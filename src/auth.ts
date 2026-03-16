@@ -72,7 +72,12 @@ export async function acquireTokenViaAutoLogin(
     launchPromise,
     new Promise<never>((_, reject) =>
       setTimeout(
-        () => reject(new Error(`Chrome launch timed out after ${BROWSER_LAUNCH_TIMEOUT / 1_000}s`)),
+        () =>
+          reject(
+            new Error(
+              `Chrome launch timed out after ${BROWSER_LAUNCH_TIMEOUT / 1_000}s`,
+            ),
+          ),
         BROWSER_LAUNCH_TIMEOUT,
       ),
     ),

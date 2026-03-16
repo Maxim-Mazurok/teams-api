@@ -45,11 +45,13 @@ import {
   fetchMembers,
   postMessage,
   fetchUserProperties,
+  ApiAuthError,
 } from "./api.js";
 import {
   acquireTokenViaAutoLogin,
   acquireTokenViaDebugSession,
 } from "./auth.js";
+import { saveToken, loadToken, clearToken } from "./token-store.js";
 
 export {
   acquireTokenViaAutoLogin,
@@ -71,7 +73,8 @@ export type {
   Reaction,
 } from "./types.js";
 export { SYSTEM_STREAM_TYPES } from "./types.js";
-export { parseRawMessage } from "./api.js";
+export { parseRawMessage, ApiAuthError } from "./api.js";
+export { saveToken, loadToken, clearToken } from "./token-store.js";
 
 const SYSTEM_STREAMS: readonly string[] = [
   "streamofannotations",
@@ -82,11 +85,44 @@ const SYSTEM_STREAMS: readonly string[] = [
 ];
 
 export class TeamsClient {
-  private readonly token: TeamsToken;
+  private token: TeamsToken;
+  private autoLoginOptions: AutoLoginOptions | null = null;
   private cachedDisplayName: string | null = null;
 
   private constructor(token: TeamsToken) {
     this.token = token;
+  }
+
+  /**
+   * Create a client with secure token caching and automatic refresh.
+   *
+   * This is the recommended entry point. It:
+   *   1. Checks the macOS Keychain for a cached, non-expired token
+   *   2. If none found, launches auto-login to acquire a fresh token
+   *   3. Saves the token to the Keychain for future use
+   *   4. Automatically re-acquires the token if a 401 occurs mid-session
+   *
+   * Token lifetime is ~24 hours. Cached tokens are reused within 23 hours.
+   */
+  static async create(options: AutoLoginOptions): Promise<TeamsClient> {
+    const log = options.verbose ? console.log.bind(console) : () => {};
+
+    const cachedToken = loadToken(options.email);
+    if (cachedToken) {
+      log("Using cached token from Keychain");
+      const client = new TeamsClient(cachedToken);
+      client.autoLoginOptions = options;
+      return client;
+    }
+
+    log("No cached token found, acquiring via auto-login...");
+    const token = await acquireTokenViaAutoLogin(options);
+    saveToken(options.email, token);
+    log("Token saved to Keychain");
+
+    const client = new TeamsClient(token);
+    client.autoLoginOptions = options;
+    return client;
   }
 
   /**
@@ -124,6 +160,15 @@ export class TeamsClient {
     return new TeamsClient({ skypeToken, region });
   }
 
+  /**
+   * Clear a cached token from the macOS Keychain.
+   *
+   * Use this to force a fresh login on the next `create()` call.
+   */
+  static clearCachedToken(email: string): void {
+    clearToken(email);
+  }
+
   /** Get the underlying token (for persistence or debugging). */
   getToken(): TeamsToken {
     return { ...this.token };
@@ -138,18 +183,20 @@ export class TeamsClient {
   async listConversations(
     options?: ListConversationsOptions,
   ): Promise<Conversation[]> {
-    const pageSize = options?.pageSize ?? 50;
-    const excludeSystem = options?.excludeSystemStreams ?? true;
+    return this.withTokenRefresh(async () => {
+      const pageSize = options?.pageSize ?? 50;
+      const excludeSystem = options?.excludeSystemStreams ?? true;
 
-    const conversations = await fetchConversations(this.token, pageSize);
+      const conversations = await fetchConversations(this.token, pageSize);
 
-    if (!excludeSystem) {
-      return conversations;
-    }
+      if (!excludeSystem) {
+        return conversations;
+      }
 
-    return conversations.filter(
-      (conversation) => !SYSTEM_STREAMS.includes(conversation.threadType),
-    );
+      return conversations.filter(
+        (conversation) => !SYSTEM_STREAMS.includes(conversation.threadType),
+      );
+    });
   }
 
   /**
@@ -184,60 +231,62 @@ export class TeamsClient {
   async findOneOnOneConversation(
     personName: string,
   ): Promise<OneOnOneSearchResult | null> {
-    const conversations = await fetchConversations(this.token, 100);
-    const targetLower = personName.toLowerCase();
+    return this.withTokenRefresh(async () => {
+      const conversations = await fetchConversations(this.token, 100);
+      const targetLower = personName.toLowerCase();
 
-    // Check self-chat first
-    const selfChat = conversations.find((conversation) =>
-      conversation.id.startsWith("48:notes"),
-    );
-    if (selfChat) {
-      const currentUserName = await this.getCurrentUserDisplayName();
-      if (currentUserName.toLowerCase().includes(targetLower)) {
-        return {
-          conversationId: selfChat.id,
-          memberDisplayName: `${currentUserName} (self)`,
-        };
-      }
-    }
-
-    // Search untitled 1:1 chats by scanning recent message senders
-    const untitledChats = conversations.filter(
-      (conversation) =>
-        conversation.threadType === "chat" && !conversation.topic,
-    );
-
-    for (const chat of untitledChats) {
-      try {
-        const page = await fetchMessagesPage(this.token, chat.id, 10);
-        const textMessages = page.messages.filter(
-          (message) =>
-            message.messageType === "RichText/Html" ||
-            message.messageType === "Text",
-        );
-
-        const senderNames = [
-          ...new Set(
-            textMessages
-              .map((message) => message.senderDisplayName)
-              .filter((name) => name.length > 0),
-          ),
-        ];
-
-        for (const senderName of senderNames) {
-          if (senderName.toLowerCase().includes(targetLower)) {
-            return {
-              conversationId: chat.id,
-              memberDisplayName: senderName,
-            };
-          }
+      // Check self-chat first
+      const selfChat = conversations.find((conversation) =>
+        conversation.id.startsWith("48:notes"),
+      );
+      if (selfChat) {
+        const currentUserName = await this.getCurrentUserDisplayName();
+        if (currentUserName.toLowerCase().includes(targetLower)) {
+          return {
+            conversationId: selfChat.id,
+            memberDisplayName: `${currentUserName} (self)`,
+          };
         }
-      } catch {
-        continue;
       }
-    }
 
-    return null;
+      // Search untitled 1:1 chats by scanning recent message senders
+      const untitledChats = conversations.filter(
+        (conversation) =>
+          conversation.threadType === "chat" && !conversation.topic,
+      );
+
+      for (const chat of untitledChats) {
+        try {
+          const page = await fetchMessagesPage(this.token, chat.id, 10);
+          const textMessages = page.messages.filter(
+            (message) =>
+              message.messageType === "RichText/Html" ||
+              message.messageType === "Text",
+          );
+
+          const senderNames = [
+            ...new Set(
+              textMessages
+                .map((message) => message.senderDisplayName)
+                .filter((name) => name.length > 0),
+            ),
+          ];
+
+          for (const senderName of senderNames) {
+            if (senderName.toLowerCase().includes(targetLower)) {
+              return {
+                conversationId: chat.id,
+                memberDisplayName: senderName,
+              };
+            }
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      return null;
+    });
   }
 
   /**
@@ -250,27 +299,29 @@ export class TeamsClient {
     conversationId: string,
     options?: GetMessagesOptions,
   ): Promise<Message[]> {
-    const maxPages = options?.maxPages ?? 100;
-    const pageSize = options?.pageSize ?? 200;
-    const allMessages: Message[] = [];
-    let backwardLink: string | undefined;
+    return this.withTokenRefresh(async () => {
+      const maxPages = options?.maxPages ?? 100;
+      const pageSize = options?.pageSize ?? 200;
+      const allMessages: Message[] = [];
+      let backwardLink: string | undefined;
 
-    for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
-      const result = await fetchMessagesPage(
-        this.token,
-        conversationId,
-        pageSize,
-        backwardLink,
-      );
-      allMessages.push(...result.messages);
+      for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
+        const result = await fetchMessagesPage(
+          this.token,
+          conversationId,
+          pageSize,
+          backwardLink,
+        );
+        allMessages.push(...result.messages);
 
-      options?.onProgress?.(allMessages.length);
+        options?.onProgress?.(allMessages.length);
 
-      if (!result.backwardLink) break;
-      backwardLink = result.backwardLink;
-    }
+        if (!result.backwardLink) break;
+        backwardLink = result.backwardLink;
+      }
 
-    return allMessages;
+      return allMessages;
+    });
   }
 
   /**
@@ -283,12 +334,14 @@ export class TeamsClient {
     pageSize = 50,
     backwardLink?: string,
   ): Promise<MessagesPage> {
-    return fetchMessagesPage(
-      this.token,
-      conversationId,
-      pageSize,
-      backwardLink,
-    );
+    return this.withTokenRefresh(async () => {
+      return fetchMessagesPage(
+        this.token,
+        conversationId,
+        pageSize,
+        backwardLink,
+      );
+    });
   }
 
   /**
@@ -301,8 +354,10 @@ export class TeamsClient {
     conversationId: string,
     content: string,
   ): Promise<SentMessage> {
-    const displayName = await this.getCurrentUserDisplayName();
-    return postMessage(this.token, conversationId, content, displayName);
+    return this.withTokenRefresh(async () => {
+      const displayName = await this.getCurrentUserDisplayName();
+      return postMessage(this.token, conversationId, content, displayName);
+    });
   }
 
   /**
@@ -312,7 +367,9 @@ export class TeamsClient {
    * Use `findOneOnOneConversation()` to resolve names from message history.
    */
   async getMembers(conversationId: string): Promise<Member[]> {
-    return fetchMembers(this.token, conversationId);
+    return this.withTokenRefresh(async () => {
+      return fetchMembers(this.token, conversationId);
+    });
   }
 
   /**
@@ -322,45 +379,83 @@ export class TeamsClient {
    * falling back to the user properties endpoint.
    */
   async getCurrentUserDisplayName(): Promise<string> {
-    if (this.cachedDisplayName) {
-      return this.cachedDisplayName;
-    }
+    return this.withTokenRefresh(async () => {
+      if (this.cachedDisplayName) {
+        return this.cachedDisplayName;
+      }
 
-    const conversations = await fetchConversations(this.token, 10);
+      const conversations = await fetchConversations(this.token, 10);
 
-    // First try: self-chat messages (most reliable)
-    for (const conversation of conversations) {
+      // First try: self-chat messages (most reliable)
+      for (const conversation of conversations) {
+        try {
+          if (!conversation.id.startsWith("48:notes")) continue;
+
+          const page = await fetchMessagesPage(this.token, conversation.id, 10);
+          const textMessage = page.messages.find(
+            (message) =>
+              (message.messageType === "RichText/Html" ||
+                message.messageType === "Text") &&
+              message.senderDisplayName.length > 0,
+          );
+
+          if (textMessage) {
+            this.cachedDisplayName = textMessage.senderDisplayName;
+            return this.cachedDisplayName;
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      // Fallback: user properties endpoint
       try {
-        if (!conversation.id.startsWith("48:notes")) continue;
-
-        const page = await fetchMessagesPage(this.token, conversation.id, 10);
-        const textMessage = page.messages.find(
-          (message) =>
-            (message.messageType === "RichText/Html" ||
-              message.messageType === "Text") &&
-            message.senderDisplayName.length > 0,
-        );
-
-        if (textMessage) {
-          this.cachedDisplayName = textMessage.senderDisplayName;
+        const properties = await fetchUserProperties(this.token);
+        if (typeof properties.displayname === "string") {
+          this.cachedDisplayName = properties.displayname;
           return this.cachedDisplayName;
         }
       } catch {
-        continue;
+        // Fall through
       }
+
+      return "Unknown User";
+    });
+  }
+
+  /**
+   * Re-acquire the token via auto-login and update the cached version.
+   *
+   * Called automatically by `withTokenRefresh` on 401 errors.
+   */
+  private async refreshToken(): Promise<void> {
+    if (!this.autoLoginOptions) {
+      throw new Error("Cannot refresh token: no auto-login options configured");
     }
 
-    // Fallback: user properties endpoint
+    clearToken(this.autoLoginOptions.email);
+    const freshToken = await acquireTokenViaAutoLogin(this.autoLoginOptions);
+    saveToken(this.autoLoginOptions.email, freshToken);
+    this.token = freshToken;
+    this.cachedDisplayName = null;
+  }
+
+  /**
+   * Wrap an operation with automatic token refresh on 401.
+   *
+   * If the operation throws an `ApiAuthError` and auto-login options
+   * are configured, the token is re-acquired and the operation retried
+   * exactly once.
+   */
+  private async withTokenRefresh<T>(operation: () => Promise<T>): Promise<T> {
     try {
-      const properties = await fetchUserProperties(this.token);
-      if (typeof properties.displayname === "string") {
-        this.cachedDisplayName = properties.displayname;
-        return this.cachedDisplayName;
+      return await operation();
+    } catch (error) {
+      if (error instanceof ApiAuthError && this.autoLoginOptions) {
+        await this.refreshToken();
+        return await operation();
       }
-    } catch {
-      // Fall through
+      throw error;
     }
-
-    return "Unknown User";
   }
 }

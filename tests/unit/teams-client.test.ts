@@ -9,6 +9,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TeamsClient } from "../../src/teams-client.js";
 import * as api from "../../src/api.js";
+import { ApiAuthError } from "../../src/api.js";
+import * as tokenStore from "../../src/token-store.js";
+import * as auth from "../../src/auth.js";
 import type {
   Conversation,
   Message,
@@ -17,9 +20,23 @@ import type {
   SentMessage,
 } from "../../src/types.js";
 
-vi.mock("../../src/api.js");
+vi.mock("../../src/api.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/api.js")>();
+  return {
+    ...actual,
+    fetchConversations: vi.fn(),
+    fetchMessagesPage: vi.fn(),
+    fetchMembers: vi.fn(),
+    postMessage: vi.fn(),
+    fetchUserProperties: vi.fn(),
+  };
+});
+vi.mock("../../src/token-store.js");
+vi.mock("../../src/auth.js");
 
 const mockedApi = vi.mocked(api);
+const mockedTokenStore = vi.mocked(tokenStore);
+const mockedAuth = vi.mocked(auth);
 
 function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
   return {
@@ -386,5 +403,139 @@ describe("getCurrentUserDisplayName", () => {
     const name = await client.getCurrentUserDisplayName();
 
     expect(name).toBe("Unknown User");
+  });
+});
+
+describe("TeamsClient.create", () => {
+  it("should use cached token when available", async () => {
+    const cachedToken = { skypeToken: "cached-token", region: "apac" };
+    mockedTokenStore.loadToken.mockReturnValue(cachedToken);
+
+    const client = await TeamsClient.create({
+      email: "user@company.com",
+    });
+
+    expect(mockedTokenStore.loadToken).toHaveBeenCalledWith("user@company.com");
+    expect(mockedAuth.acquireTokenViaAutoLogin).not.toHaveBeenCalled();
+    expect(client.getToken()).toEqual(cachedToken);
+  });
+
+  it("should auto-login and save token when no cache exists", async () => {
+    const freshToken = { skypeToken: "fresh-token", region: "apac" };
+    mockedTokenStore.loadToken.mockReturnValue(null);
+    mockedAuth.acquireTokenViaAutoLogin.mockResolvedValue(freshToken);
+
+    const client = await TeamsClient.create({
+      email: "user@company.com",
+    });
+
+    expect(mockedAuth.acquireTokenViaAutoLogin).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "user@company.com" }),
+    );
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "user@company.com",
+      freshToken,
+    );
+    expect(client.getToken()).toEqual(freshToken);
+  });
+});
+
+describe("TeamsClient.clearCachedToken", () => {
+  it("should delegate to token store", () => {
+    TeamsClient.clearCachedToken("user@company.com");
+
+    expect(mockedTokenStore.clearToken).toHaveBeenCalledWith(
+      "user@company.com",
+    );
+  });
+});
+
+describe("withTokenRefresh (automatic 401 retry)", () => {
+  it("should refresh token and retry on ApiAuthError", async () => {
+    const initialToken = { skypeToken: "old-token", region: "apac" };
+    const refreshedToken = { skypeToken: "new-token", region: "apac" };
+    mockedTokenStore.loadToken.mockReturnValue(initialToken);
+
+    const client = await TeamsClient.create({
+      email: "user@company.com",
+    });
+
+    // First call to fetchConversations fails with 401
+    mockedApi.fetchConversations
+      .mockRejectedValueOnce(new ApiAuthError("Authentication failed: 401"))
+      .mockResolvedValueOnce([makeConversation({ topic: "After Refresh" })]);
+
+    // The refresh will call acquireTokenViaAutoLogin
+    mockedAuth.acquireTokenViaAutoLogin.mockResolvedValue(refreshedToken);
+
+    const conversations = await client.listConversations();
+
+    expect(conversations).toHaveLength(1);
+    expect(conversations[0].topic).toBe("After Refresh");
+
+    // Verify refresh happened: clear old token, acquire new, save new
+    expect(mockedTokenStore.clearToken).toHaveBeenCalledWith(
+      "user@company.com",
+    );
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "user@company.com",
+      refreshedToken,
+    );
+  });
+
+  it("should not retry on non-auth errors", async () => {
+    mockedTokenStore.loadToken.mockReturnValue({
+      skypeToken: "token",
+      region: "apac",
+    });
+
+    const client = await TeamsClient.create({
+      email: "user@company.com",
+    });
+
+    mockedApi.fetchConversations.mockRejectedValueOnce(
+      new Error("Network error"),
+    );
+
+    await expect(client.listConversations()).rejects.toThrow("Network error");
+
+    // Should not have tried to refresh
+    expect(mockedTokenStore.clearToken).not.toHaveBeenCalled();
+  });
+
+  it("should not retry when created via fromToken (no auto-login options)", async () => {
+    const client = TeamsClient.fromToken("manual-token");
+
+    mockedApi.fetchConversations.mockRejectedValueOnce(
+      new ApiAuthError("Authentication failed: 401"),
+    );
+
+    await expect(client.listConversations()).rejects.toThrow(
+      "Authentication failed: 401",
+    );
+
+    // No refresh attempt since fromToken doesn't have auto-login options
+    expect(mockedAuth.acquireTokenViaAutoLogin).not.toHaveBeenCalled();
+  });
+
+  it("should propagate error if retry also fails", async () => {
+    const initialToken = { skypeToken: "token", region: "apac" };
+    const refreshedToken = { skypeToken: "new-token", region: "apac" };
+    mockedTokenStore.loadToken.mockReturnValue(initialToken);
+
+    const client = await TeamsClient.create({
+      email: "user@company.com",
+    });
+
+    // Both attempts fail with 401
+    mockedApi.fetchConversations
+      .mockRejectedValueOnce(new ApiAuthError("Authentication failed: 401"))
+      .mockRejectedValueOnce(new ApiAuthError("Authentication failed: 401"));
+
+    mockedAuth.acquireTokenViaAutoLogin.mockResolvedValue(refreshedToken);
+
+    await expect(client.listConversations()).rejects.toThrow(
+      "Authentication failed: 401",
+    );
   });
 });

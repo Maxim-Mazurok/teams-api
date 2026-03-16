@@ -13,6 +13,7 @@ import {
   postMessage,
   fetchUserProperties,
   parseRawMessage,
+  ApiAuthError,
 } from "../../src/api.js";
 import type { TeamsToken } from "../../src/types.js";
 
@@ -106,8 +107,26 @@ describe("fetchConversations", () => {
     mockFetchResponse({}, 401);
 
     await expect(fetchConversations(testToken, 50)).rejects.toThrow(
-      "Failed to fetch conversations: 401",
+      "Authentication failed: 401",
     );
+  });
+
+  it("should throw ApiAuthError on 401", async () => {
+    mockFetchResponse({}, 401);
+
+    await expect(fetchConversations(testToken, 50)).rejects.toBeInstanceOf(
+      ApiAuthError,
+    );
+  });
+
+  it("should throw regular Error on non-401 errors", async () => {
+    mockFetchResponse({}, 500);
+
+    const error = await fetchConversations(testToken, 50).catch(
+      (caughtError: unknown) => caughtError,
+    );
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(ApiAuthError);
   });
 
   it("should handle empty conversation list", async () => {
@@ -253,6 +272,18 @@ describe("postMessage", () => {
     await expect(
       postMessage(testToken, "conv-id", "Hello!", "User"),
     ).rejects.toThrow("Failed to send message: 403 Forbidden — Access denied");
+  });
+  it("should throw ApiAuthError on 401", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      text: () => Promise.resolve("Token expired"),
+    });
+
+    await expect(
+      postMessage(testToken, "conv-id", "Hello!", "User"),
+    ).rejects.toBeInstanceOf(ApiAuthError);
   });
 });
 

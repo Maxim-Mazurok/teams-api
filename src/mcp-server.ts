@@ -51,7 +51,7 @@ async function getClient(): Promise<TeamsClient> {
   if (envToken) {
     clientInstance = TeamsClient.fromToken(envToken, envRegion);
   } else if (envAuto && envEmail) {
-    clientInstance = await TeamsClient.fromAutoLogin({
+    clientInstance = await TeamsClient.create({
       email: envEmail,
       headless: true,
       verbose: false,

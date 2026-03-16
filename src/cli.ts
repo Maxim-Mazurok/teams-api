@@ -61,7 +61,7 @@ async function createClient(flags: AuthFlags): Promise<TeamsClient> {
       headless: true,
       verbose: true,
     };
-    return TeamsClient.fromAutoLogin(autoLoginOptions);
+    return TeamsClient.create(autoLoginOptions);
   }
 
   const manualOptions: ManualTokenOptions = {
@@ -81,6 +81,17 @@ addAuthOptions(
   const token = client.getToken();
   console.log(JSON.stringify(token, null, 2));
 });
+
+// ── logout command ────────────────────────────────────────────────────
+
+program
+  .command("logout")
+  .description("Clear cached token from the macOS Keychain")
+  .requiredOption("--email <email>", "Email whose cached token to clear")
+  .action((flags: { email: string }) => {
+    TeamsClient.clearCachedToken(flags.email);
+    console.log(`Cached token for ${flags.email} cleared.`);
+  });
 
 // ── conversations command ─────────────────────────────────────────────
 

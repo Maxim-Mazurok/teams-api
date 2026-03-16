@@ -18,6 +18,13 @@ import type {
   SentMessage,
 } from "./types.js";
 
+export class ApiAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ApiAuthError";
+  }
+}
+
 const chatServiceBase = (region: string) =>
   `https://${region}.ng.msg.teams.microsoft.com/v1`;
 
@@ -39,6 +46,11 @@ export async function fetchConversations(
 
   const response = await fetch(url, { headers: authHeaders(token) });
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
     throw new Error(
       `Failed to fetch conversations: ${response.status} ${response.statusText}`,
     );
@@ -87,6 +99,11 @@ export async function fetchMessagesPage(
 
   const response = await fetch(url, { headers: authHeaders(token) });
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
     throw new Error(
       `Failed to fetch messages: ${response.status} ${response.statusText}`,
     );
@@ -117,6 +134,11 @@ export async function fetchMembers(
 
   const response = await fetch(url, { headers: authHeaders(token) });
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
     throw new Error(
       `Failed to fetch members: ${response.status} ${response.statusText}`,
     );
@@ -172,6 +194,11 @@ export async function postMessage(
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
     const errorText = await response.text();
     throw new Error(
       `Failed to send message: ${response.status} ${response.statusText} — ${errorText}`,
@@ -200,6 +227,11 @@ export async function fetchUserProperties(
   const response = await fetch(url, { headers: authHeaders(token) });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
     throw new Error(
       `Failed to fetch user properties: ${response.status} ${response.statusText}`,
     );
