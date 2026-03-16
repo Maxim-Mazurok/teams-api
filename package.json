@@ -1,0 +1,47 @@
+{
+  "name": "teams-api",
+  "version": "0.1.0",
+  "description": "AI-native Microsoft Teams integration — read conversations, send messages, manage members via the Teams Chat Service REST API",
+  "private": true,
+  "type": "commonjs",
+  "main": "src/teams-client.ts",
+  "types": "src/teams-client.ts",
+  "bin": {
+    "teams-api": "./src/cli.ts"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "vitest run tests/e2e",
+    "test:watch": "vitest",
+    "lint": "prettier --check .",
+    "format": "prettier --write .",
+    "mcp": "npx -y tsx src/mcp-server.ts"
+  },
+  "keywords": [
+    "teams",
+    "microsoft-teams",
+    "chat",
+    "api",
+    "mcp",
+    "ai"
+  ],
+  "author": "Maxim Mazurok",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "commander": "^14.0.3",
+    "playwright": "^1.58.2",
+    "puppeteer-core": "^24.39.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}

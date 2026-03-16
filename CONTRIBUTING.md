@@ -1,0 +1,111 @@
+# Contributing
+
+Development guide for the teams-api project.
+
+## Architecture
+
+```
+src/types.ts          All public interfaces and types
+src/api.ts            Low-level REST calls to Teams Chat Service
+src/auth.ts           Token acquisition (Playwright auto-login + CDP debug session)
+src/teams-client.ts   Public API class (TeamsClient) — the main entry point
+src/cli.ts            Commander-based CLI
+src/mcp-server.ts     MCP server with stdio transport
+```
+
+### Data flow
+
+```
+TeamsClient (public API)
+  ├── auth.ts       — acquires a TeamsToken via one of two strategies
+  └── api.ts        — stateless HTTP calls using TeamsToken
+        └── Teams Chat Service REST API
+              https://{region}.ng.msg.teams.microsoft.com/v1
+```
+
+`TeamsClient` is the only public-facing class. It accepts a `TeamsToken` (from any auth strategy) and delegates to the stateless `api.ts` functions. The CLI and MCP server both consume `TeamsClient`.
+
+### Authentication strategies
+
+1. **Auto-login** (`acquireTokenViaAutoLogin`): Launches system Chrome via Playwright persistent context, navigates to the Teams web app, fills the email on the Microsoft Entra ID login page, waits for FIDO2 passkey authentication to complete, then intercepts the `x-skypetoken` header via CDP Fetch interception during a page reload.
+
+2. **Debug session** (`acquireTokenViaDebugSession`): Connects to a running Chrome instance via puppeteer-core CDP, finds the Teams tab, enables Fetch interception, triggers a page reload, and captures the `x-skypetoken` header.
+
+Both strategies use the same CDP Fetch interception pattern to extract the token from live network requests.
+
+### Token lifecycle
+
+- The skype token is obtained from the Teams web application at `https://teams.cloud.microsoft/`
+- Token lifetime is approximately 24 hours (the `skypetoken_asm` cookie has `Max-Age=86399`)
+- Authentication header format: `Authentication: skypetoken=<token>` (note: `Authentication`, not `Authorization`)
+- When the token expires, any API call will return `401` and a new token must be acquired
+
+## API documentation
+
+See [docs/findings.md](docs/findings.md) for detailed REST API endpoint documentation, including:
+
+- Request/response formats for all endpoints
+- Message structure and field descriptions
+- Reactions format (JSON string vs. array inconsistency)
+- Mentions format
+- Conversation types and system stream filtering
+- Deleted message detection
+- Quoted message (reply) parsing
+- Worker intercept findings from earlier browser extension research
+
+## Development
+
+### Prerequisites
+
+- Node.js 20+
+- npm
+
+### Setup
+
+```bash
+npm install
+```
+
+### Scripts
+
+| Command                    | Description                                 |
+| -------------------------- | ------------------------------------------- |
+| `npm test`                 | Run unit tests                              |
+| `npm run test:unit`        | Run unit tests only                         |
+| `npm run test:integration` | Run integration tests (needs `TEAMS_TOKEN`) |
+| `npm run test:e2e`         | Run E2E tests (needs `TEAMS_EMAIL`)         |
+| `npm run test:watch`       | Run tests in watch mode                     |
+| `npm run type-check`       | TypeScript type checking                    |
+| `npm run lint`             | Check formatting with Prettier              |
+| `npm run format`           | Auto-format with Prettier                   |
+| `npm run mcp`              | Start MCP server                            |
+
+### Testing
+
+**Unit tests** (`tests/unit/`): Mock `fetch` globally and test the API and client layers in isolation. No network access required.
+
+**Integration tests** (`tests/integration/`): Hit the real Teams API. Skipped by default — set `TEAMS_TOKEN` and `TEAMS_REGION` env vars to run.
+
+**E2E tests** (`tests/e2e/`): Full auto-login → read → write flow. Skipped by default — set `TEAMS_EMAIL` to run. Requires macOS with a platform authenticator and FIDO2 passkey.
+
+### Code style
+
+- TypeScript strict mode
+- Prettier for formatting
+- No default exports
+- Named exports only
+- ESM syntax in `.ts` files, CommonJS in `package.json`
+
+## Implementation notes
+
+### 1:1 chat name resolution
+
+The Teams members API returns empty `friendlyName` / `displayName` for 1:1 chat participants. The `findOneOnOneConversation` method works around this by scanning recent message senders in untitled chats for a name match. It also checks the self-chat (`48:notes` conversation) for the current user's own name.
+
+### Reactions parsing
+
+The `properties.emotions` field in message payloads has inconsistent formatting — sometimes it's a JSON string, sometimes a raw array. The `parseReactions` helper in `api.ts` handles both formats and fails gracefully on malformed data.
+
+### System stream filtering
+
+Teams returns several system streams alongside real conversations (annotations, notifications, mentions, threads, notes). `listConversations` filters these out by default. The full list of filtered types is in the `SYSTEM_STREAMS` constant in `teams-client.ts`.
