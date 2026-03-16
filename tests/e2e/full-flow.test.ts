@@ -19,21 +19,28 @@ describe.skipIf(!shouldRun)("Full E2E flow", { timeout: 120_000 }, () => {
   it("should auto-login and list conversations", async () => {
     if (!email) throw new Error("TEAMS_EMAIL is required");
 
-    const client = await TeamsClient.fromAutoLogin({ email });
+    console.log("[e2e] Starting auto-login...");
+    const client = await TeamsClient.fromAutoLogin({ email, verbose: true });
 
+    console.log("[e2e] Listing conversations...");
     const conversations = await client.listConversations({ pageSize: 5 });
+    console.log(`[e2e] Got ${conversations.length} conversations`);
     expect(conversations.length).toBeGreaterThan(0);
 
     const token = client.getToken();
     expect(token.skypeToken.length).toBeGreaterThan(100);
     expect(token.region).toBe("apac");
+    console.log("[e2e] Test 1 passed");
   });
 
   it("should send a message to self-chat and read it back", async () => {
     if (!email) throw new Error("TEAMS_EMAIL is required");
 
-    const client = await TeamsClient.fromAutoLogin({ email });
+    console.log("[e2e] Starting auto-login for send/read test...");
+    const client = await TeamsClient.fromAutoLogin({ email, verbose: true });
+    console.log("[e2e] Getting display name...");
     const displayName = await client.getCurrentUserDisplayName();
+    console.log(`[e2e] Display name: ${displayName}`);
 
     // Find self-chat
     const selfChat = await client.findOneOnOneConversation(displayName);
@@ -57,5 +64,6 @@ describe.skipIf(!shouldRun)("Full E2E flow", { timeout: 120_000 }, () => {
       message.content.includes(uniqueContent),
     );
     expect(ourMessage).toBeDefined();
+    console.log("[e2e] Test 2 passed");
   });
 });

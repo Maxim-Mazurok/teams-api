@@ -24,6 +24,7 @@ const LOGIN_TIMEOUT = 60_000;
 const TOKEN_INTERCEPT_TIMEOUT = 30_000;
 const FETCH_INTERCEPT_TIMEOUT = 20_000;
 const PAGE_RELOAD_TIMEOUT = 25_000;
+const BROWSER_LAUNCH_TIMEOUT = 30_000;
 
 /**
  * Acquire a Teams skype token with zero user interaction.
@@ -54,7 +55,7 @@ export async function acquireTokenViaAutoLogin(
   execSync(`rm -rf "${profileDirectory}"`);
 
   log("Launching Chrome with fresh profile...");
-  const context = await chromium.launchPersistentContext(profileDirectory, {
+  const launchPromise = chromium.launchPersistentContext(profileDirectory, {
     headless,
     executablePath: chromePath,
     args: [
@@ -67,6 +68,17 @@ export async function acquireTokenViaAutoLogin(
     ignoreDefaultArgs: ["--disable-component-extensions-with-background-pages"],
   });
 
+  const context = await Promise.race([
+    launchPromise,
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`Chrome launch timed out after ${BROWSER_LAUNCH_TIMEOUT / 1_000}s`)),
+        BROWSER_LAUNCH_TIMEOUT,
+      ),
+    ),
+  ]);
+  log("Chrome launched successfully");
+
   try {
     const page = context.pages()[0] || (await context.newPage());
 
@@ -77,12 +89,14 @@ export async function acquireTokenViaAutoLogin(
     });
 
     // Wait for Entra ID login page
+    log(`Current URL: ${page.url()}`);
+    log("Waiting for Entra ID login page...");
     await page
       .waitForURL(/login\.microsoftonline\.com|login\.microsoft\.com/, {
         timeout: LOGIN_TIMEOUT,
       })
       .catch(() => {
-        // May already be at Teams if session is cached
+        log("Did not reach login page (may already be at Teams)");
       });
 
     // If at the login page, enter email and submit
@@ -119,7 +133,7 @@ export async function acquireTokenViaAutoLogin(
       });
     }
 
-    log(`Logged in. URL: ${page.url()}`);
+    log(`Login flow finished. URL: ${page.url()}`);
 
     // Capture the skype token via CDP Fetch interception
     log("Capturing skype token...");
@@ -130,8 +144,12 @@ export async function acquireTokenViaAutoLogin(
       patterns: [{ urlPattern: "*teams*", requestStage: "Request" }],
     });
 
+    log("Listening for skype token in network requests...");
     const tokenPromise = new Promise<void>((resolve) => {
-      const timeout = setTimeout(resolve, TOKEN_INTERCEPT_TIMEOUT);
+      const timeout = setTimeout(() => {
+        log("Token intercept timed out");
+        resolve();
+      }, TOKEN_INTERCEPT_TIMEOUT);
 
       cdpSession.on(
         "Fetch.requestPaused",
@@ -154,6 +172,7 @@ export async function acquireTokenViaAutoLogin(
           }
 
           if (skypeToken) {
+            log("Skype token captured from request headers");
             clearTimeout(timeout);
             resolve();
           }
