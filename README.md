@@ -143,6 +143,9 @@ npx tsx src/cli.ts get-messages --auto --email you@example.com --chat "Design Re
 npx tsx src/cli.ts get-messages --auto --email you@example.com --to "Jane Doe" --max-pages 5
 npx tsx src/cli.ts get-messages --auto --email you@example.com --conversation-id "19:abc@thread.v2" --format json
 
+# Newest-first order (API returns newest-first; default is oldest-first/chronological)
+npx tsx src/cli.ts get-messages --auto --email you@example.com --chat "General" --order newest-first
+
 # Send a message
 npx tsx src/cli.ts send-message --auto --email you@example.com --to "Jane Doe" --content "Hello!"
 npx tsx src/cli.ts send-message --auto --email you@example.com --chat "Design Review" --content "Status update"

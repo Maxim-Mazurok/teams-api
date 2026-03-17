@@ -387,8 +387,8 @@ describe("get-messages", () => {
     })) as Message[];
 
     expect(result).toHaveLength(2);
-    expect(result[0].content).toBe("Hello");
-    expect(result[1].content).toBe("Plain text");
+    expect(result[0].content).toBe("Plain text");
+    expect(result[1].content).toBe("Hello");
   });
 
   it("should include system messages when textOnly is false", async () => {
@@ -444,7 +444,7 @@ describe("get-messages", () => {
     });
   });
 
-  it("should reverse messages for oldest-first order", async () => {
+  it("should reverse to oldest-first by default", async () => {
     const messages = [
       makeMessage({ id: "3", content: "Third" }),
       makeMessage({ id: "2", content: "Second" }),
@@ -456,7 +456,6 @@ describe("get-messages", () => {
 
     const result = (await action.execute(client, {
       conversationId: "19:test@thread.v2",
-      order: "oldest-first",
     })) as Message[];
 
     expect(result[0].content).toBe("First");
@@ -464,7 +463,7 @@ describe("get-messages", () => {
     expect(result[2].content).toBe("Third");
   });
 
-  it("should keep newest-first order by default", async () => {
+  it("should keep newest-first order when explicit", async () => {
     const messages = [
       makeMessage({ id: "3", content: "Third" }),
       makeMessage({ id: "1", content: "First" }),
@@ -475,6 +474,7 @@ describe("get-messages", () => {
 
     const result = (await action.execute(client, {
       conversationId: "19:test@thread.v2",
+      order: "newest-first",
     })) as Message[];
 
     expect(result[0].content).toBe("Third");
@@ -1405,7 +1405,7 @@ describe("message order parameter", () => {
     expect(orderParameter).toBeDefined();
     expect(orderParameter!.type).toBe("string");
     expect(orderParameter!.required).toBe(false);
-    expect(orderParameter!.default).toBe("newest-first");
+    expect(orderParameter!.default).toBe("oldest-first");
   });
 
   it("should not mutate original array when reversing", async () => {
@@ -1427,7 +1427,7 @@ describe("message order parameter", () => {
     expect(originalMessages[1].id).toBe("2");
   });
 
-  it("should pass explicit newest-first without reversing", async () => {
+  it("should keep original API order when newest-first is explicit", async () => {
     const messages = [
       makeMessage({ id: "3", content: "Third" }),
       makeMessage({ id: "2", content: "Second" }),

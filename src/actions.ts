@@ -403,9 +403,9 @@ const getMessages: ActionDefinition = {
       name: "order",
       type: "string",
       description:
-        "Message order: newest-first (default) or oldest-first (chronological)",
+        "Message order: oldest-first (chronological, default) or newest-first",
       required: false,
-      default: "newest-first",
+      default: "oldest-first",
     },
   ],
   execute: async (client, parameters) => {
@@ -432,7 +432,7 @@ const getMessages: ActionDefinition = {
       );
     }
 
-    const order = (parameters.order as string | undefined) ?? "newest-first";
+    const order = (parameters.order as string | undefined) ?? "oldest-first";
     if (order === "oldest-first") {
       messages = [...messages].reverse();
     }

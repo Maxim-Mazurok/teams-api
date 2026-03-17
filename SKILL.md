@@ -51,6 +51,7 @@ Parameters:
 - `maxPages` (optional, number): Maximum pagination pages to fetch. Default: 100.
 - `pageSize` (optional, number): Messages per page. Default: 200.
 - `textOnly` (optional, boolean): Only return text messages, excluding system events. Default: true.
+- `order` (optional, string): Message order — `oldest-first` (chronological, default) or `newest-first`.
 
 ### teams_send_message
 
