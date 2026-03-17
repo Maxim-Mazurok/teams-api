@@ -444,6 +444,43 @@ describe("get-messages", () => {
     });
   });
 
+  it("should reverse messages for oldest-first order", async () => {
+    const messages = [
+      makeMessage({ id: "3", content: "Third" }),
+      makeMessage({ id: "2", content: "Second" }),
+      makeMessage({ id: "1", content: "First" }),
+    ];
+    const client = createMockClient({
+      getMessages: vi.fn().mockResolvedValue(messages),
+    });
+
+    const result = (await action.execute(client, {
+      conversationId: "19:test@thread.v2",
+      order: "oldest-first",
+    })) as Message[];
+
+    expect(result[0].content).toBe("First");
+    expect(result[1].content).toBe("Second");
+    expect(result[2].content).toBe("Third");
+  });
+
+  it("should keep newest-first order by default", async () => {
+    const messages = [
+      makeMessage({ id: "3", content: "Third" }),
+      makeMessage({ id: "1", content: "First" }),
+    ];
+    const client = createMockClient({
+      getMessages: vi.fn().mockResolvedValue(messages),
+    });
+
+    const result = (await action.execute(client, {
+      conversationId: "19:test@thread.v2",
+    })) as Message[];
+
+    expect(result[0].content).toBe("Third");
+    expect(result[1].content).toBe("First");
+  });
+
   it("should format messages correctly", () => {
     const messages = [
       makeMessage({
@@ -457,6 +494,131 @@ describe("get-messages", () => {
 
     expect(output).toContain("1 messages:");
     expect(output).toContain("[2026-03-16 10:00:00] Alice: Hello world");
+  });
+
+  it("should decode HTML entities in text format", () => {
+    const messages = [
+      makeMessage({
+        senderDisplayName: "Alice",
+        content: "<p>Hello&nbsp;world&amp;friends&quot;hi&quot;</p>",
+      }),
+    ];
+
+    const output = action.formatResult(messages);
+
+    expect(output).toContain('Hello world&friends"hi"');
+    expect(output).not.toContain("&nbsp;");
+    expect(output).not.toContain("&quot;");
+  });
+
+  it("should show reply markers in text format", () => {
+    const quotedMessage = makeMessage({
+      id: "msg-100",
+      senderDisplayName: "Bob",
+      content: "<p>Original message</p>",
+    });
+    const replyMessage = makeMessage({
+      id: "msg-200",
+      senderDisplayName: "Alice",
+      content: "<blockquote>Original message</blockquote><p>My reply here</p>",
+      quotedMessageId: "msg-100",
+    });
+    const messages = [quotedMessage, replyMessage];
+
+    const output = action.formatResult(messages);
+
+    expect(output).toContain("> [replying to Bob]:");
+    expect(output).toContain("My reply here");
+  });
+
+  it("should compress repeated authors in markdown format", () => {
+    const messages = [
+      makeMessage({
+        senderDisplayName: "Alice",
+        originalArrivalTime: "2026-03-16T10:00:00.000Z",
+        content: "<p>First message</p>",
+      }),
+      makeMessage({
+        senderDisplayName: "Alice",
+        originalArrivalTime: "2026-03-16T10:01:00.000Z",
+        content: "<p>Second message</p>",
+      }),
+      makeMessage({
+        senderDisplayName: "Bob",
+        originalArrivalTime: "2026-03-16T10:02:00.000Z",
+        content: "<p>Different person</p>",
+      }),
+    ];
+
+    const output = action.formatMarkdown(messages);
+
+    // First Alice message gets full header
+    expect(output).toContain("### Alice");
+    // Second Alice message gets compressed (just timestamp)
+    expect(output).toContain("*2026-03-16 10:01:00*");
+    // Bob gets full header
+    expect(output).toContain("### Bob");
+  });
+
+  it("should show reply markers in markdown format", () => {
+    const messages = [
+      makeMessage({
+        id: "msg-100",
+        senderDisplayName: "Bob",
+        content: "<p>Original</p>",
+      }),
+      makeMessage({
+        id: "msg-200",
+        senderDisplayName: "Alice",
+        content: "<blockquote>Original</blockquote><p>Reply</p>",
+        quotedMessageId: "msg-100",
+      }),
+    ];
+
+    const output = action.formatMarkdown(messages);
+
+    expect(output).toContain("> **[replying to Bob]:**");
+    expect(output).toContain("Reply");
+  });
+
+  it("should decode HTML entities in markdown format", () => {
+    const messages = [
+      makeMessage({
+        content: "<p>test&nbsp;content&#8203;here</p>",
+      }),
+    ];
+
+    const output = action.formatMarkdown(messages);
+
+    expect(output).toContain("test content");
+    expect(output).not.toContain("&nbsp;");
+    expect(output).not.toContain("&#8203;");
+  });
+
+  it("should compress repeated authors in toon format", () => {
+    const messages = [
+      makeMessage({
+        senderDisplayName: "Alice",
+        originalArrivalTime: "2026-03-16T10:00:00.000Z",
+        content: "<p>First</p>",
+      }),
+      makeMessage({
+        senderDisplayName: "Alice",
+        originalArrivalTime: "2026-03-16T10:01:00.000Z",
+        content: "<p>Second</p>",
+      }),
+    ];
+
+    const output = action.formatToon(messages);
+
+    // First message has full name
+    const nameMatches = output.match(/Alice/g);
+    // Should appear in header line once, and only timestamp for second
+    expect(output).toContain("🗣️  Alice · 2026-03-16 10:00:00");
+    expect(output).toContain("2026-03-16 10:01:00");
+    // Name should appear only once (plus the header count line)
+    expect(nameMatches).toBeTruthy();
+    expect(nameMatches!.length).toBeLessThanOrEqual(2);
   });
 });
 
@@ -1017,4 +1179,295 @@ describe("all actions have formatMarkdown and formatToon", () => {
       expect(typeof action.formatToon).toBe("function");
     });
   }
+});
+
+// ── HTML entity decoding (tested through formatters) ─────────────────
+
+describe("HTML entity decoding in message formats", () => {
+  const action = getAction("get-messages");
+
+  it("should decode &amp; correctly (after other entities)", () => {
+    const messages = [makeMessage({ content: "<p>A &amp; B</p>" })];
+    const output = action.formatResult(messages);
+    expect(output).toContain("A & B");
+  });
+
+  it("should decode &lt; and &gt;", () => {
+    const messages = [
+      makeMessage({ content: "<p>if (a &lt; b &amp;&amp; c &gt; d)</p>" }),
+    ];
+    const output = action.formatResult(messages);
+    expect(output).toContain("if (a < b && c > d)");
+  });
+
+  it("should remove zero-width spaces (&#8203;)", () => {
+    const messages = [makeMessage({ content: "<p>hello&#8203;world</p>" })];
+    const output = action.formatResult(messages);
+    expect(output).toContain("helloworld");
+  });
+
+  it("should decode numeric character references", () => {
+    const messages = [makeMessage({ content: "<p>&#65;&#66;&#67;</p>" })];
+    const output = action.formatResult(messages);
+    expect(output).toContain("ABC");
+  });
+
+  it("should handle content with no HTML at all", () => {
+    const messages = [
+      makeMessage({
+        messageType: "Text",
+        content: "plain text message",
+      }),
+    ];
+    const output = action.formatResult(messages);
+    expect(output).toContain("plain text message");
+  });
+
+  it("should strip nested HTML tags", () => {
+    const messages = [
+      makeMessage({
+        content: "<p><b>bold</b> and <i>italic</i> text</p>",
+      }),
+    ];
+    const output = action.formatResult(messages);
+    expect(output).toContain("bold and italic text");
+  });
+});
+
+// ── Quote extraction (tested through formatters) ─────────────────────
+
+describe("quote extraction in message formats", () => {
+  const action = getAction("get-messages");
+
+  it("should handle blockquote with attributes", () => {
+    const messages = [
+      makeMessage({
+        id: "msg-reply",
+        content:
+          '<blockquote itemtype="cite">Quoted text</blockquote><p>Reply</p>',
+        quotedMessageId: "msg-original",
+      }),
+      makeMessage({
+        id: "msg-original",
+        senderDisplayName: "Original Author",
+        content: "<p>Original message</p>",
+      }),
+    ];
+    const output = action.formatResult(messages);
+    expect(output).toContain("[replying to Original Author]");
+    expect(output).toContain("Reply");
+  });
+
+  it("should not show reply marker when quotedMessageId is null", () => {
+    const messages = [
+      makeMessage({
+        content: "<blockquote>Some quote</blockquote><p>Reply</p>",
+        quotedMessageId: null,
+      }),
+    ];
+    const output = action.formatResult(messages);
+    expect(output).not.toContain("[replying to");
+  });
+
+  it("should show unknown sender for replies to messages not in result set", () => {
+    const messages = [
+      makeMessage({
+        content: "<blockquote>Old message</blockquote><p>My reply</p>",
+        quotedMessageId: "msg-not-in-set",
+      }),
+    ];
+    const output = action.formatResult(messages);
+    expect(output).toContain("[replying to unknown]");
+  });
+
+  it("should handle messages with no blockquote", () => {
+    const messages = [makeMessage({ content: "<p>Normal message</p>" })];
+    const output = action.formatResult(messages);
+    expect(output).not.toContain("[replying to");
+    expect(output).toContain("Normal message");
+  });
+});
+
+// ── Author compression (tested through formatters) ───────────────────
+
+describe("author compression in formatMarkdown", () => {
+  const action = getAction("get-messages");
+
+  it("should not compress when different senders alternate", () => {
+    const messages = [
+      makeMessage({
+        senderDisplayName: "Alice",
+        originalArrivalTime: "2026-03-16T10:00:00.000Z",
+        content: "<p>Hello</p>",
+      }),
+      makeMessage({
+        senderDisplayName: "Bob",
+        originalArrivalTime: "2026-03-16T10:01:00.000Z",
+        content: "<p>Hi</p>",
+      }),
+      makeMessage({
+        senderDisplayName: "Alice",
+        originalArrivalTime: "2026-03-16T10:02:00.000Z",
+        content: "<p>How are you?</p>",
+      }),
+    ];
+
+    const output = action.formatMarkdown(messages);
+
+    // All three should have full headers
+    expect(output.match(/### Alice/g)).toHaveLength(2);
+    expect(output.match(/### Bob/g)).toHaveLength(1);
+  });
+
+  it("should compress three consecutive messages from same sender", () => {
+    const messages = [
+      makeMessage({
+        senderDisplayName: "Alice",
+        originalArrivalTime: "2026-03-16T10:00:00.000Z",
+        content: "<p>First</p>",
+      }),
+      makeMessage({
+        senderDisplayName: "Alice",
+        originalArrivalTime: "2026-03-16T10:01:00.000Z",
+        content: "<p>Second</p>",
+      }),
+      makeMessage({
+        senderDisplayName: "Alice",
+        originalArrivalTime: "2026-03-16T10:02:00.000Z",
+        content: "<p>Third</p>",
+      }),
+    ];
+
+    const output = action.formatMarkdown(messages);
+
+    // Only one full header, two compressed timestamps
+    expect(output.match(/### Alice/g)).toHaveLength(1);
+    expect(output).toContain("*2026-03-16 10:01:00*");
+    expect(output).toContain("*2026-03-16 10:02:00*");
+  });
+});
+
+describe("author compression in formatToon", () => {
+  const action = getAction("get-messages");
+
+  it("should compress consecutive same-sender messages", () => {
+    const messages = [
+      makeMessage({
+        senderDisplayName: "Alice",
+        originalArrivalTime: "2026-03-16T10:00:00.000Z",
+        content: "<p>First</p>",
+      }),
+      makeMessage({
+        senderDisplayName: "Alice",
+        originalArrivalTime: "2026-03-16T10:01:00.000Z",
+        content: "<p>Second</p>",
+      }),
+    ];
+
+    const output = action.formatToon(messages);
+
+    // Full header only once
+    expect(output.match(/🗣️  Alice/g)).toHaveLength(1);
+    // Second message has just the timestamp, indented
+    expect(output).toContain("      2026-03-16 10:01:00");
+  });
+
+  it("should reset compression when sender changes", () => {
+    const messages = [
+      makeMessage({
+        senderDisplayName: "Alice",
+        originalArrivalTime: "2026-03-16T10:00:00.000Z",
+        content: "<p>Hello</p>",
+      }),
+      makeMessage({
+        senderDisplayName: "Bob",
+        originalArrivalTime: "2026-03-16T10:01:00.000Z",
+        content: "<p>Hi</p>",
+      }),
+    ];
+
+    const output = action.formatToon(messages);
+
+    expect(output).toContain("🗣️  Alice");
+    expect(output).toContain("🗣️  Bob");
+  });
+});
+
+// ── Message order parameter ──────────────────────────────────────────
+
+describe("message order parameter", () => {
+  const action = getAction("get-messages");
+
+  it("should have order in parameter definitions", () => {
+    const orderParameter = action.parameters.find(
+      (parameter) => parameter.name === "order",
+    );
+    expect(orderParameter).toBeDefined();
+    expect(orderParameter!.type).toBe("string");
+    expect(orderParameter!.required).toBe(false);
+    expect(orderParameter!.default).toBe("newest-first");
+  });
+
+  it("should not mutate original array when reversing", async () => {
+    const originalMessages = [
+      makeMessage({ id: "1", content: "First" }),
+      makeMessage({ id: "2", content: "Second" }),
+    ];
+    const client = createMockClient({
+      getMessages: vi.fn().mockResolvedValue(originalMessages),
+    });
+
+    await action.execute(client, {
+      conversationId: "19:test@thread.v2",
+      order: "oldest-first",
+    });
+
+    // Original array should be untouched
+    expect(originalMessages[0].id).toBe("1");
+    expect(originalMessages[1].id).toBe("2");
+  });
+
+  it("should pass explicit newest-first without reversing", async () => {
+    const messages = [
+      makeMessage({ id: "3", content: "Third" }),
+      makeMessage({ id: "2", content: "Second" }),
+      makeMessage({ id: "1", content: "First" }),
+    ];
+    const client = createMockClient({
+      getMessages: vi.fn().mockResolvedValue(messages),
+    });
+
+    const result = (await action.execute(client, {
+      conversationId: "19:test@thread.v2",
+      order: "newest-first",
+    })) as Message[];
+
+    expect(result[0].content).toBe("Third");
+    expect(result[2].content).toBe("First");
+  });
+
+  it("should apply order after textOnly filtering", async () => {
+    const messages = [
+      makeMessage({ id: "3", messageType: "RichText/Html", content: "C" }),
+      makeMessage({
+        id: "2",
+        messageType: "ThreadActivity/AddMember",
+        content: "system",
+      }),
+      makeMessage({ id: "1", messageType: "RichText/Html", content: "A" }),
+    ];
+    const client = createMockClient({
+      getMessages: vi.fn().mockResolvedValue(messages),
+    });
+
+    const result = (await action.execute(client, {
+      conversationId: "19:test@thread.v2",
+      order: "oldest-first",
+    })) as Message[];
+
+    // System message filtered out, remaining reversed
+    expect(result).toHaveLength(2);
+    expect(result[0].content).toBe("A");
+    expect(result[1].content).toBe("C");
+  });
 });

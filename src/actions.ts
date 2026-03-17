@@ -59,6 +59,7 @@ export interface ActionDefinition {
 // ── Output format types ──────────────────────────────────────────────
 
 export type OutputFormat = "json" | "text" | "md" | "toon";
+export type MessageOrder = "newest-first" | "oldest-first";
 
 /** Format an action result in the specified output format. */
 export function formatOutput(
@@ -81,6 +82,53 @@ export function formatOutput(
 function toonHeader(emoji: string, text: string): string {
   const separator = "─".repeat(40);
   return `\n  ${emoji} ${text}\n  ${separator}`;
+}
+
+// ── Message formatting utilities ─────────────────────────────────────
+
+/** Decode common HTML entities to plain text. */
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#8203;/g, "") // zero-width space
+    .replace(/&#(\d+);/g, (_, code: string) =>
+      String.fromCharCode(Number(code)),
+    );
+}
+
+/** Strip HTML tags and decode entities from message content. */
+function cleanContent(content: string): string {
+  return decodeHtmlEntities(content.replace(/<[^>]*>/g, "")).trim();
+}
+
+/** Extract quoted text from HTML blockquotes, returning quote and body separately. */
+function extractQuote(content: string): {
+  quote: string | null;
+  body: string;
+} {
+  for (const tag of ["blockquote", "quote"]) {
+    const pattern = new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}>`, "i");
+    const match = content.match(pattern);
+    if (match) {
+      const quote = cleanContent(match[0]);
+      const remainder = content.replace(pattern, "");
+      return { quote: quote || null, body: cleanContent(remainder) };
+    }
+  }
+  return { quote: null, body: cleanContent(content) };
+}
+
+/** Build a map from message ID to sender display name. */
+function buildSenderLookup(messages: Message[]): Map<string, string> {
+  const lookup = new Map<string, string>();
+  for (const message of messages) {
+    lookup.set(message.id, message.senderDisplayName || "(system)");
+  }
+  return lookup;
 }
 
 // ── Shared conversation resolution ───────────────────────────────────
@@ -351,6 +399,14 @@ const getMessages: ActionDefinition = {
       required: false,
       default: true,
     },
+    {
+      name: "order",
+      type: "string",
+      description:
+        "Message order: newest-first (default) or oldest-first (chronological)",
+      required: false,
+      default: "newest-first",
+    },
   ],
   execute: async (client, parameters) => {
     const { conversationId } = await resolveConversationId(client, parameters);
@@ -376,40 +432,89 @@ const getMessages: ActionDefinition = {
       );
     }
 
+    const order = (parameters.order as string | undefined) ?? "newest-first";
+    if (order === "oldest-first") {
+      messages = [...messages].reverse();
+    }
+
     return messages;
   },
   formatResult: (result) => {
     const messages = result as Message[];
+    const senderLookup = buildSenderLookup(messages);
     const lines = [`\n${messages.length} messages:\n`];
     for (const message of messages) {
       const time = message.originalArrivalTime.slice(0, 19).replace("T", " ");
       const sender = message.senderDisplayName || "(system)";
-      const preview = message.content.replace(/<[^>]*>/g, "").slice(0, 120);
-      lines.push(`  [${time}] ${sender}: ${preview}`);
+      const { quote, body } = extractQuote(message.content);
+
+      if (quote && message.quotedMessageId) {
+        const quotedSender =
+          senderLookup.get(message.quotedMessageId) ?? "unknown";
+        lines.push(`  [${time}] ${sender}:`);
+        lines.push(
+          `    > [replying to ${quotedSender}]: ${quote.slice(0, 80)}`,
+        );
+        lines.push(`    ${body.slice(0, 120)}`);
+      } else {
+        lines.push(`  [${time}] ${sender}: ${body.slice(0, 120)}`);
+      }
     }
     return lines.join("\n");
   },
   formatMarkdown: (result) => {
     const messages = result as Message[];
+    const senderLookup = buildSenderLookup(messages);
     const lines = [`## Messages (${messages.length})`, ""];
+    let previousSender = "";
     for (const message of messages) {
       const time = message.originalArrivalTime.slice(0, 19).replace("T", " ");
       const sender = message.senderDisplayName || "(system)";
-      const content = message.content.replace(/<[^>]*>/g, "");
-      lines.push(`### ${sender} — ${time}`, "", content, "");
+      const { quote, body } = extractQuote(message.content);
+
+      if (sender === previousSender) {
+        lines.push(`*${time}*`, "");
+      } else {
+        lines.push(`### ${sender} — ${time}`, "");
+        previousSender = sender;
+      }
+
+      if (quote && message.quotedMessageId) {
+        const quotedSender =
+          senderLookup.get(message.quotedMessageId) ?? "unknown";
+        lines.push(`> **[replying to ${quotedSender}]:** ${quote}`, "");
+      }
+
+      lines.push(body, "");
     }
     return lines.join("\n");
   },
   formatToon: (result) => {
     const messages = result as Message[];
+    const senderLookup = buildSenderLookup(messages);
     const lines = [toonHeader("💬", `${messages.length} Messages`)];
+    let previousSender = "";
     for (const message of messages) {
       const time = message.originalArrivalTime.slice(0, 19).replace("T", " ");
       const sender = message.senderDisplayName || "(system)";
-      const preview = message.content.replace(/<[^>]*>/g, "").slice(0, 120);
+      const { quote, body } = extractQuote(message.content);
+
       lines.push("");
-      lines.push(`  🗣️  ${sender} · ${time}`);
-      lines.push(`      ${preview}`);
+      if (sender === previousSender) {
+        lines.push(`      ${time}`);
+      } else {
+        lines.push(`  🗣️  ${sender} · ${time}`);
+        previousSender = sender;
+      }
+
+      if (quote && message.quotedMessageId) {
+        const quotedSender =
+          senderLookup.get(message.quotedMessageId) ?? "unknown";
+        lines.push(
+          `      > [replying to ${quotedSender}]: ${quote.slice(0, 80)}`,
+        );
+      }
+      lines.push(`      ${body.slice(0, 120)}`);
     }
     return lines.join("\n");
   },
