@@ -2,18 +2,18 @@
 /**
  * teams-api CLI
  *
- * Full-featured command-line interface for Teams operations.
+ * Thin adapter that maps unified action definitions to CLI commands.
+ * All commands, parameters, descriptions, and execution logic come
+ * from `src/actions.ts` — the single source of truth.
  *
- * Commands:
- *   conversations   List conversations
- *   messages         Get messages from a conversation
- *   send             Send a message
- *   members          List members of a conversation
- *   auth             Acquire and print a token
+ * Special commands (auth, logout) are defined here directly since
+ * they handle authentication rather than Teams data operations.
  */
 
 import { Command } from "commander";
 import { TeamsClient } from "./teams-client.js";
+import { actions } from "./actions.js";
+import type { ActionParameter } from "./actions.js";
 import type { AutoLoginOptions, ManualTokenOptions } from "./types.js";
 
 const program = new Command();
@@ -24,6 +24,14 @@ program
   .version("0.1.0");
 
 // ── Shared auth options ────────────────────────────────────────────────
+
+interface AuthFlags {
+  auto?: boolean;
+  email?: string;
+  token?: string;
+  debugPort: string;
+  region: string;
+}
 
 function addAuthOptions(command: Command): Command {
   return command
@@ -36,14 +44,6 @@ function addAuthOptions(command: Command): Command {
       "9222",
     )
     .option("--region <region>", "API region", "apac");
-}
-
-interface AuthFlags {
-  auto?: boolean;
-  email?: string;
-  token?: string;
-  debugPort: string;
-  region: string;
 }
 
 async function createClient(flags: AuthFlags): Promise<TeamsClient> {
@@ -70,7 +70,100 @@ async function createClient(flags: AuthFlags): Promise<TeamsClient> {
   return TeamsClient.fromDebugSession(manualOptions);
 }
 
-// ── auth command ───────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────
+
+function camelToKebab(name: string): string {
+  return name.replace(/([A-Z])/g, "-$1").toLowerCase();
+}
+
+function coerceParameter(
+  value: string | boolean | undefined,
+  type: ActionParameter["type"],
+): unknown {
+  if (value === undefined) return undefined;
+  switch (type) {
+    case "number":
+      return Number(value);
+    case "boolean":
+      return value === true || value === "true";
+    default:
+      return value;
+  }
+}
+
+// ── Register actions as CLI commands ──────────────────────────────────
+
+for (const action of actions) {
+  const command = new Command(action.name).description(action.description);
+
+  addAuthOptions(command);
+
+  for (const parameter of action.parameters) {
+    const flag = camelToKebab(parameter.name);
+
+    if (parameter.type === "boolean") {
+      if (parameter.default === true) {
+        // Default-true boolean: define --no-* to allow opting out.
+        // Commander auto-sets the value to true when --no-* is absent.
+        command.option(`--no-${flag}`, `Disable: ${parameter.description}`);
+      } else {
+        command.option(`--${flag}`, parameter.description);
+      }
+    } else if (parameter.required) {
+      command.requiredOption(`--${flag} <value>`, parameter.description);
+    } else {
+      command.option(
+        `--${flag} <value>`,
+        parameter.description,
+        parameter.default !== undefined ? String(parameter.default) : undefined,
+      );
+    }
+  }
+
+  command.option("--json", "Output as JSON");
+
+  command.action(async (flags: Record<string, unknown>) => {
+    const client = await createClient(flags as unknown as AuthFlags);
+
+    const actionParameters: Record<string, unknown> = {};
+    for (const parameter of action.parameters) {
+      actionParameters[parameter.name] = coerceParameter(
+        flags[parameter.name] as string | boolean | undefined,
+        parameter.type,
+      );
+    }
+
+    // Inject progress callback for message fetching
+    if (action.name === "get-messages") {
+      actionParameters.onProgress = (count: number) =>
+        process.stderr.write(`\r  ${count} messages fetched...`);
+    }
+
+    try {
+      const result = await action.execute(client, actionParameters);
+
+      if (action.name === "get-messages") {
+        process.stderr.write("\n");
+      }
+
+      if (flags.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log(action.formatResult(result));
+      }
+    } catch (error) {
+      if (action.name === "get-messages") {
+        process.stderr.write("\n");
+      }
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+  program.addCommand(command);
+}
+
+// ── auth command (special — creates a client, not a data operation) ───
 
 addAuthOptions(
   program
@@ -82,7 +175,7 @@ addAuthOptions(
   console.log(JSON.stringify(token, null, 2));
 });
 
-// ── logout command ────────────────────────────────────────────────────
+// ── logout command (special — clears cached token) ────────────────────
 
 program
   .command("logout")
@@ -92,198 +185,6 @@ program
     TeamsClient.clearCachedToken(flags.email);
     console.log(`Cached token for ${flags.email} cleared.`);
   });
-
-// ── conversations command ─────────────────────────────────────────────
-
-addAuthOptions(
-  program
-    .command("conversations")
-    .description("List conversations")
-    .option("--limit <n>", "Max conversations to return", "50")
-    .option("--json", "Output as JSON"),
-).action(async (flags: AuthFlags & { limit: string; json?: boolean }) => {
-  const client = await createClient(flags);
-  const conversations = await client.listConversations({
-    pageSize: Number(flags.limit),
-  });
-
-  if (flags.json) {
-    console.log(JSON.stringify(conversations, null, 2));
-    return;
-  }
-
-  console.log(`\n${conversations.length} conversations:\n`);
-  for (let i = 0; i < conversations.length; i++) {
-    const conversation = conversations[i];
-    const lastMessage = conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
-    const topic = conversation.topic || "(untitled 1:1 chat)";
-    console.log(
-      `  [${i}] ${conversation.threadType}: "${topic}" (members: ${conversation.memberCount ?? "?"}, last: ${lastMessage})`,
-    );
-  }
-});
-
-// ── messages command ──────────────────────────────────────────────────
-
-addAuthOptions(
-  program
-    .command("messages")
-    .description("Get messages from a conversation")
-    .requiredOption("--chat <name>", "Conversation name/topic (partial match)")
-    .option("--max-pages <n>", "Max pagination pages", "100")
-    .option("--page-size <n>", "Messages per page", "200")
-    .option(
-      "--text-only",
-      "Only show text/rich-text messages (exclude system events)",
-    )
-    .option("--json", "Output as JSON"),
-).action(
-  async (
-    flags: AuthFlags & {
-      chat: string;
-      maxPages: string;
-      pageSize: string;
-      textOnly?: boolean;
-      json?: boolean;
-    },
-  ) => {
-    const client = await createClient(flags);
-
-    const conversation = await client.findConversation(flags.chat);
-    if (!conversation) {
-      console.error(`No conversation matching "${flags.chat}" found.`);
-      process.exit(1);
-    }
-
-    console.error(`Fetching messages from "${conversation.topic}"...`);
-
-    let messages = await client.getMessages(conversation.id, {
-      maxPages: Number(flags.maxPages),
-      pageSize: Number(flags.pageSize),
-      onProgress: (count) =>
-        process.stderr.write(`\r  ${count} messages fetched...`),
-    });
-    process.stderr.write("\n");
-
-    if (flags.textOnly) {
-      messages = messages.filter(
-        (message) =>
-          (message.messageType === "RichText/Html" ||
-            message.messageType === "Text") &&
-          !message.isDeleted,
-      );
-    }
-
-    if (flags.json) {
-      console.log(JSON.stringify(messages, null, 2));
-      return;
-    }
-
-    console.error(`\n${messages.length} messages:\n`);
-    for (const message of messages) {
-      const time = message.originalArrivalTime.slice(0, 19).replace("T", " ");
-      const sender = message.senderDisplayName || "(system)";
-      const preview = message.content.replace(/<[^>]*>/g, "").slice(0, 120);
-      console.log(`  [${time}] ${sender}: ${preview}`);
-    }
-  },
-);
-
-// ── send command ──────────────────────────────────────────────────────
-
-addAuthOptions(
-  program
-    .command("send")
-    .description("Send a message to a conversation")
-    .option("--to <name>", "Find 1:1 conversation by person name")
-    .option("--chat <name>", "Find conversation by topic name")
-    .requiredOption("--message <text>", "Message content (plain text)")
-    .option("--json", "Output result as JSON"),
-).action(
-  async (
-    flags: AuthFlags & {
-      to?: string;
-      chat?: string;
-      message: string;
-      json?: boolean;
-    },
-  ) => {
-    if (!flags.to && !flags.chat) {
-      console.error("Error: either --to <name> or --chat <name> is required.");
-      process.exit(1);
-    }
-
-    const client = await createClient(flags);
-
-    let conversationId: string;
-    let conversationLabel: string;
-
-    if (flags.to) {
-      console.error(`Searching for 1:1 conversation with "${flags.to}"...`);
-      const result = await client.findOneOnOneConversation(flags.to);
-      if (!result) {
-        console.error(`No 1:1 conversation found matching "${flags.to}".`);
-        process.exit(1);
-      }
-      conversationId = result.conversationId;
-      conversationLabel = result.memberDisplayName;
-    } else {
-      console.error(`Searching for conversation matching "${flags.chat}"...`);
-      const conversation = await client.findConversation(flags.chat!);
-      if (!conversation) {
-        console.error(`No conversation matching "${flags.chat}" found.`);
-        process.exit(1);
-      }
-      conversationId = conversation.id;
-      conversationLabel = conversation.topic;
-    }
-
-    console.error(`Sending to "${conversationLabel}"...`);
-    const result = await client.sendMessage(conversationId, flags.message);
-
-    if (flags.json) {
-      console.log(
-        JSON.stringify({ ...result, conversation: conversationLabel }, null, 2),
-      );
-      return;
-    }
-
-    console.log(`Message sent to "${conversationLabel}"`);
-    console.log(`  Message ID: ${result.messageId}`);
-    console.log(`  Arrival time: ${result.arrivalTime}`);
-  },
-);
-
-// ── members command ───────────────────────────────────────────────────
-
-addAuthOptions(
-  program
-    .command("members")
-    .description("List members of a conversation")
-    .requiredOption("--chat <name>", "Conversation name/topic (partial match)")
-    .option("--json", "Output as JSON"),
-).action(async (flags: AuthFlags & { chat: string; json?: boolean }) => {
-  const client = await createClient(flags);
-
-  const conversation = await client.findConversation(flags.chat);
-  if (!conversation) {
-    console.error(`No conversation matching "${flags.chat}" found.`);
-    process.exit(1);
-  }
-
-  const members = await client.getMembers(conversation.id);
-
-  if (flags.json) {
-    console.log(JSON.stringify(members, null, 2));
-    return;
-  }
-
-  console.log(`\n${members.length} members in "${conversation.topic}":\n`);
-  for (const member of members) {
-    const name = member.displayName || "(unknown)";
-    console.log(`  ${name} (${member.role}) — ${member.id}`);
-  }
-});
 
 program.parseAsync().catch((error: Error) => {
   console.error("Fatal error:", error.message);

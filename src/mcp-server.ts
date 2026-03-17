@@ -2,8 +2,9 @@
 /**
  * MCP Server for Teams API
  *
- * Exposes Teams operations as MCP tools for AI agents.
- * Communicates via stdio transport.
+ * Thin adapter that maps unified action definitions to MCP tools.
+ * All tools, parameters, descriptions, and execution logic come
+ * from `src/actions.ts` — the single source of truth.
  *
  * Configuration:
  *   Set environment variables for authentication:
@@ -32,6 +33,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { TeamsClient } from "./teams-client.js";
+import { actions } from "./actions.js";
+import type { ActionParameter } from "./actions.js";
 
 let clientInstance: TeamsClient | null = null;
 
@@ -65,245 +68,69 @@ async function getClient(): Promise<TeamsClient> {
   return clientInstance;
 }
 
+function parameterToZod(parameter: ActionParameter): z.ZodTypeAny {
+  let schema: z.ZodTypeAny;
+  switch (parameter.type) {
+    case "string":
+      schema = z.string();
+      break;
+    case "number":
+      schema = z.number();
+      break;
+    case "boolean":
+      schema = z.boolean();
+      break;
+  }
+  schema = schema.describe(parameter.description);
+  if (!parameter.required) {
+    schema = schema.optional();
+  }
+  return schema;
+}
+
 const server = new McpServer({
   name: "teams-api",
   version: "0.1.0",
 });
 
-server.registerTool(
-  "teams_list_conversations",
-  {
-    title: "List Teams Conversations",
-    description:
-      "List Microsoft Teams conversations (chats, group chats, meetings, channels). " +
-      "Returns conversation ID, topic/name, type, member count, and last message time. " +
-      "Use the conversation ID from the results to fetch messages or send messages.",
-    inputSchema: {
-      limit: z
-        .number()
-        .optional()
-        .describe("Maximum number of conversations to return (default: 50)"),
+// ── Register all actions as MCP tools ─────────────────────────────────
+
+for (const action of actions) {
+  const toolName = `teams_${action.name.replace(/-/g, "_")}`;
+
+  const inputSchema: Record<string, z.ZodTypeAny> = {};
+  for (const parameter of action.parameters) {
+    inputSchema[parameter.name] = parameterToZod(parameter);
+  }
+
+  server.registerTool(
+    toolName,
+    {
+      title: action.title,
+      description: action.description,
+      inputSchema,
     },
-  },
-  async ({ limit }) => {
-    const client = await getClient();
-    const conversations = await client.listConversations({
-      pageSize: limit ?? 50,
-    });
-
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(conversations, null, 2),
-        },
-      ],
-    };
-  },
-);
-
-server.registerTool(
-  "teams_find_conversation",
-  {
-    title: "Find Teams Conversation",
-    description:
-      "Find a Teams conversation by topic name (case-insensitive partial match). " +
-      "Returns the matching conversation with its ID, or null if not found. " +
-      "For 1:1 chats (which have no topic), use teams_find_one_on_one instead.",
-    inputSchema: {
-      query: z
-        .string()
-        .describe("Partial topic name to search for (case-insensitive)"),
-    },
-  },
-  async ({ query }) => {
-    const client = await getClient();
-    const conversation = await client.findConversation(query);
-
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: conversation
-            ? JSON.stringify(conversation, null, 2)
-            : "No conversation found matching the query.",
-        },
-      ],
-    };
-  },
-);
-
-server.registerTool(
-  "teams_find_one_on_one",
-  {
-    title: "Find 1:1 Conversation",
-    description:
-      "Find a 1:1 Teams conversation with a specific person by name. " +
-      "Searches untitled chats by scanning recent message sender names. " +
-      "Also finds the self-chat (notes to self) if the name matches the current user. " +
-      "Returns the conversation ID and matched member name, or null if not found.",
-    inputSchema: {
-      personName: z
-        .string()
-        .describe(
-          "Name of the person to find (case-insensitive partial match)",
-        ),
-    },
-  },
-  async ({ personName }) => {
-    const client = await getClient();
-    const result = await client.findOneOnOneConversation(personName);
-
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: result
-            ? JSON.stringify(result, null, 2)
-            : `No 1:1 conversation found with "${personName}".`,
-        },
-      ],
-    };
-  },
-);
-
-server.registerTool(
-  "teams_get_messages",
-  {
-    title: "Get Messages",
-    description:
-      "Fetch messages from a Teams conversation. Returns an array of messages " +
-      "with sender name, content (HTML or plain text), timestamp, reactions, " +
-      "mentions, and reply references. Use the conversation ID from " +
-      "teams_list_conversations or teams_find_conversation. " +
-      "Messages are in reverse chronological order (newest first).",
-    inputSchema: {
-      conversationId: z
-        .string()
-        .describe("Conversation thread ID to fetch messages from"),
-      maxPages: z
-        .number()
-        .optional()
-        .describe("Max pagination pages to fetch (default: 5 for MCP use)"),
-      textOnly: z
-        .boolean()
-        .optional()
-        .describe(
-          "If true, exclude system events and only return text messages (default: true)",
-        ),
-    },
-  },
-  async ({ conversationId, maxPages, textOnly }) => {
-    const client = await getClient();
-    let messages = await client.getMessages(conversationId, {
-      maxPages: maxPages ?? 5,
-      pageSize: 200,
-    });
-
-    const shouldFilterText = textOnly ?? true;
-    if (shouldFilterText) {
-      messages = messages.filter(
-        (message) =>
-          (message.messageType === "RichText/Html" ||
-            message.messageType === "Text") &&
-          !message.isDeleted,
+    async (parameters) => {
+      const client = await getClient();
+      const result = await action.execute(
+        client,
+        parameters as Record<string, unknown>,
       );
-    }
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(messages, null, 2),
-        },
-      ],
-    };
-  },
-);
-
-server.registerTool(
-  "teams_send_message",
-  {
-    title: "Send Message",
-    description:
-      "Send a plain-text message to a Teams conversation. " +
-      "The sender identity is determined automatically from the authenticated user. " +
-      "Use the conversation ID from teams_list_conversations, " +
-      "teams_find_conversation, or teams_find_one_on_one.",
-    inputSchema: {
-      conversationId: z
-        .string()
-        .describe("Conversation thread ID to send the message to"),
-      content: z.string().describe("Plain text message content to send"),
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text:
+              result === null || result === undefined
+                ? action.formatResult(result)
+                : JSON.stringify(result, null, 2),
+          },
+        ],
+      };
     },
-  },
-  async ({ conversationId, content }) => {
-    const client = await getClient();
-    const result = await client.sendMessage(conversationId, content);
-
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-  },
-);
-
-server.registerTool(
-  "teams_get_members",
-  {
-    title: "Get Conversation Members",
-    description:
-      "List members of a Teams conversation. Returns member ID (MRI), " +
-      "display name, and role. Note: 1:1 chat members may have empty display names; " +
-      "use teams_find_one_on_one to resolve names from message history.",
-    inputSchema: {
-      conversationId: z
-        .string()
-        .describe("Conversation thread ID to get members for"),
-    },
-  },
-  async ({ conversationId }) => {
-    const client = await getClient();
-    const members = await client.getMembers(conversationId);
-
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(members, null, 2),
-        },
-      ],
-    };
-  },
-);
-
-server.registerTool(
-  "teams_whoami",
-  {
-    title: "Current User Info",
-    description:
-      "Get the display name of the currently authenticated Teams user.",
-    inputSchema: {},
-  },
-  async () => {
-    const client = await getClient();
-    const displayName = await client.getCurrentUserDisplayName();
-    const token = client.getToken();
-
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({ displayName, region: token.region }, null, 2),
-        },
-      ],
-    };
-  },
-);
+  );
+}
 
 async function main() {
   const transport = new StdioServerTransport();

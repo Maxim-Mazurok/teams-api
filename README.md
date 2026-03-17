@@ -72,18 +72,28 @@ Run commands with `npx tsx src/cli.ts`.
 npx tsx src/cli.ts auth --auto --email you@example.com
 
 # List conversations
-npx tsx src/cli.ts conversations --token "$TOKEN" --limit 20 --json
+npx tsx src/cli.ts list-conversations --token "$TOKEN" --limit 20 --json
 
-# Read messages
-npx tsx src/cli.ts messages --token "$TOKEN" --chat "Design Review"
-npx tsx src/cli.ts messages --token "$TOKEN" --id "19:abc123@thread.v2" --pages 3 --json
+# Find a conversation by topic
+npx tsx src/cli.ts find-conversation --token "$TOKEN" --query "Design Review"
+
+# Find a 1:1 chat by person name
+npx tsx src/cli.ts find-one-on-one --token "$TOKEN" --person-name "Jane Doe"
+
+# Read messages (by topic name, person name, or direct ID)
+npx tsx src/cli.ts get-messages --token "$TOKEN" --chat "Design Review"
+npx tsx src/cli.ts get-messages --token "$TOKEN" --to "Jane Doe" --max-pages 5
+npx tsx src/cli.ts get-messages --token "$TOKEN" --conversation-id "19:abc@thread.v2" --json
 
 # Send a message
-npx tsx src/cli.ts send --token "$TOKEN" --to "Jane Doe" --message "Hello!"
-npx tsx src/cli.ts send --token "$TOKEN" --chat "Design Review" --message "Status update"
+npx tsx src/cli.ts send-message --token "$TOKEN" --to "Jane Doe" --content "Hello!"
+npx tsx src/cli.ts send-message --token "$TOKEN" --chat "Design Review" --content "Status update"
 
 # List members
-npx tsx src/cli.ts members --token "$TOKEN" --chat "Design Review" --json
+npx tsx src/cli.ts get-members --token "$TOKEN" --chat "Design Review" --json
+
+# Get current user info
+npx tsx src/cli.ts whoami --token "$TOKEN"
 ```
 
 ## MCP server

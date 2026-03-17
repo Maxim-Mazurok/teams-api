@@ -75,6 +75,8 @@ export type {
 export { SYSTEM_STREAM_TYPES } from "./types.js";
 export { parseRawMessage, ApiAuthError } from "./api.js";
 export { saveToken, loadToken, clearToken } from "./token-store.js";
+export { actions } from "./actions.js";
+export type { ActionDefinition, ActionParameter } from "./actions.js";
 
 const SYSTEM_STREAMS: readonly string[] = [
   "streamofannotations",
@@ -105,7 +107,7 @@ export class TeamsClient {
    * Token lifetime is ~24 hours. Cached tokens are reused within 23 hours.
    */
   static async create(options: AutoLoginOptions): Promise<TeamsClient> {
-    const log = options.verbose ? console.log.bind(console) : () => {};
+    const log = options.verbose ? console.error.bind(console) : () => {};
 
     const cachedToken = loadToken(options.email);
     if (cachedToken) {
