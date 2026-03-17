@@ -57,13 +57,15 @@ Run commands with `npx tsx src/cli.ts`.
 
 ### Auth flags (available on all commands)
 
-| Flag                  | Description                              |
-| --------------------- | ---------------------------------------- |
-| `--auto`              | Auto-acquire token via FIDO2 passkey     |
-| `--email <email>`     | Corporate email (required with `--auto`) |
-| `--token <token>`     | Use an existing skype token              |
-| `--debug-port <port>` | Chrome debug port (default: 9222)        |
-| `--region <region>`   | API region (default: apac)               |
+| Flag                  | Description                                |
+| --------------------- | ------------------------------------------ |
+| `--auto`              | Auto-acquire token via FIDO2 passkey       |
+| `--email <email>`     | Corporate email (required with `--auto`)   |
+| `--token <token>`     | Use an existing skype token                |
+| `--debug-port <port>` | Chrome debug port (default: 9222)          |
+| `--region <region>`   | API region (default: apac)                 |
+| `--format <format>`   | Output format: json, text, md, toon        |
+| `--output <file>`     | Export output to file (default format: md) |
 
 ### Examples
 
@@ -72,28 +74,37 @@ Run commands with `npx tsx src/cli.ts`.
 npx tsx src/cli.ts auth --auto --email you@example.com
 
 # List conversations
-npx tsx src/cli.ts list-conversations --token "$TOKEN" --limit 20 --json
+npx tsx src/cli.ts list-conversations --auto --email you@example.com --limit 20 --format json
 
 # Find a conversation by topic
-npx tsx src/cli.ts find-conversation --token "$TOKEN" --query "Design Review"
+npx tsx src/cli.ts find-conversation --auto --email you@example.com --query "Design Review"
 
 # Find a 1:1 chat by person name
-npx tsx src/cli.ts find-one-on-one --token "$TOKEN" --person-name "Jane Doe"
+npx tsx src/cli.ts find-one-on-one --auto --email you@example.com --person-name "Jane Doe"
 
 # Read messages (by topic name, person name, or direct ID)
-npx tsx src/cli.ts get-messages --token "$TOKEN" --chat "Design Review"
-npx tsx src/cli.ts get-messages --token "$TOKEN" --to "Jane Doe" --max-pages 5
-npx tsx src/cli.ts get-messages --token "$TOKEN" --conversation-id "19:abc@thread.v2" --json
+npx tsx src/cli.ts get-messages --auto --email you@example.com --chat "Design Review"
+npx tsx src/cli.ts get-messages --auto --email you@example.com --to "Jane Doe" --max-pages 5
+npx tsx src/cli.ts get-messages --auto --email you@example.com --conversation-id "19:abc@thread.v2" --format json
 
 # Send a message
-npx tsx src/cli.ts send-message --token "$TOKEN" --to "Jane Doe" --content "Hello!"
-npx tsx src/cli.ts send-message --token "$TOKEN" --chat "Design Review" --content "Status update"
+npx tsx src/cli.ts send-message --auto --email you@example.com --to "Jane Doe" --content "Hello!"
+npx tsx src/cli.ts send-message --auto --email you@example.com --chat "Design Review" --content "Status update"
 
 # List members
-npx tsx src/cli.ts get-members --token "$TOKEN" --chat "Design Review" --json
+npx tsx src/cli.ts get-members --auto --email you@example.com --chat "Design Review" --format md
 
 # Get current user info
-npx tsx src/cli.ts whoami --token "$TOKEN"
+npx tsx src/cli.ts whoami --auto --email you@example.com
+
+# Export messages to a file (default format: md)
+npx tsx src/cli.ts get-messages --auto --email you@example.com --chat "General" --output exports/general.md
+
+# Export as JSON to a file
+npx tsx src/cli.ts get-messages --auto --email you@example.com --chat "General" --format json --output exports/general.json
+
+# Toon format (fun ASCII art output)
+npx tsx src/cli.ts list-conversations --auto --email you@example.com --format toon
 ```
 
 ## MCP server
@@ -128,6 +139,8 @@ The MCP server exposes Teams operations as tools for AI agents via stdio transpo
 | `TEAMS_DEBUG_PORT` | Chrome debug port (default: 9222)  |
 
 ### Available tools
+
+All MCP tools accept an optional `format` parameter (`json`, `text`, `md`, or `toon`). Default format is `toon`.
 
 | Tool                       | Description                               |
 | -------------------------- | ----------------------------------------- |

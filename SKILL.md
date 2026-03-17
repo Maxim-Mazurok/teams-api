@@ -2,7 +2,7 @@
 
 Use this skill when you need to interact with Microsoft Teams — reading messages, sending replies, listing conversations, or looking up team members.
 
-All tools share a unified interface with the CLI and programmatic API. Tool definitions, parameters, and descriptions are generated from a single source (`src/actions.ts`).
+All tools share a unified interface with the CLI and programmatic API. Tool definitions, parameters, and descriptions are generated from a single source (`src/actions.ts`).\n\nAll tools accept an optional `format` parameter (`json`, `text`, `md`, or `toon`). Default format is `toon`.
 
 ## When to use
 

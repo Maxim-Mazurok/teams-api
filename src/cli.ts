@@ -10,11 +10,15 @@
  * they handle authentication rather than Teams data operations.
  */
 
+import { writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Command } from "commander";
 import { TeamsClient } from "./teams-client.js";
-import { actions } from "./actions.js";
-import type { ActionParameter } from "./actions.js";
+import { actions, formatOutput } from "./actions.js";
+import type { ActionParameter, OutputFormat } from "./actions.js";
 import type { AutoLoginOptions, ManualTokenOptions } from "./types.js";
+
+const VALID_FORMATS: OutputFormat[] = ["json", "text", "md", "toon"];
 
 const program = new Command();
 
@@ -120,7 +124,11 @@ for (const action of actions) {
     }
   }
 
-  command.option("--json", "Output as JSON");
+  command.option("--format <format>", "Output format (json, text, md, toon)");
+  command.option(
+    "--output <file>",
+    "Export output to file (default format: md)",
+  );
 
   command.action(async (flags: Record<string, unknown>) => {
     const client = await createClient(flags as unknown as AuthFlags);
@@ -139,6 +147,23 @@ for (const action of actions) {
         process.stderr.write(`\r  ${count} messages fetched...`);
     }
 
+    // Determine output format
+    const rawFormat = flags.format as string | undefined;
+    if (rawFormat && !VALID_FORMATS.includes(rawFormat as OutputFormat)) {
+      console.error(
+        `Error: Invalid format "${rawFormat}". Valid formats: ${VALID_FORMATS.join(", ")}`,
+      );
+      process.exit(1);
+    }
+    let outputFormat: OutputFormat;
+    if (rawFormat) {
+      outputFormat = rawFormat as OutputFormat;
+    } else if (flags.output) {
+      outputFormat = "md";
+    } else {
+      outputFormat = "text";
+    }
+
     try {
       const result = await action.execute(client, actionParameters);
 
@@ -146,10 +171,14 @@ for (const action of actions) {
         process.stderr.write("\n");
       }
 
-      if (flags.json) {
-        console.log(JSON.stringify(result, null, 2));
+      const output = formatOutput(action, result, outputFormat);
+
+      if (flags.output) {
+        const outputPath = resolve(flags.output as string);
+        writeFileSync(outputPath, output, "utf-8");
+        console.log(`Output written to ${outputPath}`);
       } else {
-        console.log(action.formatResult(result));
+        console.log(output);
       }
     } catch (error) {
       if (action.name === "get-messages") {

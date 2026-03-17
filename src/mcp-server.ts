@@ -33,8 +33,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { TeamsClient } from "./teams-client.js";
-import { actions } from "./actions.js";
-import type { ActionParameter } from "./actions.js";
+import { actions, formatOutput } from "./actions.js";
+import type { ActionParameter, OutputFormat } from "./actions.js";
 
 let clientInstance: TeamsClient | null = null;
 
@@ -102,6 +102,10 @@ for (const action of actions) {
   for (const parameter of action.parameters) {
     inputSchema[parameter.name] = parameterToZod(parameter);
   }
+  inputSchema["format"] = z
+    .enum(["json", "text", "md", "toon"])
+    .describe("Output format (default: toon)")
+    .optional();
 
   server.registerTool(
     toolName,
@@ -112,6 +116,7 @@ for (const action of actions) {
     },
     async (parameters) => {
       const client = await getClient();
+      const outputFormat = (parameters.format as OutputFormat) ?? "toon";
       const result = await action.execute(
         client,
         parameters as Record<string, unknown>,
@@ -121,10 +126,7 @@ for (const action of actions) {
         content: [
           {
             type: "text" as const,
-            text:
-              result === null || result === undefined
-                ? action.formatResult(result)
-                : JSON.stringify(result, null, 2),
+            text: formatOutput(action, result, outputFormat),
           },
         ],
       };

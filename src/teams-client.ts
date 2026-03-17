@@ -75,8 +75,12 @@ export type {
 export { SYSTEM_STREAM_TYPES } from "./types.js";
 export { parseRawMessage, ApiAuthError } from "./api.js";
 export { saveToken, loadToken, clearToken } from "./token-store.js";
-export { actions } from "./actions.js";
-export type { ActionDefinition, ActionParameter } from "./actions.js";
+export { actions, formatOutput } from "./actions.js";
+export type {
+  ActionDefinition,
+  ActionParameter,
+  OutputFormat,
+} from "./actions.js";
 
 const SYSTEM_STREAMS: readonly string[] = [
   "streamofannotations",

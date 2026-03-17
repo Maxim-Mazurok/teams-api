@@ -50,6 +50,37 @@ export interface ActionDefinition {
   ) => Promise<unknown>;
   /** Format result as human-readable text (CLI output without --json). */
   formatResult: (result: unknown) => string;
+  /** Format result as Markdown. */
+  formatMarkdown: (result: unknown) => string;
+  /** Format result as fun ASCII art with emojis. */
+  formatToon: (result: unknown) => string;
+}
+
+// ── Output format types ──────────────────────────────────────────────
+
+export type OutputFormat = "json" | "text" | "md" | "toon";
+
+/** Format an action result in the specified output format. */
+export function formatOutput(
+  action: ActionDefinition,
+  result: unknown,
+  format: OutputFormat = "json",
+): string {
+  switch (format) {
+    case "json":
+      return JSON.stringify(result, null, 2);
+    case "text":
+      return action.formatResult(result);
+    case "md":
+      return action.formatMarkdown(result);
+    case "toon":
+      return action.formatToon(result);
+  }
+}
+
+function toonHeader(emoji: string, text: string): string {
+  const separator = "─".repeat(40);
+  return `\n  ${emoji} ${text}\n  ${separator}`;
 }
 
 // ── Shared conversation resolution ───────────────────────────────────
@@ -156,6 +187,39 @@ const listConversations: ActionDefinition = {
     }
     return lines.join("\n");
   },
+  formatMarkdown: (result) => {
+    const conversations = result as Conversation[];
+    const lines = [`## Conversations (${conversations.length})`, ""];
+    if (conversations.length === 0) return lines.join("\n");
+    lines.push("| # | Topic | Type | Members | Last Message |");
+    lines.push("|---|-------|------|---------|--------------|");
+    for (let i = 0; i < conversations.length; i++) {
+      const conversation = conversations[i];
+      const lastMessage =
+        conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
+      const topic = conversation.topic || "(untitled 1:1 chat)";
+      lines.push(
+        `| ${i} | ${topic} | ${conversation.threadType} | ${conversation.memberCount ?? "?"} | ${lastMessage} |`,
+      );
+    }
+    return lines.join("\n");
+  },
+  formatToon: (result) => {
+    const conversations = result as Conversation[];
+    const lines = [toonHeader("📋", `${conversations.length} Conversations`)];
+    for (let i = 0; i < conversations.length; i++) {
+      const conversation = conversations[i];
+      const lastMessage =
+        conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
+      const topic = conversation.topic || "(untitled 1:1 chat)";
+      lines.push("");
+      lines.push(`  💬 [${i}] "${topic}"`);
+      lines.push(
+        `      ${conversation.threadType} · ${conversation.memberCount ?? "?"} members · last: ${lastMessage}`,
+      );
+    }
+    return lines.join("\n");
+  },
 };
 
 const findConversation: ActionDefinition = {
@@ -186,6 +250,29 @@ const findConversation: ActionDefinition = {
       `members: ${conversation.memberCount ?? "?"}, last: ${lastMessage})`
     );
   },
+  formatMarkdown: (result) => {
+    if (!result) return "No conversation found.";
+    const conversation = result as Conversation;
+    const lastMessage = conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
+    return [
+      `## Found: "${conversation.topic}"`,
+      "",
+      `- **ID:** ${conversation.id}`,
+      `- **Type:** ${conversation.threadType}`,
+      `- **Members:** ${conversation.memberCount ?? "?"}`,
+      `- **Last message:** ${lastMessage}`,
+    ].join("\n");
+  },
+  formatToon: (result) => {
+    if (!result) return "\n  🔍 No conversation found.";
+    const conversation = result as Conversation;
+    const lastMessage = conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
+    return [
+      toonHeader("🔍", `Found: "${conversation.topic}"`),
+      `  🆔 ${conversation.id}`,
+      `  📁 ${conversation.threadType} · ${conversation.memberCount ?? "?"} members · last: ${lastMessage}`,
+    ].join("\n");
+  },
 };
 
 const findOneOnOne: ActionDefinition = {
@@ -212,6 +299,23 @@ const findOneOnOne: ActionDefinition = {
     if (!result) return "No 1:1 conversation found.";
     const searchResult = result as OneOnOneSearchResult;
     return `Found 1:1 with ${searchResult.memberDisplayName} (${searchResult.conversationId})`;
+  },
+  formatMarkdown: (result) => {
+    if (!result) return "No 1:1 conversation found.";
+    const searchResult = result as OneOnOneSearchResult;
+    return [
+      `## Found 1:1 with ${searchResult.memberDisplayName}`,
+      "",
+      `- **Conversation ID:** ${searchResult.conversationId}`,
+    ].join("\n");
+  },
+  formatToon: (result) => {
+    if (!result) return "\n  🔍 No 1:1 conversation found.";
+    const searchResult = result as OneOnOneSearchResult;
+    return [
+      toonHeader("🔍", `Found 1:1 with ${searchResult.memberDisplayName}`),
+      `  🆔 ${searchResult.conversationId}`,
+    ].join("\n");
   },
 };
 
@@ -285,6 +389,30 @@ const getMessages: ActionDefinition = {
     }
     return lines.join("\n");
   },
+  formatMarkdown: (result) => {
+    const messages = result as Message[];
+    const lines = [`## Messages (${messages.length})`, ""];
+    for (const message of messages) {
+      const time = message.originalArrivalTime.slice(0, 19).replace("T", " ");
+      const sender = message.senderDisplayName || "(system)";
+      const content = message.content.replace(/<[^>]*>/g, "");
+      lines.push(`### ${sender} — ${time}`, "", content, "");
+    }
+    return lines.join("\n");
+  },
+  formatToon: (result) => {
+    const messages = result as Message[];
+    const lines = [toonHeader("💬", `${messages.length} Messages`)];
+    for (const message of messages) {
+      const time = message.originalArrivalTime.slice(0, 19).replace("T", " ");
+      const sender = message.senderDisplayName || "(system)";
+      const preview = message.content.replace(/<[^>]*>/g, "").slice(0, 120);
+      lines.push("");
+      lines.push(`  🗣️  ${sender} · ${time}`);
+      lines.push(`      ${preview}`);
+    }
+    return lines.join("\n");
+  },
 };
 
 const sendMessage: ActionDefinition = {
@@ -325,6 +453,33 @@ const sendMessage: ActionDefinition = {
       `  Arrival time: ${arrivalTime}`,
     ].join("\n");
   },
+  formatMarkdown: (result) => {
+    const { messageId, arrivalTime, conversation } = result as {
+      messageId: string;
+      arrivalTime: number;
+      conversation: string;
+    };
+    return [
+      "## Message Sent",
+      "",
+      `- **To:** ${conversation}`,
+      `- **Message ID:** ${messageId}`,
+      `- **Arrival time:** ${arrivalTime}`,
+    ].join("\n");
+  },
+  formatToon: (result) => {
+    const { messageId, arrivalTime, conversation } = result as {
+      messageId: string;
+      arrivalTime: number;
+      conversation: string;
+    };
+    return [
+      toonHeader("✅", "Message Sent!"),
+      `  📨 To: "${conversation}"`,
+      `  🆔 ${messageId}`,
+      `  ⏰ ${arrivalTime}`,
+    ].join("\n");
+  },
 };
 
 const getMembers: ActionDefinition = {
@@ -350,6 +505,29 @@ const getMembers: ActionDefinition = {
     }
     return lines.join("\n");
   },
+  formatMarkdown: (result) => {
+    const members = result as Member[];
+    const lines = [`## Members (${members.length})`, ""];
+    if (members.length === 0) return lines.join("\n");
+    lines.push("| Name | Role | ID |");
+    lines.push("|------|------|----|");
+    for (const member of members) {
+      const name = member.displayName || "(unknown)";
+      lines.push(`| ${name} | ${member.role} | ${member.id} |`);
+    }
+    return lines.join("\n");
+  },
+  formatToon: (result) => {
+    const members = result as Member[];
+    const lines = [toonHeader("👥", `${members.length} Members`)];
+    for (const member of members) {
+      const name = member.displayName || "(unknown)";
+      lines.push("");
+      lines.push(`  👤 ${name} · ${member.role}`);
+      lines.push(`     ${member.id}`);
+    }
+    return lines.join("\n");
+  },
 };
 
 const whoami: ActionDefinition = {
@@ -369,6 +547,20 @@ const whoami: ActionDefinition = {
       region: string;
     };
     return `${displayName} (region: ${region})`;
+  },
+  formatMarkdown: (result) => {
+    const { displayName, region } = result as {
+      displayName: string;
+      region: string;
+    };
+    return [`## ${displayName}`, "", `- **Region:** ${region}`].join("\n");
+  },
+  formatToon: (result) => {
+    const { displayName, region } = result as {
+      displayName: string;
+      region: string;
+    };
+    return [toonHeader("🙋", displayName), `  📍 region: ${region}`].join("\n");
   },
 };
 
