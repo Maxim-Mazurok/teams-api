@@ -28,6 +28,7 @@
 import type {
   TeamsToken,
   AutoLoginOptions,
+  InteractiveLoginOptions,
   ManualTokenOptions,
   Conversation,
   Message,
@@ -49,17 +50,20 @@ import {
 } from "./api.js";
 import {
   acquireTokenViaAutoLogin,
+  acquireTokenViaInteractiveLogin,
   acquireTokenViaDebugSession,
 } from "./auth.js";
 import { saveToken, loadToken, clearToken } from "./token-store.js";
 
 export {
   acquireTokenViaAutoLogin,
+  acquireTokenViaInteractiveLogin,
   acquireTokenViaDebugSession,
 } from "./auth.js";
 export type {
   TeamsToken,
   AutoLoginOptions,
+  InteractiveLoginOptions,
   ManualTokenOptions,
   Conversation,
   Message,
@@ -153,6 +157,20 @@ export class TeamsClient {
     options?: ManualTokenOptions,
   ): Promise<TeamsClient> {
     const token = await acquireTokenViaDebugSession(options);
+    return new TeamsClient(token);
+  }
+
+  /**
+   * Create a client via interactive browser login.
+   *
+   * Opens a visible Chromium window where the user manually logs into
+   * Teams. Works on all platforms (macOS, Windows, Linux) without
+   * requiring FIDO2 passkeys or system Chrome.
+   */
+  static async fromInteractiveLogin(
+    options?: InteractiveLoginOptions,
+  ): Promise<TeamsClient> {
+    const token = await acquireTokenViaInteractiveLogin(options);
     return new TeamsClient(token);
   }
 

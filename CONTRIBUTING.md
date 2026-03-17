@@ -27,11 +27,13 @@ TeamsClient (public API)
 
 ### Authentication strategies
 
-1. **Auto-login** (`acquireTokenViaAutoLogin`): Launches system Chrome via Playwright persistent context, navigates to the Teams web app, fills the email on the Microsoft Entra ID login page, waits for FIDO2 passkey authentication to complete, then intercepts the `x-skypetoken` header via CDP Fetch interception during a page reload.
+1. **Interactive login** (`acquireTokenViaInteractiveLogin`): Opens a visible Chromium browser window (Playwright's bundled browser) and navigates to Teams. The user completes the login manually using any method their organization supports (password, MFA, passkey, etc.). Once Teams loads, the skype token is captured via CDP Fetch interception during a page reload. Works on all platforms without requiring system Chrome or FIDO2 passkeys.
 
-2. **Debug session** (`acquireTokenViaDebugSession`): Connects to a running Chrome instance via puppeteer-core CDP, finds the Teams tab, enables Fetch interception, triggers a page reload, and captures the `x-skypetoken` header.
+2. **Auto-login** (`acquireTokenViaAutoLogin`): Launches system Chrome via Playwright persistent context, navigates to the Teams web app, fills the email on the Microsoft Entra ID login page, waits for FIDO2 passkey authentication to complete, then intercepts the `x-skypetoken` header via CDP Fetch interception during a page reload. macOS only.
 
-Both strategies use the same CDP Fetch interception pattern to extract the token from live network requests.
+3. **Debug session** (`acquireTokenViaDebugSession`): Connects to a running Chrome instance via puppeteer-core CDP, finds the Teams tab, enables Fetch interception, triggers a page reload, and captures the `x-skypetoken` header.
+
+All three strategies use the same CDP Fetch interception pattern to extract the token from live network requests.
 
 ### Token lifecycle
 

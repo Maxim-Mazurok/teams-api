@@ -114,7 +114,11 @@ Or for group chats:
 
 ## Authentication
 
-The MCP server handles authentication automatically via environment variables. The user configures `TEAMS_AUTO=true` and `TEAMS_EMAIL=user@company.com` for unattended login, or `TEAMS_TOKEN=<token>` for a pre-acquired token.
+The MCP server handles authentication automatically via environment variables. Common configurations:
+
+- `TEAMS_TOKEN=<token>` — pre-acquired skype token (all platforms)
+- `TEAMS_AUTO=true` and `TEAMS_EMAIL=user@company.com` — unattended FIDO2 login (macOS only)
+- `TEAMS_LOGIN=true` — interactive browser login (all platforms, opens a visible browser window)
 
 ## Important notes
 

@@ -10,8 +10,9 @@
  *   Set environment variables for authentication:
  *     TEAMS_TOKEN     — Use an existing skype token
  *     TEAMS_REGION    — API region (default: "apac")
- *     TEAMS_EMAIL     — Corporate email (for auto-login)
- *     TEAMS_AUTO      — Set to "true" to use auto-login
+ *     TEAMS_EMAIL     — Corporate email (for auto-login or interactive login)
+ *     TEAMS_AUTO      — Set to "true" to use auto-login (macOS + FIDO2)
+ *     TEAMS_LOGIN     — Set to "true" to use interactive browser login (all platforms)
  *     TEAMS_DEBUG_PORT — Chrome debug port (default: 9222)
  *
  * Usage in VS Code settings (mcp config):
@@ -47,6 +48,7 @@ async function getClient(): Promise<TeamsClient> {
   const envRegion = process.env.TEAMS_REGION ?? "apac";
   const envEmail = process.env.TEAMS_EMAIL;
   const envAuto = process.env.TEAMS_AUTO === "true";
+  const envLogin = process.env.TEAMS_LOGIN === "true";
   const envDebugPort = process.env.TEAMS_DEBUG_PORT
     ? Number(process.env.TEAMS_DEBUG_PORT)
     : 9222;
@@ -57,6 +59,12 @@ async function getClient(): Promise<TeamsClient> {
     clientInstance = await TeamsClient.create({
       email: envEmail,
       headless: true,
+      verbose: false,
+    });
+  } else if (envLogin) {
+    clientInstance = await TeamsClient.fromInteractiveLogin({
+      region: envRegion,
+      email: envEmail,
       verbose: false,
     });
   } else {

@@ -1,18 +1,21 @@
 /**
  * Authentication module for Teams API.
  *
- * Two strategies:
- *   1. Auto-login: Launch system Chrome, complete FIDO2/passkey via platform authenticator,
- *      capture skype token from CDP Fetch interception.
- *   2. Manual: Connect to a running Chrome debug session with Teams open,
+ * Three strategies:
+ *   1. Interactive login: Open a visible browser, let the user log in manually,
+ *      capture skype token via CDP Fetch interception. Works on all platforms.
+ *   2. Auto-login: Launch system Chrome, complete FIDO2/passkey via platform authenticator,
+ *      capture skype token from CDP Fetch interception. macOS only.
+ *   3. Debug session: Connect to a running Chrome debug session with Teams open,
  *      intercept the token during a page reload.
  *
- * Both return a TeamsToken that can be used with the API layer.
+ * All strategies return a TeamsToken that can be used with the API layer.
  */
 
 import type {
   TeamsToken,
   AutoLoginOptions,
+  InteractiveLoginOptions,
   ManualTokenOptions,
 } from "./types.js";
 
@@ -214,6 +217,139 @@ export async function acquireTokenViaAutoLogin(
     } catch {
       // Best-effort cleanup
     }
+  }
+}
+
+const INTERACTIVE_LOGIN_TIMEOUT = 5 * 60 * 1_000;
+
+/**
+ * Acquire a Teams skype token via interactive browser login.
+ *
+ * Opens a visible Chromium window (Playwright's bundled browser),
+ * navigates to Teams, and waits for the user to complete login
+ * manually. Once Teams loads, the skype token is captured via
+ * CDP Fetch interception.
+ *
+ * Works on all platforms (macOS, Windows, Linux). No FIDO2 passkey
+ * or system Chrome required.
+ */
+export async function acquireTokenViaInteractiveLogin(
+  options?: InteractiveLoginOptions,
+): Promise<TeamsToken> {
+  const { chromium } = await import("playwright");
+  const region = options?.region ?? "apac";
+  const log = options?.verbose ? console.log.bind(console) : () => {};
+
+  log("Launching browser for interactive login...");
+  const browser = await chromium.launch({ headless: false });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  try {
+    log("Navigating to Teams...");
+    await page.goto(TEAMS_URL, {
+      waitUntil: "domcontentloaded",
+      timeout: INTERACTIVE_LOGIN_TIMEOUT,
+    });
+
+    // Pre-fill email if provided
+    if (options?.email) {
+      try {
+        await page.waitForURL(
+          /login\.microsoftonline\.com|login\.microsoft\.com/,
+          { timeout: 30_000 },
+        );
+
+        const emailInput = await page
+          .waitForSelector(
+            '#i0116, input[name="loginfmt"], input[type="email"]',
+            { timeout: 10_000 },
+          )
+          .catch(() => null);
+
+        if (emailInput) {
+          await emailInput.fill(options.email);
+          log(`Pre-filled email: ${options.email}`);
+        }
+      } catch {
+        log("Could not pre-fill email (login page may have changed)");
+      }
+    }
+
+    // Wait for user to complete login and reach Teams
+    log("Waiting for you to complete login in the browser window...");
+    await page.waitForURL(/teams\.cloud\.microsoft/, {
+      timeout: INTERACTIVE_LOGIN_TIMEOUT,
+      waitUntil: "domcontentloaded",
+    });
+    log("Login detected, capturing token...");
+
+    // Capture the skype token via CDP Fetch interception
+    const cdpSession = await page.context().newCDPSession(page);
+    let skypeToken: string | null = null;
+
+    await cdpSession.send("Fetch.enable", {
+      patterns: [{ urlPattern: "*teams*", requestStage: "Request" }],
+    });
+
+    const tokenPromise = new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        log("Token intercept timed out");
+        resolve();
+      }, TOKEN_INTERCEPT_TIMEOUT);
+
+      cdpSession.on(
+        "Fetch.requestPaused",
+        async (event: Record<string, unknown>) => {
+          const request = event.request as {
+            headers?: Record<string, string>;
+          };
+          const requestId = event.requestId as string;
+
+          for (const [name, value] of Object.entries(request.headers ?? {})) {
+            if (name.toLowerCase() === "x-skypetoken" && !skypeToken) {
+              skypeToken = value;
+            }
+          }
+
+          try {
+            await cdpSession.send("Fetch.continueRequest", { requestId });
+          } catch {
+            // Request may have already been handled
+          }
+
+          if (skypeToken) {
+            log("Skype token captured");
+            clearTimeout(timeout);
+            resolve();
+          }
+        },
+      );
+    });
+
+    page
+      .reload({ waitUntil: "domcontentloaded", timeout: LOGIN_TIMEOUT })
+      .catch(() => {
+        // Reload may time out, but token should be captured by then
+      });
+
+    await tokenPromise;
+
+    await cdpSession.send("Fetch.disable");
+    await cdpSession.detach();
+
+    if (!skypeToken) {
+      throw new Error(
+        "Failed to capture skype token after login. Teams may not have fully loaded.",
+      );
+    }
+
+    const capturedToken: string = skypeToken;
+    log(`Token captured (${capturedToken.length} chars)`);
+    return { skypeToken: capturedToken, region };
+  } finally {
+    await context.close();
+    await browser.close();
   }
 }
 

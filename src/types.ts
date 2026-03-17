@@ -26,6 +26,16 @@ export interface AutoLoginOptions {
   verbose?: boolean;
 }
 
+/** Options for interactive browser login (all platforms). */
+export interface InteractiveLoginOptions {
+  /** API region (default: "apac"). */
+  region?: string;
+  /** Corporate email to pre-fill on the login page (optional). */
+  email?: string;
+  /** Emit progress messages to console (default: false). */
+  verbose?: boolean;
+}
+
 /** Options for manual token capture from a running Chrome debug session. */
 export interface ManualTokenOptions {
   /** Chrome DevTools Protocol debug port (default: 9222). */

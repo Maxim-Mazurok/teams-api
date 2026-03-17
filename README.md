@@ -12,7 +12,10 @@ Designed for autonomous AI agents that need to interact with Teams: read message
 ```typescript
 import { TeamsClient } from "./src/teams-client.js";
 
-// From an existing token (~24h lifetime)
+// Interactive login — opens a browser, you log in manually (all platforms)
+const client = await TeamsClient.fromInteractiveLogin({ region: "emea" });
+
+// Or from an existing token (~24h lifetime)
 const client = TeamsClient.fromToken("skype-token-here", "apac");
 
 // Or auto-login via platform authenticator (macOS + FIDO2 passkey)
@@ -39,17 +42,66 @@ const oneOnOne = await client.findOneOnOneConversation("Jane Doe");
 const members = await client.getMembers(conversations[0].id);
 ```
 
+## Platform support
+
+| Feature                | macOS          | Windows / Linux |
+| ---------------------- | -------------- | --------------- |
+| **Interactive login**  | Full support   | Full support    |
+| **Auto-login (FIDO2)** | Full support   | Not supported   |
+| **Debug session**      | Full support   | Full support    |
+| **Direct token**       | Full support   | Full support    |
+| **Token caching**      | macOS Keychain | Not available   |
+| **CLI & MCP server**   | Full support   | Full support    |
+| **Programmatic API**   | Full support   | Full support    |
+
 ## Authentication
 
 All access requires a **skype token** from an authenticated Teams web session. Token lifetime is ~24 hours.
 
-| Method            | Description                                                               | Automation       |
-| ----------------- | ------------------------------------------------------------------------- | ---------------- |
-| **Auto-login**    | Playwright launches system Chrome, completes FIDO2 passkey authentication | Fully unattended |
-| **Debug session** | Connects to a running Chrome instance via Chrome DevTools Protocol        | Semi-manual      |
-| **Direct token**  | Provide a previously captured skype token string                          | Manual           |
+| Method                | Description                                                                   | Automation       | Platform |
+| --------------------- | ----------------------------------------------------------------------------- | ---------------- | -------- |
+| **Interactive login** | Opens a browser window — you log in manually, token is captured automatically | One-time manual  | All      |
+| **Auto-login**        | Playwright launches system Chrome, completes FIDO2 passkey authentication     | Fully unattended | macOS    |
+| **Debug session**     | Connects to a running Chrome instance via Chrome DevTools Protocol            | Semi-manual      | All      |
+| **Direct token**      | Provide a previously captured skype token string                              | Manual           | All      |
 
-Auto-login requires macOS with a platform authenticator (e.g. Intune Company Portal) and a FIDO2 passkey enrolled.
+### Interactive login (recommended for Windows / Linux)
+
+The easiest cross-platform option. A browser window opens, you log in with any method your organization supports (password, MFA, passkey, etc.), and the token is captured automatically:
+
+```bash
+npx tsx src/cli.ts auth --login --region emea
+```
+
+Optionally pre-fill your email:
+
+```bash
+npx tsx src/cli.ts auth --login --email you@example.com --region emea
+```
+
+> [!NOTE]
+> Interactive login uses Playwright's bundled Chromium. No system Chrome installation is required.
+
+### Auto-login (macOS only)
+
+Requires macOS with a platform authenticator (e.g. Intune Company Portal) and a FIDO2 passkey enrolled. Fully unattended — no browser window appears.
+
+### Other methods
+
+**Debug session** — start Chrome with `--remote-debugging-port=9222`, navigate to Teams and log in, then run:
+
+```bash
+npx tsx src/cli.ts auth --debug-port 9222 --region emea
+```
+
+**Direct token** — extract `x-skypetoken` from browser DevTools (Network tab) and pass it directly:
+
+```bash
+npx tsx src/cli.ts list-conversations --token "<paste-token-here>" --region emea
+```
+
+> [!TIP]
+> Replace `emea` with your region (`apac`, `emea`, or `amer`). See [API regions](#api-regions) below.
 
 ## CLI
 
@@ -57,24 +109,28 @@ Run commands with `npx tsx src/cli.ts`.
 
 ### Auth flags (available on all commands)
 
-| Flag                  | Description                                |
-| --------------------- | ------------------------------------------ |
-| `--auto`              | Auto-acquire token via FIDO2 passkey       |
-| `--email <email>`     | Corporate email (required with `--auto`)   |
-| `--token <token>`     | Use an existing skype token                |
-| `--debug-port <port>` | Chrome debug port (default: 9222)          |
-| `--region <region>`   | API region (default: apac)                 |
-| `--format <format>`   | Output format: json, text, md, toon        |
-| `--output <file>`     | Export output to file (default format: md) |
+| Flag                  | Description                                                  |
+| --------------------- | ------------------------------------------------------------ |
+| `--login`             | Interactive browser login (all platforms)                    |
+| `--auto`              | Auto-acquire token via FIDO2 passkey (macOS)                 |
+| `--email <email>`     | Corporate email (required with `--auto`, optional otherwise) |
+| `--token <token>`     | Use an existing skype token                                  |
+| `--debug-port <port>` | Chrome debug port (default: 9222)                            |
+| `--region <region>`   | API region (default: apac)                                   |
+| `--format <format>`   | Output format: json, text, md, toon                          |
+| `--output <file>`     | Export output to file (default format: md)                   |
 
 ### Examples
 
 ```bash
-# Acquire a token
+# Acquire a token (interactive — all platforms)
+npx tsx src/cli.ts auth --login --region emea
+
+# Acquire a token (auto — macOS with FIDO2)
 npx tsx src/cli.ts auth --auto --email you@example.com
 
 # List conversations
-npx tsx src/cli.ts list-conversations --auto --email you@example.com --limit 20 --format json
+npx tsx src/cli.ts list-conversations --login --region emea --limit 20 --format json
 
 # Find a conversation by topic
 npx tsx src/cli.ts find-conversation --auto --email you@example.com --query "Design Review"
@@ -113,6 +169,8 @@ The MCP server exposes Teams operations as tools for AI agents via stdio transpo
 
 ### Configuration
 
+**macOS (auto-login with FIDO2):**
+
 ```json
 {
   "mcpServers": {
@@ -128,15 +186,38 @@ The MCP server exposes Teams operations as tools for AI agents via stdio transpo
 }
 ```
 
+**All platforms (direct token):**
+
+```json
+{
+  "mcpServers": {
+    "teams": {
+      "command": "npx",
+      "args": ["-y", "tsx", "/path/to/teams-api/src/mcp-server.ts"],
+      "env": {
+        "TEAMS_TOKEN": "<paste-skype-token-here>",
+        "TEAMS_REGION": "emea"
+      }
+    }
+  }
+}
+```
+
+> [!TIP]
+> To get a token for the MCP config, run `npx tsx src/cli.ts auth --login --region emea` and copy the `skypeToken` value from the output.
+
+````
+
 ### Environment variables
 
-| Variable           | Description                        |
-| ------------------ | ---------------------------------- |
-| `TEAMS_TOKEN`      | Pre-existing skype token           |
-| `TEAMS_REGION`     | API region (default: apac)         |
-| `TEAMS_EMAIL`      | Corporate email for auto-login     |
-| `TEAMS_AUTO`       | Set to `true` to enable auto-login |
-| `TEAMS_DEBUG_PORT` | Chrome debug port (default: 9222)  |
+| Variable           | Description                                          |
+| ------------------ | ---------------------------------------------------- |
+| `TEAMS_TOKEN`      | Pre-existing skype token                             |
+| `TEAMS_REGION`     | API region (default: apac)                           |
+| `TEAMS_EMAIL`      | Corporate email for auto-login or interactive login  |
+| `TEAMS_AUTO`       | Set to `true` to enable auto-login (macOS + FIDO2)   |
+| `TEAMS_LOGIN`      | Set to `true` to enable interactive browser login    |
+| `TEAMS_DEBUG_PORT` | Chrome debug port (default: 9222)                    |
 
 ### Available tools
 
@@ -178,13 +259,14 @@ TEAMS_EMAIL=you@example.com npm run test:e2e
 
 # Watch mode
 npm run test:watch
-```
+````
 
 ## Known limitations
 
 - Token lifetime is ~24 hours. After expiry, you must re-acquire.
 - The Teams Chat Service REST API is undocumented and may change without notice.
-- Auto-login requires macOS, system Chrome, a platform authenticator, and a FIDO2 passkey.
+- Auto-login requires macOS, system Chrome, a platform authenticator, and a FIDO2 passkey. On other platforms, use interactive login (`--login`) instead.
+- Token caching (macOS Keychain) is only available on macOS. On other platforms, pass the token directly or re-run interactive login each time.
 - The members API returns empty display names for 1:1 chat participants. Use `findOneOnOneConversation()` to resolve names from message history.
 - Reaction actor identities come from the `emotions` field in message payloads. Parsing handles both JSON-string and array formats.
 

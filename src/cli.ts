@@ -16,7 +16,11 @@ import { Command } from "commander";
 import { TeamsClient } from "./teams-client.js";
 import { actions, formatOutput } from "./actions.js";
 import type { ActionParameter, OutputFormat } from "./actions.js";
-import type { AutoLoginOptions, ManualTokenOptions } from "./types.js";
+import type {
+  AutoLoginOptions,
+  InteractiveLoginOptions,
+  ManualTokenOptions,
+} from "./types.js";
 
 const VALID_FORMATS: OutputFormat[] = ["json", "text", "md", "toon"];
 
@@ -31,6 +35,7 @@ program
 
 interface AuthFlags {
   auto?: boolean;
+  login?: boolean;
   email?: string;
   token?: string;
   debugPort: string;
@@ -39,8 +44,15 @@ interface AuthFlags {
 
 function addAuthOptions(command: Command): Command {
   return command
-    .option("--auto", "Auto-acquire token via FIDO2 passkey")
-    .option("--email <email>", "Corporate email for auto login")
+    .option("--auto", "Auto-acquire token via FIDO2 passkey (macOS)")
+    .option(
+      "--login",
+      "Interactive browser login (all platforms, no FIDO2 needed)",
+    )
+    .option(
+      "--email <email>",
+      "Corporate email (required with --auto, optional with --login)",
+    )
     .option("--token <token>", "Use an existing skype token directly")
     .option(
       "--debug-port <port>",
@@ -66,6 +78,15 @@ async function createClient(flags: AuthFlags): Promise<TeamsClient> {
       verbose: true,
     };
     return TeamsClient.create(autoLoginOptions);
+  }
+
+  if (flags.login) {
+    const interactiveLoginOptions: InteractiveLoginOptions = {
+      region: flags.region,
+      email: flags.email,
+      verbose: true,
+    };
+    return TeamsClient.fromInteractiveLogin(interactiveLoginOptions);
   }
 
   const manualOptions: ManualTokenOptions = {
