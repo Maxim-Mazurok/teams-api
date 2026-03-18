@@ -595,7 +595,7 @@ const getMembers: ActionDefinition = {
     "Identify the conversation by topic name (--chat), " +
     "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
     "At least one identifier is required. " +
-    "Note: 1:1 chat members may have empty display names.",
+    "Display names are resolved from message history; members who haven't sent messages may show as unknown.",
   parameters: [...conversationParameters],
   execute: async (client, parameters) => {
     const { conversationId } = await resolveConversationId(client, parameters);
@@ -603,33 +603,70 @@ const getMembers: ActionDefinition = {
   },
   formatResult: (result) => {
     const members = result as Member[];
-    const lines = [`\n${members.length} members:\n`];
-    for (const member of members) {
+    const people = members.filter((member) => member.memberType === "person");
+    const bots = members.filter((member) => member.memberType === "bot");
+    const lines = [`\n${people.length} people, ${bots.length} bots:\n`];
+    for (const member of people) {
       const name = member.displayName || "(unknown)";
       lines.push(`  ${name} (${member.role}) — ${member.id}`);
+    }
+    if (bots.length > 0) {
+      lines.push("");
+      lines.push("  Bots/Apps:");
+      for (const bot of bots) {
+        const name = bot.displayName || "(unnamed bot)";
+        lines.push(`  ${name} — ${bot.id}`);
+      }
     }
     return lines.join("\n");
   },
   formatMarkdown: (result) => {
     const members = result as Member[];
-    const lines = [`## Members (${members.length})`, ""];
-    if (members.length === 0) return lines.join("\n");
-    lines.push("| Name | Role | ID |");
-    lines.push("|------|------|----|");
-    for (const member of members) {
-      const name = member.displayName || "(unknown)";
-      lines.push(`| ${name} | ${member.role} | ${member.id} |`);
+    const people = members.filter((member) => member.memberType === "person");
+    const bots = members.filter((member) => member.memberType === "bot");
+    const lines = [
+      `## Members (${people.length} people, ${bots.length} bots)`,
+      "",
+    ];
+    if (people.length > 0) {
+      lines.push("| Name | Role | ID |");
+      lines.push("|------|------|----|");
+      for (const member of people) {
+        const name = member.displayName || "(unknown)";
+        lines.push(`| ${name} | ${member.role} | ${member.id} |`);
+      }
+    }
+    if (bots.length > 0) {
+      lines.push("", "### Bots/Apps", "");
+      lines.push("| Name | ID |");
+      lines.push("|------|----|");
+      for (const bot of bots) {
+        const name = bot.displayName || "(unnamed bot)";
+        lines.push(`| ${name} | ${bot.id} |`);
+      }
     }
     return lines.join("\n");
   },
   formatToon: (result) => {
     const members = result as Member[];
-    const lines = [toonHeader("👥", `${members.length} Members`)];
-    for (const member of members) {
+    const people = members.filter((member) => member.memberType === "person");
+    const bots = members.filter((member) => member.memberType === "bot");
+    const lines = [
+      toonHeader("👥", `${people.length} People, ${bots.length} Bots`),
+    ];
+    for (const member of people) {
       const name = member.displayName || "(unknown)";
       lines.push("");
       lines.push(`  👤 ${name} · ${member.role}`);
       lines.push(`     ${member.id}`);
+    }
+    if (bots.length > 0) {
+      lines.push("");
+      lines.push("  🤖 Bots/Apps:");
+      for (const bot of bots) {
+        const name = bot.displayName || "(unnamed bot)";
+        lines.push(`     🤖 ${name} — ${bot.id}`);
+      }
     }
     return lines.join("\n");
   },

@@ -76,6 +76,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     id: "8:orgid:user-1",
     displayName: "Alice Smith",
     role: "Admin",
+    memberType: "person",
     ...overrides,
   };
 }
@@ -749,7 +750,7 @@ describe("get-members", () => {
 
     const output = action.formatResult(members);
 
-    expect(output).toContain("2 members:");
+    expect(output).toContain("2 people, 0 bots");
     expect(output).toContain("Alice Smith (Admin) — 8:orgid:alice");
     expect(output).toContain("(unknown) (User) — 8:orgid:unknown");
   });
@@ -1107,14 +1108,14 @@ describe("get-members formatMarkdown", () => {
 
     const output = action.formatMarkdown(members);
 
-    expect(output).toContain("## Members (1)");
+    expect(output).toContain("## Members (1 people, 0 bots)");
     expect(output).toContain("| Name | Role | ID |");
     expect(output).toContain("| Alice Smith | Admin | 8:orgid:alice |");
   });
 
   it("should handle empty members", () => {
     const output = action.formatMarkdown([]);
-    expect(output).toContain("## Members (0)");
+    expect(output).toContain("## Members (0 people, 0 bots)");
     expect(output).not.toContain("| Name |");
   });
 });
@@ -1133,7 +1134,7 @@ describe("get-members formatToon", () => {
 
     const output = action.formatToon(members);
 
-    expect(output).toContain("👥 1 Members");
+    expect(output).toContain("👥 1 People, 0 Bots");
     expect(output).toContain("👤 Alice Smith · Admin");
     expect(output).toContain("8:orgid:alice");
   });

@@ -94,6 +94,20 @@ const SYSTEM_STREAMS: readonly string[] = [
   "streamofnotes",
 ];
 
+/**
+ * Extract the MRI suffix from a sender URL or return the input unchanged.
+ * API messages use full URLs (e.g. ".../contacts/8:orgid:uuid"),
+ * while member IDs are just the MRI suffix ("8:orgid:uuid").
+ */
+function extractMriSuffix(senderMri: string): string {
+  const contactsPrefix = "/contacts/";
+  const contactsIndex = senderMri.lastIndexOf(contactsPrefix);
+  if (contactsIndex >= 0) {
+    return senderMri.slice(contactsIndex + contactsPrefix.length);
+  }
+  return senderMri;
+}
+
 export class TeamsClient {
   private token: TeamsToken;
   private autoLoginOptions: AutoLoginOptions | null = null;
@@ -387,12 +401,37 @@ export class TeamsClient {
   /**
    * Get members of a conversation.
    *
-   * Note: For 1:1 chats, member display names may be empty.
-   * Use `findOneOnOneConversation()` to resolve names from message history.
+   * Display names are resolved by scanning recent messages in the conversation,
+   * since the members endpoint does not return names. Members who haven't sent
+   * any messages will have an empty display name.
    */
   async getMembers(conversationId: string): Promise<Member[]> {
     return this.withTokenRefresh(async () => {
-      return fetchMembers(this.token, conversationId);
+      const members = await fetchMembers(this.token, conversationId);
+
+      // Fetch one page of recent messages to build an MRI→displayName lookup.
+      // Message senderMri is a full URL (e.g. .../contacts/8:orgid:uuid),
+      // while member IDs are just the MRI suffix (8:orgid:uuid).
+      try {
+        const page = await fetchMessagesPage(this.token, conversationId, 200);
+        const nameLookup = new Map<string, string>();
+        for (const message of page.messages) {
+          if (message.senderDisplayName) {
+            const mriSuffix = extractMriSuffix(message.senderMri);
+            nameLookup.set(mriSuffix, message.senderDisplayName);
+          }
+        }
+
+        for (const member of members) {
+          if (!member.displayName) {
+            member.displayName = nameLookup.get(member.id) ?? "";
+          }
+        }
+      } catch {
+        // If message fetch fails, return members without display names
+      }
+
+      return members;
     });
   }
 

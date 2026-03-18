@@ -339,16 +339,98 @@ describe("sendMessage", () => {
 });
 
 describe("getMembers", () => {
-  it("should delegate to fetchMembers", async () => {
-    const expectedMembers: Member[] = [
-      { id: "8:orgid:user1", displayName: "Alice", role: "Admin" },
-    ];
-    mockedApi.fetchMembers.mockResolvedValue(expectedMembers);
+  it("should resolve display names from message history", async () => {
+    mockedApi.fetchMembers.mockResolvedValue([
+      { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
+      { id: "8:orgid:user2", displayName: "", role: "User", memberType: "person" as const },
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([
+        makeMessage({
+          senderMri:
+            "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/contacts/8:orgid:user1",
+          senderDisplayName: "Alice",
+        }),
+        makeMessage({
+          senderMri:
+            "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/contacts/8:orgid:user2",
+          senderDisplayName: "Bob",
+        }),
+      ]),
+    );
 
     const client = TeamsClient.fromToken("token");
     const members = await client.getMembers("conv-id");
 
-    expect(members).toEqual(expectedMembers);
+    expect(members).toEqual([
+      { id: "8:orgid:user1", displayName: "Alice", role: "Admin", memberType: "person" },
+      { id: "8:orgid:user2", displayName: "Bob", role: "User", memberType: "person" },
+    ]);
+  });
+
+  it("should keep existing display names from the API", async () => {
+    mockedApi.fetchMembers.mockResolvedValue([
+      { id: "8:orgid:user1", displayName: "Alice from API", role: "Admin", memberType: "person" as const },
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([
+        makeMessage({
+          senderMri:
+            "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/contacts/8:orgid:user1",
+          senderDisplayName: "Alice from Messages",
+        }),
+      ]),
+    );
+
+    const client = TeamsClient.fromToken("token");
+    const members = await client.getMembers("conv-id");
+
+    expect(members[0].displayName).toBe("Alice from API");
+  });
+
+  it("should handle bare MRI senderMri values", async () => {
+    mockedApi.fetchMembers.mockResolvedValue([
+      { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([
+        makeMessage({
+          senderMri: "8:orgid:user1",
+          senderDisplayName: "Alice",
+        }),
+      ]),
+    );
+
+    const client = TeamsClient.fromToken("token");
+    const members = await client.getMembers("conv-id");
+
+    expect(members[0].displayName).toBe("Alice");
+  });
+
+  it("should leave display name empty when no messages match", async () => {
+    mockedApi.fetchMembers.mockResolvedValue([
+      { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(makeMessagesPage([]));
+
+    const client = TeamsClient.fromToken("token");
+    const members = await client.getMembers("conv-id");
+
+    expect(members[0].displayName).toBe("");
+  });
+
+  it("should still return members when message fetch fails", async () => {
+    mockedApi.fetchMembers.mockResolvedValue([
+      { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
+    ]);
+    mockedApi.fetchMessagesPage.mockRejectedValue(new Error("forbidden"));
+
+    const client = TeamsClient.fromToken("token");
+    const members = await client.getMembers("conv-id");
+
+    expect(members).toEqual([
+      { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" },
+    ]);
   });
 });
 

@@ -130,6 +130,11 @@ for (const action of actions) {
         parameters as Record<string, unknown>,
       );
 
+      const structuredContent =
+        result !== null && typeof result === "object" && !Array.isArray(result)
+          ? (result as Record<string, unknown>)
+          : { data: result };
+
       return {
         content: [
           {
@@ -137,6 +142,7 @@ for (const action of actions) {
             text: formatOutput(action, result, outputFormat),
           },
         ],
+        structuredContent,
       };
     },
   );

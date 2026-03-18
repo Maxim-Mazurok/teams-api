@@ -210,12 +210,28 @@ describe("fetchMembers", () => {
       id: "8:orgid:user1",
       displayName: "Alice",
       role: "Admin",
+      memberType: "person",
     });
     expect(members[1]).toEqual({
       id: "8:orgid:user2",
       displayName: "",
       role: "User",
+      memberType: "person",
     });
+  });
+
+  it("should detect bot members by 28: prefix", async () => {
+    mockFetchResponse({
+      members: [
+        { id: "8:orgid:user1", role: "Admin" },
+        { id: "28:bot-guid-here", role: "User" },
+      ],
+    });
+
+    const members = await fetchMembers(testToken, "conv-id");
+
+    expect(members[0].memberType).toBe("person");
+    expect(members[1].memberType).toBe("bot");
   });
 });
 

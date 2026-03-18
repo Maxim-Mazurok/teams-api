@@ -121,6 +121,8 @@ export interface Member {
   displayName: string;
   /** Role in the conversation (e.g. "Admin", "User"). */
   role: string;
+  /** Whether this member is a person or a bot/app (detected from MRI prefix). */
+  memberType: "person" | "bot";
 }
 
 /** Result of sending a message. */
