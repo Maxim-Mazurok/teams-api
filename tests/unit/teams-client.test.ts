@@ -97,6 +97,22 @@ describe("TeamsClient.fromToken", () => {
     expect(client.getToken().region).toBe("apac");
   });
 
+  it("should preserve optional bearer and substrate tokens", () => {
+    const client = TeamsClient.fromToken(
+      "my-token",
+      "emea",
+      "bearer-token",
+      "substrate-token",
+    );
+
+    expect(client.getToken()).toEqual({
+      skypeToken: "my-token",
+      region: "emea",
+      bearerToken: "bearer-token",
+      substrateToken: "substrate-token",
+    });
+  });
+
   it("should return a copy of the token (not a reference)", () => {
     const client = TeamsClient.fromToken("original");
     const token1 = client.getToken();

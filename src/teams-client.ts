@@ -22,7 +22,12 @@
  *
  * @example
  *   // From an existing token
- *   const client = TeamsClient.fromToken("skype-token-here", "apac");
+ *   const client = TeamsClient.fromToken(
+ *     "skype-token-here",
+ *     "apac",
+ *     "optional-bearer-token",
+ *     "optional-substrate-token",
+ *   );
  */
 
 import type {
@@ -217,10 +222,11 @@ export class TeamsClient {
   }
 
   /**
-   * Create a client from an existing skype token.
+   * Create a client from an existing token bundle.
    *
-   * Use this when you already have a valid token (e.g. from a previous
-   * session or external source). Token lifetime is ~24 hours.
+   * `bearerToken` enables profile/member resolution and `substrateToken`
+   * enables reliable people/chat search. Both are optional; basic chat
+   * operations only require `skypeToken`.
    */
   static fromToken(
     skypeToken: string,

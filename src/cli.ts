@@ -38,6 +38,8 @@ interface AuthFlags {
   login?: boolean;
   email?: string;
   token?: string;
+  bearerToken?: string;
+  substrateToken?: string;
   debugPort: string;
   region: string;
 }
@@ -55,6 +57,14 @@ function addAuthOptions(command: Command): Command {
     )
     .option("--token <token>", "Use an existing skype token directly")
     .option(
+      "--bearer-token <token>",
+      "Optional middle-tier bearer token for profile/member resolution",
+    )
+    .option(
+      "--substrate-token <token>",
+      "Optional Substrate bearer token for people/chat search",
+    )
+    .option(
       "--debug-port <port>",
       "Chrome debug port for manual token capture",
       "9222",
@@ -64,7 +74,12 @@ function addAuthOptions(command: Command): Command {
 
 async function createClient(flags: AuthFlags): Promise<TeamsClient> {
   if (flags.token) {
-    return TeamsClient.fromToken(flags.token, flags.region);
+    return TeamsClient.fromToken(
+      flags.token,
+      flags.region,
+      flags.bearerToken,
+      flags.substrateToken,
+    );
   }
 
   if (flags.auto) {

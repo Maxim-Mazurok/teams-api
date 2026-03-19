@@ -21,6 +21,13 @@ const testToken: TeamsToken = {
   region: "apac",
 };
 
+const testTokenWithAuxiliaryTokens: TeamsToken = {
+  skypeToken: "test-skype-token-abc123",
+  region: "apac",
+  bearerToken: "test-bearer-token",
+  substrateToken: "test-substrate-token",
+};
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.useFakeTimers();
@@ -79,6 +86,25 @@ describe("saveToken", () => {
       new Date("2026-03-17T12:00:00.000Z").getTime(),
     );
   });
+
+  it("should persist optional bearer and substrate tokens", () => {
+    saveToken(testEmail, testTokenWithAuxiliaryTokens);
+
+    const encodedValue = (mockedExecFileSync as ReturnType<typeof vi.fn>).mock
+      .calls[0][1][6] as string;
+    const decoded = JSON.parse(
+      Buffer.from(encodedValue, "base64").toString("utf-8"),
+    ) as {
+      skypeToken: string;
+      region: string;
+      bearerToken?: string;
+      substrateToken?: string;
+      acquiredAt: number;
+    };
+
+    expect(decoded.bearerToken).toBe("test-bearer-token");
+    expect(decoded.substrateToken).toBe("test-substrate-token");
+  });
 });
 
 describe("loadToken", () => {
@@ -94,6 +120,23 @@ describe("loadToken", () => {
       ["find-generic-password", "-a", testEmail, "-s", "teams-api", "-w"],
       { encoding: "utf-8" },
     );
+  });
+
+  it("should restore optional bearer and substrate tokens", () => {
+    const encoded = Buffer.from(
+      JSON.stringify({
+        skypeToken: testTokenWithAuxiliaryTokens.skypeToken,
+        region: testTokenWithAuxiliaryTokens.region,
+        bearerToken: testTokenWithAuxiliaryTokens.bearerToken,
+        substrateToken: testTokenWithAuxiliaryTokens.substrateToken,
+        acquiredAt: new Date("2026-03-17T12:00:00.000Z").getTime(),
+      }),
+    ).toString("base64");
+    mockedExecFileSync.mockReturnValueOnce(encoded as never);
+
+    const result = loadToken(testEmail);
+
+    expect(result).toEqual(testTokenWithAuxiliaryTokens);
   });
 
   it("should return null when no token exists in keychain", () => {
