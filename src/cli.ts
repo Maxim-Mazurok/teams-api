@@ -41,7 +41,7 @@ interface AuthFlags {
   bearerToken?: string;
   substrateToken?: string;
   debugPort: string;
-  region: string;
+  region?: string;
 }
 
 function addAuthOptions(command: Command): Command {
@@ -69,11 +69,18 @@ function addAuthOptions(command: Command): Command {
       "Chrome debug port for manual token capture",
       "9222",
     )
-    .option("--region <region>", "API region", "apac");
+    .option(
+      "--region <region>",
+      "API region (optional for login/debug auth, required with --token)",
+    );
 }
 
 async function createClient(flags: AuthFlags): Promise<TeamsClient> {
   if (flags.token) {
+    if (!flags.region) {
+      console.error("Error: --region is required when using --token");
+      process.exit(1);
+    }
     return TeamsClient.fromToken(
       flags.token,
       flags.region,
@@ -89,6 +96,7 @@ async function createClient(flags: AuthFlags): Promise<TeamsClient> {
     }
     const autoLoginOptions: AutoLoginOptions = {
       email: flags.email,
+      region: flags.region,
       headless: true,
       verbose: true,
     };
@@ -106,6 +114,7 @@ async function createClient(flags: AuthFlags): Promise<TeamsClient> {
 
   const manualOptions: ManualTokenOptions = {
     debugPort: Number(flags.debugPort),
+    region: flags.region,
   };
   return TeamsClient.fromDebugSession(manualOptions);
 }

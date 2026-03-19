@@ -4,7 +4,7 @@ Instructions for AI agents working on this codebase. For human-readable architec
 
 ## Documentation boundaries
 
-- **README.md** is for **end users** — installation via npm, CLI usage with the `teams-api` binary, MCP server config via the `teams-api-mcp` npm package, programmatic API quick start. No dev setup, testing, or source-based commands.
+- **README.md** is for **end users** — installation via npm, CLI usage with the `teams-api` binary, MCP server config via the `teams-api` npm package, programmatic API quick start. No dev setup, testing, or source-based commands.
 - **CONTRIBUTING.md** is for **contributors/developers** — cloning the repo, running from source (`npx -y tsx src/cli.ts`), architecture, testing, code style, implementation notes, MCP from-source config.
 - When adding new content, put it in the right file based on the audience. User-facing features go in README; dev tooling, internals, and build instructions go in CONTRIBUTING.
 - CLI examples in README use the installed binary name (`teams-api`), not `npx tsx src/cli.ts`. Source-based commands belong only in CONTRIBUTING.
@@ -23,6 +23,20 @@ Instructions for AI agents working on this codebase. For human-readable architec
 - ESM syntax in `.ts` files, `"type": "commonjs"` in `package.json`
 - Stateless API layer (`src/api.ts`) — all functions accept a token and return data
 - `TeamsClient` delegates to `api.ts` for HTTP and `auth.ts` for token acquisition
+
+## Commit messages
+
+- Use Conventional Commits.
+- Prefer `feat`, `fix`, `docs`, `chore`, `ci`, `refactor`, `test`, `style`, `build`, `perf`, and `revert`.
+- Use `feat` for minor releases, `fix` and the other maintenance types for patch releases, and `BREAKING CHANGE:` only for major releases.
+- Keep commit subjects in the form `<type>: <summary>`.
+
+## Releases and changelog
+
+- Releases are automated with `semantic-release` on pushes to `main`.
+- `CHANGELOG.md` is generated from commit history by the release workflow; do not maintain it manually for normal feature, fix, docs, or refactor changes.
+- When making changes that should appear in release notes, focus on using the correct Conventional Commit type so versioning and changelog generation stay accurate.
+- Only edit `CHANGELOG.md` directly when explicitly asked to repair release metadata or change the release tooling itself.
 
 ## Build and test
 

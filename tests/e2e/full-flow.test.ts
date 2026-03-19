@@ -11,6 +11,7 @@
 
 import { describe, it, expect } from "vitest";
 import { TeamsClient } from "../../src/teams-client.js";
+import { teamsRegions } from "../../src/region.js";
 
 const email = process.env["TEAMS_EMAIL"];
 const shouldRun = Boolean(email);
@@ -29,7 +30,7 @@ describe.skipIf(!shouldRun)("Full E2E flow", { timeout: 120_000 }, () => {
 
     const token = client.getToken();
     expect(token.skypeToken.length).toBeGreaterThan(100);
-    expect(token.region).toBe("apac");
+    expect(teamsRegions).toContain(token.region);
     console.log("[e2e] Test 1 passed");
   });
 

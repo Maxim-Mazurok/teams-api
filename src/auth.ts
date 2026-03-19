@@ -18,6 +18,7 @@ import type {
   InteractiveLoginOptions,
   ManualTokenOptions,
 } from "./types.js";
+import { detectTeamsRegionFromUrl, resolveTeamsRegion } from "./region.js";
 
 const TEAMS_URL = "https://teams.cloud.microsoft/";
 const DEFAULT_SYSTEM_CHROME_PATH =
@@ -134,6 +135,7 @@ async function captureTokensFromPage(
   interceptTimeout: number,
 ): Promise<{
   skypeToken: string;
+  region: string | undefined;
   bearerToken: string | undefined;
   substrateToken: string | undefined;
 }> {
@@ -149,6 +151,7 @@ async function captureTokensFromPage(
     detach: () => Promise<void>;
   };
   let skypeToken: string | null = null;
+  let region: string | null = null;
   let bearerToken: string | null = null;
   let substrateToken: string | null = null;
 
@@ -175,6 +178,12 @@ async function captureTokensFromPage(
         };
         const requestId = event.requestId as string;
         const requestUrl = request.url ?? "";
+        const detectedRegion = detectTeamsRegionFromUrl(requestUrl);
+
+        if (detectedRegion && !region) {
+          region = detectedRegion;
+          log(`Detected Teams region from request URL: ${region}`);
+        }
 
         for (const [name, value] of Object.entries(request.headers ?? {})) {
           if (name.toLowerCase() === "x-skypetoken" && !skypeToken) {
@@ -258,6 +267,7 @@ async function captureTokensFromPage(
 
   return {
     skypeToken,
+    region: region ?? undefined,
     bearerToken: bearerToken ?? undefined,
     substrateToken: substrateToken ?? undefined,
   };
@@ -401,12 +411,12 @@ export async function acquireTokenViaAutoLogin(
 
     // Capture tokens via shared helper
     log("Capturing tokens...");
-    const { skypeToken, bearerToken, substrateToken } =
+    const { skypeToken, region, bearerToken, substrateToken } =
       await captureTokensFromPage(page, log, TOKEN_INTERCEPT_TIMEOUT);
 
     return {
       skypeToken,
-      region: "apac",
+      region: resolveTeamsRegion(options.region, region),
       bearerToken,
       substrateToken,
     };
@@ -437,7 +447,6 @@ export async function acquireTokenViaInteractiveLogin(
   options?: InteractiveLoginOptions,
 ): Promise<TeamsToken> {
   const { chromium } = await import("playwright");
-  const region = options?.region ?? "apac";
   const log: LogFunction = options?.verbose
     ? console.log.bind(console)
     : () => {};
@@ -506,12 +515,12 @@ export async function acquireTokenViaInteractiveLogin(
 
     log("Login detected, capturing token...");
 
-    const { skypeToken, bearerToken, substrateToken } =
+    const { skypeToken, region, bearerToken, substrateToken } =
       await captureTokensFromPage(page, log, TOKEN_INTERCEPT_TIMEOUT);
 
     return {
       skypeToken,
-      region,
+      region: resolveTeamsRegion(options?.region, region),
       bearerToken,
       substrateToken,
     };
@@ -555,6 +564,7 @@ export async function acquireTokenViaDebugSession(
 
     const cdpSession = await teamsPage.createCDPSession();
     let skypeToken: string | null = null;
+    let region: string | null = null;
     let bearerToken: string | null = null;
     let substrateToken: string | null = null;
 
@@ -575,6 +585,11 @@ export async function acquireTokenViaDebugSession(
         ) => {
           const headers = event.request.headers ?? {};
           const requestUrl = event.request.url ?? "";
+          const detectedRegion = detectTeamsRegionFromUrl(requestUrl);
+
+          if (detectedRegion && !region) {
+            region = detectedRegion;
+          }
 
           for (const [name, value] of Object.entries(headers)) {
             if (name.toLowerCase() === "x-skypetoken" && !skypeToken) {
@@ -647,7 +662,7 @@ export async function acquireTokenViaDebugSession(
 
     return {
       skypeToken,
-      region: "apac",
+      region: resolveTeamsRegion(options?.region, region ?? undefined),
       bearerToken: bearerToken ?? undefined,
       substrateToken: substrateToken ?? undefined,
     };

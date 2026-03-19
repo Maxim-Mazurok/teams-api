@@ -67,6 +67,7 @@ import {
   acquireTokenViaInteractiveLogin,
   acquireTokenViaDebugSession,
 } from "./auth.js";
+import { DEFAULT_TEAMS_REGION, resolveTeamsRegion } from "./region.js";
 import { saveToken, loadToken, clearToken } from "./token-store.js";
 
 export {
@@ -166,8 +167,19 @@ export class TeamsClient {
 
     const cachedToken = loadToken(options.email);
     if (cachedToken) {
+      const region = resolveTeamsRegion(options.region, cachedToken.region);
+      const token =
+        region === cachedToken.region
+          ? cachedToken
+          : { ...cachedToken, region };
+
       log("Using cached token from Keychain");
-      const client = new TeamsClient(cachedToken);
+      if (token !== cachedToken) {
+        log(`Overriding cached region with explicit value: ${region}`);
+        saveToken(options.email, token);
+      }
+
+      const client = new TeamsClient(token);
       client.autoLoginOptions = options;
       return client;
     }
@@ -230,7 +242,7 @@ export class TeamsClient {
    */
   static fromToken(
     skypeToken: string,
-    region = "apac",
+    region = DEFAULT_TEAMS_REGION,
     bearerToken?: string,
     substrateToken?: string,
   ): TeamsClient {

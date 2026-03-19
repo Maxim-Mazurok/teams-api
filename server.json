@@ -1,0 +1,68 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.maxim-mazurok/teams-api",
+  "title": "Microsoft Teams API",
+  "description": "AI-native Microsoft Teams integration — read conversations, send messages, search people and chats via the Teams Chat Service REST API",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/Maxim-Mazurok/teams-api",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "teams-api",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeHint": "npx",
+      "packageArguments": ["-y", "teams-api"],
+      "environmentVariables": [
+        {
+          "name": "TEAMS_EMAIL",
+          "description": "Corporate email address for Teams authentication",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "TEAMS_AUTO",
+          "description": "Set to \"true\" to use auto-login (macOS + FIDO2)",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "TEAMS_LOGIN",
+          "description": "Set to \"true\" to use interactive browser login (all platforms)",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "TEAMS_TOKEN",
+          "description": "Pre-existing Skype token for direct authentication",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "TEAMS_REGION",
+          "description": "API region (required with TEAMS_TOKEN, auto-detected otherwise)",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "TEAMS_BEARER_TOKEN",
+          "description": "Middle-tier bearer token for profile resolution",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "TEAMS_SUBSTRATE_TOKEN",
+          "description": "Substrate bearer token for people/chat search",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

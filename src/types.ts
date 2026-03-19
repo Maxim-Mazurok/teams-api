@@ -26,6 +26,8 @@ export interface TeamsToken {
 export interface AutoLoginOptions {
   /** Corporate email for Microsoft Entra ID login. */
   email: string;
+  /** Explicit API region override. Omit to auto-detect when possible. */
+  region?: string;
   /** Path to Chrome executable (defaults to system Chrome on macOS). */
   chromePath?: string;
   /** Directory for temporary browser profile (cleaned automatically). */
@@ -38,7 +40,7 @@ export interface AutoLoginOptions {
 
 /** Options for interactive browser login (all platforms). */
 export interface InteractiveLoginOptions {
-  /** API region (default: "apac"). */
+  /** Explicit API region override. Omit to auto-detect when possible. */
   region?: string;
   /** Corporate email to pre-fill on the login page (optional). */
   email?: string;
@@ -50,6 +52,8 @@ export interface InteractiveLoginOptions {
 export interface ManualTokenOptions {
   /** Chrome DevTools Protocol debug port (default: 9222). */
   debugPort?: number;
+  /** Explicit API region override. Omit to auto-detect when possible. */
+  region?: string;
 }
 
 /** A Teams conversation (chat, group chat, meeting, or channel). */

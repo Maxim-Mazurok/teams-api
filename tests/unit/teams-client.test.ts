@@ -1070,6 +1070,26 @@ describe("TeamsClient.create", () => {
     expect(client.getToken()).toEqual(cachedToken);
   });
 
+  it("should apply an explicit region override to a cached token", async () => {
+    const cachedToken = { skypeToken: "cached-token", region: "apac" };
+    mockedTokenStore.loadToken.mockReturnValue(cachedToken);
+
+    const client = await TeamsClient.create({
+      email: "user@company.com",
+      region: "emea",
+    });
+
+    expect(mockedAuth.acquireTokenViaAutoLogin).not.toHaveBeenCalled();
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "user@company.com",
+      { ...cachedToken, region: "emea" },
+    );
+    expect(client.getToken()).toEqual({
+      ...cachedToken,
+      region: "emea",
+    });
+  });
+
   it("should auto-login and save token when no cache exists", async () => {
     const freshToken = { skypeToken: "fresh-token", region: "apac" };
     mockedTokenStore.loadToken.mockReturnValue(null);

@@ -2,7 +2,7 @@
  * Integration tests — hit the real Teams API.
  *
  * These tests are skipped by default.
- * Run them with: TEAMS_TOKEN=<token> TEAMS_REGION=apac npx vitest run tests/integration
+ * Run them with: TEAMS_TOKEN=<token> TEAMS_REGION=<apac|emea|amer> npx vitest run tests/integration
  *
  * Prerequisites:
  *   - A valid skype token (acquire via `npx tsx src/cli.ts auth --auto --email you@company.com`)
@@ -13,13 +13,14 @@ import { describe, it, expect } from "vitest";
 import { TeamsClient } from "../../src/teams-client.js";
 
 const skypeToken = process.env["TEAMS_TOKEN"];
-const region = process.env["TEAMS_REGION"] ?? "apac";
+const region = process.env["TEAMS_REGION"];
 
-const shouldRun = Boolean(skypeToken);
+const shouldRun = Boolean(skypeToken && region);
 
 describe.skipIf(!shouldRun)("Live Teams API", () => {
   function createClient(): TeamsClient {
     if (!skypeToken) throw new Error("TEAMS_TOKEN is required");
+    if (!region) throw new Error("TEAMS_REGION is required");
     return TeamsClient.fromToken(skypeToken, region);
   }
 
