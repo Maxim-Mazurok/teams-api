@@ -595,7 +595,7 @@ const getMembers: ActionDefinition = {
     "Identify the conversation by topic name (--chat), " +
     "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
     "At least one identifier is required. " +
-    "Display names are resolved from message history; members who haven't sent messages may show as unknown.",
+    "Display names are resolved via the Teams profile API when available, with message history as fallback.",
   parameters: [...conversationParameters],
   execute: async (client, parameters) => {
     const { conversationId } = await resolveConversationId(client, parameters);

@@ -27,6 +27,7 @@ vi.mock("../../src/api.js", async (importOriginal) => {
     fetchConversations: vi.fn(),
     fetchMessagesPage: vi.fn(),
     fetchMembers: vi.fn(),
+    fetchProfiles: vi.fn(),
     postMessage: vi.fn(),
     fetchUserProperties: vi.fn(),
   };
@@ -339,72 +340,221 @@ describe("sendMessage", () => {
 });
 
 describe("getMembers", () => {
-  it("should resolve display names from message history", async () => {
-    mockedApi.fetchMembers.mockResolvedValue([
-      { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
-      { id: "8:orgid:user2", displayName: "", role: "User", memberType: "person" as const },
-    ]);
-    mockedApi.fetchMessagesPage.mockResolvedValue(
-      makeMessagesPage([
-        makeMessage({
-          senderMri:
-            "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/contacts/8:orgid:user1",
-          senderDisplayName: "Alice",
-        }),
-        makeMessage({
-          senderMri:
-            "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/contacts/8:orgid:user2",
-          senderDisplayName: "Bob",
-        }),
-      ]),
-    );
+  describe("with bearerToken (profile API)", () => {
+    it("should resolve display names via fetchProfiles", async () => {
+      mockedApi.fetchMembers.mockResolvedValue([
+        { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
+        { id: "8:orgid:user2", displayName: "", role: "User", memberType: "person" as const },
+      ]);
+      mockedApi.fetchProfiles.mockResolvedValue([
+        { mri: "8:orgid:user1", displayName: "Alice Smith", email: "alice@example.com", jobTitle: "Engineer", userType: "Member" },
+        { mri: "8:orgid:user2", displayName: "Bob Jones", email: "bob@example.com", jobTitle: "Manager", userType: "Member" },
+      ]);
 
-    const client = TeamsClient.fromToken("token");
-    const members = await client.getMembers("conv-id");
+      const client = TeamsClient.fromToken("token", "apac", "bearer-token");
+      const members = await client.getMembers("conv-id");
 
-    expect(members).toEqual([
-      { id: "8:orgid:user1", displayName: "Alice", role: "Admin", memberType: "person" },
-      { id: "8:orgid:user2", displayName: "Bob", role: "User", memberType: "person" },
-    ]);
+      expect(members).toEqual([
+        { id: "8:orgid:user1", displayName: "Alice Smith", role: "Admin", memberType: "person" },
+        { id: "8:orgid:user2", displayName: "Bob Jones", role: "User", memberType: "person" },
+      ]);
+      expect(mockedApi.fetchProfiles).toHaveBeenCalledOnce();
+      expect(mockedApi.fetchMessagesPage).not.toHaveBeenCalled();
+    });
+
+    it("should fall back to message history when fetchProfiles fails", async () => {
+      mockedApi.fetchMembers.mockResolvedValue([
+        { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
+      ]);
+      mockedApi.fetchProfiles.mockRejectedValue(new Error("profile API down"));
+      mockedApi.fetchMessagesPage.mockResolvedValue(
+        makeMessagesPage([
+          makeMessage({
+            senderMri: "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/contacts/8:orgid:user1",
+            senderDisplayName: "Alice",
+          }),
+        ]),
+      );
+
+      const client = TeamsClient.fromToken("token", "apac", "bearer-token");
+      const members = await client.getMembers("conv-id");
+
+      expect(members[0].displayName).toBe("Alice");
+      expect(mockedApi.fetchProfiles).toHaveBeenCalledOnce();
+      expect(mockedApi.fetchMessagesPage).toHaveBeenCalled();
+    });
+
+    it("should only send unresolved person MRIs to fetchProfiles", async () => {
+      mockedApi.fetchMembers.mockResolvedValue([
+        { id: "8:orgid:user1", displayName: "Already Named", role: "Admin", memberType: "person" as const },
+        { id: "8:orgid:user2", displayName: "", role: "User", memberType: "person" as const },
+        { id: "28:bot-id", displayName: "", role: "User", memberType: "bot" as const },
+      ]);
+      mockedApi.fetchProfiles.mockResolvedValue([
+        { mri: "8:orgid:user2", displayName: "Bob", email: "", jobTitle: "", userType: "" },
+      ]);
+
+      const client = TeamsClient.fromToken("token", "apac", "bearer-token");
+      const members = await client.getMembers("conv-id");
+
+      expect(members[0].displayName).toBe("Already Named");
+      expect(members[1].displayName).toBe("Bob");
+      expect(members[2].displayName).toBe("");
+      // Only user2 should have been sent to fetchProfiles
+      expect(mockedApi.fetchProfiles).toHaveBeenCalledWith(
+        expect.anything(),
+        ["8:orgid:user2"],
+      );
+    });
   });
 
-  it("should keep existing display names from the API", async () => {
-    mockedApi.fetchMembers.mockResolvedValue([
-      { id: "8:orgid:user1", displayName: "Alice from API", role: "Admin", memberType: "person" as const },
-    ]);
-    mockedApi.fetchMessagesPage.mockResolvedValue(
-      makeMessagesPage([
-        makeMessage({
-          senderMri:
-            "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/contacts/8:orgid:user1",
-          senderDisplayName: "Alice from Messages",
-        }),
-      ]),
-    );
+  describe("without bearerToken (message history fallback)", () => {
+    it("should resolve display names from message history", async () => {
+      mockedApi.fetchMembers.mockResolvedValue([
+        { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
+        { id: "8:orgid:user2", displayName: "", role: "User", memberType: "person" as const },
+      ]);
+      mockedApi.fetchMessagesPage.mockResolvedValue(
+        makeMessagesPage([
+          makeMessage({
+            senderMri:
+              "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/contacts/8:orgid:user1",
+            senderDisplayName: "Alice",
+          }),
+          makeMessage({
+            senderMri:
+              "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/contacts/8:orgid:user2",
+            senderDisplayName: "Bob",
+          }),
+        ]),
+      );
 
-    const client = TeamsClient.fromToken("token");
-    const members = await client.getMembers("conv-id");
+      const client = TeamsClient.fromToken("token");
+      const members = await client.getMembers("conv-id");
 
-    expect(members[0].displayName).toBe("Alice from API");
+      expect(members).toEqual([
+        { id: "8:orgid:user1", displayName: "Alice", role: "Admin", memberType: "person" },
+        { id: "8:orgid:user2", displayName: "Bob", role: "User", memberType: "person" },
+      ]);
+    });
+
+    it("should paginate through messages to resolve all names", async () => {
+      mockedApi.fetchMembers.mockResolvedValue([
+        { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
+        { id: "8:orgid:user2", displayName: "", role: "User", memberType: "person" as const },
+      ]);
+      mockedApi.fetchMessagesPage.mockResolvedValueOnce(
+        makeMessagesPage(
+          [
+            makeMessage({
+              senderMri:
+                "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/contacts/8:orgid:user1",
+              senderDisplayName: "Alice",
+            }),
+          ],
+          "https://backward-link-page2",
+        ),
+      );
+      mockedApi.fetchMessagesPage.mockResolvedValueOnce(
+        makeMessagesPage([
+          makeMessage({
+            senderMri:
+              "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/contacts/8:orgid:user2",
+            senderDisplayName: "Bob",
+          }),
+        ]),
+      );
+
+      const client = TeamsClient.fromToken("token");
+      const members = await client.getMembers("conv-id");
+
+      expect(members[0].displayName).toBe("Alice");
+      expect(members[1].displayName).toBe("Bob");
+      expect(mockedApi.fetchMessagesPage).toHaveBeenCalledTimes(2);
+    });
+
+    it("should stop paginating once all people are resolved", async () => {
+      mockedApi.fetchMembers.mockResolvedValue([
+        { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
+      ]);
+      mockedApi.fetchMessagesPage.mockResolvedValueOnce(
+        makeMessagesPage(
+          [
+            makeMessage({
+              senderMri: "8:orgid:user1",
+              senderDisplayName: "Alice",
+            }),
+          ],
+          "https://backward-link-page2",
+        ),
+      );
+
+      const client = TeamsClient.fromToken("token");
+      const members = await client.getMembers("conv-id");
+
+      expect(members[0].displayName).toBe("Alice");
+      expect(mockedApi.fetchMessagesPage).toHaveBeenCalledTimes(1);
+    });
+
+    it("should handle bare MRI senderMri values", async () => {
+      mockedApi.fetchMembers.mockResolvedValue([
+        { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
+      ]);
+      mockedApi.fetchMessagesPage.mockResolvedValue(
+        makeMessagesPage([
+          makeMessage({
+            senderMri: "8:orgid:user1",
+            senderDisplayName: "Alice",
+          }),
+        ]),
+      );
+
+      const client = TeamsClient.fromToken("token");
+      const members = await client.getMembers("conv-id");
+
+      expect(members[0].displayName).toBe("Alice");
+    });
+
+    it("should still return members when message fetch fails", async () => {
+      mockedApi.fetchMembers.mockResolvedValue([
+        { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
+      ]);
+      mockedApi.fetchMessagesPage.mockRejectedValue(new Error("forbidden"));
+
+      const client = TeamsClient.fromToken("token");
+      const members = await client.getMembers("conv-id");
+
+      expect(members).toEqual([
+        { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" },
+      ]);
+    });
   });
 
-  it("should handle bare MRI senderMri values", async () => {
+  it("should skip name resolution when all members already have names", async () => {
     mockedApi.fetchMembers.mockResolvedValue([
-      { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
+      { id: "8:orgid:user1", displayName: "Already Named", role: "Admin", memberType: "person" as const },
     ]);
-    mockedApi.fetchMessagesPage.mockResolvedValue(
-      makeMessagesPage([
-        makeMessage({
-          senderMri: "8:orgid:user1",
-          senderDisplayName: "Alice",
-        }),
-      ]),
-    );
 
     const client = TeamsClient.fromToken("token");
     const members = await client.getMembers("conv-id");
 
-    expect(members[0].displayName).toBe("Alice");
+    expect(members[0].displayName).toBe("Already Named");
+    expect(mockedApi.fetchProfiles).not.toHaveBeenCalled();
+    expect(mockedApi.fetchMessagesPage).not.toHaveBeenCalled();
+  });
+
+  it("should skip name resolution for bot-only unresolved members", async () => {
+    mockedApi.fetchMembers.mockResolvedValue([
+      { id: "8:orgid:user1", displayName: "Alice", role: "Admin", memberType: "person" as const },
+      { id: "28:bot-id", displayName: "", role: "User", memberType: "bot" as const },
+    ]);
+
+    const client = TeamsClient.fromToken("token");
+    const members = await client.getMembers("conv-id");
+
+    expect(members[1].displayName).toBe("");
+    expect(mockedApi.fetchProfiles).not.toHaveBeenCalled();
+    expect(mockedApi.fetchMessagesPage).not.toHaveBeenCalled();
   });
 
   it("should leave display name empty when no messages match", async () => {
@@ -417,20 +567,6 @@ describe("getMembers", () => {
     const members = await client.getMembers("conv-id");
 
     expect(members[0].displayName).toBe("");
-  });
-
-  it("should still return members when message fetch fails", async () => {
-    mockedApi.fetchMembers.mockResolvedValue([
-      { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" as const },
-    ]);
-    mockedApi.fetchMessagesPage.mockRejectedValue(new Error("forbidden"));
-
-    const client = TeamsClient.fromToken("token");
-    const members = await client.getMembers("conv-id");
-
-    expect(members).toEqual([
-      { id: "8:orgid:user1", displayName: "", role: "Admin", memberType: "person" },
-    ]);
   });
 });
 

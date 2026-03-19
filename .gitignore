@@ -6,3 +6,4 @@ dist/
 !vitest.config.ts
 .tmp_*
 .DS_Store
+.playwright-mcp/

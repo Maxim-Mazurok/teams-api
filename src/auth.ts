@@ -143,16 +143,17 @@ export async function acquireTokenViaAutoLogin(
 
     log(`Login flow finished. URL: ${page.url()}`);
 
-    // Capture the skype token via CDP Fetch interception
-    log("Capturing skype token...");
+    // Capture the skype token and Bearer token via CDP Fetch interception
+    log("Capturing tokens...");
     const cdpSession = await page.context().newCDPSession(page);
     let skypeToken: string | null = null;
+    let bearerToken: string | null = null;
 
     await cdpSession.send("Fetch.enable", {
       patterns: [{ urlPattern: "*teams*", requestStage: "Request" }],
     });
 
-    log("Listening for skype token in network requests...");
+    log("Listening for tokens in network requests...");
     const tokenPromise = new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
         log("Token intercept timed out");
@@ -163,13 +164,23 @@ export async function acquireTokenViaAutoLogin(
         "Fetch.requestPaused",
         async (event: Record<string, unknown>) => {
           const request = event.request as {
+            url?: string;
             headers?: Record<string, string>;
           };
           const requestId = event.requestId as string;
+          const requestUrl = request.url ?? "";
 
           for (const [name, value] of Object.entries(request.headers ?? {})) {
             if (name.toLowerCase() === "x-skypetoken" && !skypeToken) {
               skypeToken = value;
+            }
+            if (
+              name.toLowerCase() === "authorization" &&
+              value.startsWith("Bearer ") &&
+              requestUrl.includes("/api/mt/") &&
+              !bearerToken
+            ) {
+              bearerToken = value.slice("Bearer ".length);
             }
           }
 
@@ -208,8 +219,15 @@ export async function acquireTokenViaAutoLogin(
 
     const capturedToken: string = skypeToken;
     log(`Token captured (${capturedToken.length} chars)`);
+    if (bearerToken) {
+      log("Bearer token also captured for profile resolution");
+    }
 
-    return { skypeToken: capturedToken, region: "apac" };
+    return {
+      skypeToken: capturedToken,
+      region: "apac",
+      bearerToken: bearerToken ?? undefined,
+    };
   } finally {
     await context.close();
     try {
@@ -284,9 +302,10 @@ export async function acquireTokenViaInteractiveLogin(
     });
     log("Login detected, capturing token...");
 
-    // Capture the skype token via CDP Fetch interception
+    // Capture the skype token and Bearer token via CDP Fetch interception
     const cdpSession = await page.context().newCDPSession(page);
     let skypeToken: string | null = null;
+    let bearerToken: string | null = null;
 
     await cdpSession.send("Fetch.enable", {
       patterns: [{ urlPattern: "*teams*", requestStage: "Request" }],
@@ -302,13 +321,23 @@ export async function acquireTokenViaInteractiveLogin(
         "Fetch.requestPaused",
         async (event: Record<string, unknown>) => {
           const request = event.request as {
+            url?: string;
             headers?: Record<string, string>;
           };
           const requestId = event.requestId as string;
+          const requestUrl = request.url ?? "";
 
           for (const [name, value] of Object.entries(request.headers ?? {})) {
             if (name.toLowerCase() === "x-skypetoken" && !skypeToken) {
               skypeToken = value;
+            }
+            if (
+              name.toLowerCase() === "authorization" &&
+              value.startsWith("Bearer ") &&
+              requestUrl.includes("/api/mt/") &&
+              !bearerToken
+            ) {
+              bearerToken = value.slice("Bearer ".length);
             }
           }
 
@@ -346,7 +375,11 @@ export async function acquireTokenViaInteractiveLogin(
 
     const capturedToken: string = skypeToken;
     log(`Token captured (${capturedToken.length} chars)`);
-    return { skypeToken: capturedToken, region };
+    return {
+      skypeToken: capturedToken,
+      region,
+      bearerToken: bearerToken ?? undefined,
+    };
   } finally {
     await context.close();
     await browser.close();
@@ -387,6 +420,7 @@ export async function acquireTokenViaDebugSession(
 
     const cdpSession = await teamsPage.createCDPSession();
     let skypeToken: string | null = null;
+    let bearerToken: string | null = null;
 
     await cdpSession.send("Fetch.enable", {
       patterns: [{ urlPattern: "*teams*", requestStage: "Request" }],
@@ -401,10 +435,19 @@ export async function acquireTokenViaDebugSession(
           event: import("puppeteer-core").Protocol.Fetch.RequestPausedEvent,
         ) => {
           const headers = event.request.headers ?? {};
+          const requestUrl = event.request.url ?? "";
 
           for (const [name, value] of Object.entries(headers)) {
             if (name.toLowerCase() === "x-skypetoken" && !skypeToken) {
               skypeToken = value;
+            }
+            if (
+              name.toLowerCase() === "authorization" &&
+              value.startsWith("Bearer ") &&
+              requestUrl.includes("/api/mt/") &&
+              !bearerToken
+            ) {
+              bearerToken = value.slice("Bearer ".length);
             }
           }
 
@@ -441,7 +484,11 @@ export async function acquireTokenViaDebugSession(
       );
     }
 
-    return { skypeToken, region: "apac" };
+    return {
+      skypeToken,
+      region: "apac",
+      bearerToken: bearerToken ?? undefined,
+    };
   } finally {
     browser.disconnect();
   }

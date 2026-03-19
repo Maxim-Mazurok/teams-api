@@ -17,6 +17,7 @@ const TOKEN_LIFETIME = 23 * 60 * 60 * 1_000; // 23 hours (tokens last ~24h, 1h s
 interface StoredToken {
   skypeToken: string;
   region: string;
+  bearerToken?: string;
   acquiredAt: number;
 }
 
@@ -24,6 +25,7 @@ export function saveToken(email: string, token: TeamsToken): void {
   const storedToken: StoredToken = {
     skypeToken: token.skypeToken,
     region: token.region,
+    bearerToken: token.bearerToken,
     acquiredAt: Date.now(),
   };
   const encoded = Buffer.from(JSON.stringify(storedToken)).toString("base64");
@@ -67,7 +69,11 @@ export function loadToken(email: string): TeamsToken | null {
     return null;
   }
 
-  return { skypeToken: storedToken.skypeToken, region: storedToken.region };
+  return {
+    skypeToken: storedToken.skypeToken,
+    region: storedToken.region,
+    bearerToken: storedToken.bearerToken,
+  };
 }
 
 export function clearToken(email: string): void {

@@ -44,6 +44,7 @@ import {
   fetchConversations,
   fetchMessagesPage,
   fetchMembers,
+  fetchProfiles,
   postMessage,
   fetchUserProperties,
   ApiAuthError,
@@ -75,9 +76,10 @@ export type {
   MessagesPage,
   Mention,
   Reaction,
+  UserProfile,
 } from "./types.js";
 export { SYSTEM_STREAM_TYPES } from "./types.js";
-export { parseRawMessage, ApiAuthError } from "./api.js";
+export { parseRawMessage, ApiAuthError, fetchProfiles } from "./api.js";
 export { saveToken, loadToken, clearToken } from "./token-store.js";
 export { actions, formatOutput } from "./actions.js";
 export type {
@@ -194,8 +196,12 @@ export class TeamsClient {
    * Use this when you already have a valid token (e.g. from a previous
    * session or external source). Token lifetime is ~24 hours.
    */
-  static fromToken(skypeToken: string, region = "apac"): TeamsClient {
-    return new TeamsClient({ skypeToken, region });
+  static fromToken(
+    skypeToken: string,
+    region = "apac",
+    bearerToken?: string,
+  ): TeamsClient {
+    return new TeamsClient({ skypeToken, region, bearerToken });
   }
 
   /**
@@ -401,34 +407,81 @@ export class TeamsClient {
   /**
    * Get members of a conversation.
    *
-   * Display names are resolved by scanning recent messages in the conversation,
-   * since the members endpoint does not return names. Members who haven't sent
-   * any messages will have an empty display name.
+   * Display names are resolved via the Teams middle-tier profile API when a
+   * Bearer token is available. Falls back to scanning message history when it
+   * is not.
    */
   async getMembers(conversationId: string): Promise<Member[]> {
     return this.withTokenRefresh(async () => {
       const members = await fetchMembers(this.token, conversationId);
 
-      // Fetch one page of recent messages to build an MRI→displayName lookup.
-      // Message senderMri is a full URL (e.g. .../contacts/8:orgid:uuid),
-      // while member IDs are just the MRI suffix (8:orgid:uuid).
-      try {
-        const page = await fetchMessagesPage(this.token, conversationId, 200);
-        const nameLookup = new Map<string, string>();
-        for (const message of page.messages) {
-          if (message.senderDisplayName) {
-            const mriSuffix = extractMriSuffix(message.senderMri);
-            nameLookup.set(mriSuffix, message.senderDisplayName);
-          }
-        }
+      const unresolvedPeople = members.filter(
+        (member) => member.memberType === "person" && !member.displayName,
+      );
 
-        for (const member of members) {
-          if (!member.displayName) {
-            member.displayName = nameLookup.get(member.id) ?? "";
+      if (unresolvedPeople.length === 0) {
+        return members;
+      }
+
+      // Primary: resolve via middle-tier profile API (requires bearerToken)
+      if (this.token.bearerToken) {
+        const mris = unresolvedPeople.map((member) => member.id);
+        try {
+          const profiles = await fetchProfiles(this.token, mris);
+          const profileLookup = new Map(
+            profiles.map((profile) => [profile.mri, profile.displayName]),
+          );
+          for (const member of members) {
+            if (!member.displayName) {
+              member.displayName = profileLookup.get(member.id) ?? "";
+            }
           }
+          return members;
+        } catch {
+          // Fall through to message-history fallback
+        }
+      }
+
+      // Fallback: resolve from message sender names in conversation history
+      const unresolvedMris = new Set(
+        unresolvedPeople.map((member) => member.id),
+      );
+      const nameLookup = new Map<string, string>();
+      const maxPages = 10;
+      let backwardLink: string | undefined;
+
+      try {
+        for (let page = 0; page < maxPages; page++) {
+          const result = await fetchMessagesPage(
+            this.token,
+            conversationId,
+            200,
+            backwardLink,
+          );
+
+          for (const message of result.messages) {
+            if (message.senderDisplayName) {
+              const mriSuffix = extractMriSuffix(message.senderMri);
+              if (unresolvedMris.has(mriSuffix)) {
+                nameLookup.set(mriSuffix, message.senderDisplayName);
+                unresolvedMris.delete(mriSuffix);
+              }
+            }
+          }
+
+          if (unresolvedMris.size === 0 || !result.backwardLink) {
+            break;
+          }
+          backwardLink = result.backwardLink;
         }
       } catch {
-        // If message fetch fails, return members without display names
+        // If message fetch fails, return members with whatever names we have
+      }
+
+      for (const member of members) {
+        if (!member.displayName) {
+          member.displayName = nameLookup.get(member.id) ?? "";
+        }
       }
 
       return members;

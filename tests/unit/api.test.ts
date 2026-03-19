@@ -10,6 +10,7 @@ import {
   fetchConversations,
   fetchMessagesPage,
   fetchMembers,
+  fetchProfiles,
   postMessage,
   fetchUserProperties,
   parseRawMessage,
@@ -232,6 +233,83 @@ describe("fetchMembers", () => {
 
     expect(members[0].memberType).toBe("person");
     expect(members[1].memberType).toBe("bot");
+  });
+});
+
+const tokenWithBearer: TeamsToken = {
+  skypeToken: "test-token-abc123",
+  region: "apac",
+  bearerToken: "test-bearer-token-xyz",
+};
+
+describe("fetchProfiles", () => {
+  it("should resolve profiles from MRIs via middle-tier API", async () => {
+    mockFetchResponse({
+      value: [
+        {
+          mri: "8:orgid:user1",
+          displayName: "Alice Smith",
+          email: "alice@example.com",
+          jobTitle: "Engineer",
+          userType: "Member",
+        },
+        {
+          mri: "8:orgid:user2",
+          displayName: "Bob Jones",
+          email: "bob@example.com",
+          jobTitle: "Manager",
+          userType: "Member",
+        },
+      ],
+    });
+
+    const profiles = await fetchProfiles(tokenWithBearer, [
+      "8:orgid:user1",
+      "8:orgid:user2",
+    ]);
+
+    expect(profiles).toHaveLength(2);
+    expect(profiles[0]).toEqual({
+      mri: "8:orgid:user1",
+      displayName: "Alice Smith",
+      email: "alice@example.com",
+      jobTitle: "Engineer",
+      userType: "Member",
+    });
+    expect(profiles[1].displayName).toBe("Bob Jones");
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(fetchCall[0]).toContain("/users/fetchShortProfile");
+    expect(fetchCall[1].method).toBe("POST");
+    expect(fetchCall[1].headers.Authorization).toBe(
+      "Bearer test-bearer-token-xyz",
+    );
+  });
+
+  it("should return empty when no bearer token is available", async () => {
+    const profiles = await fetchProfiles(testToken, ["8:orgid:user1"]);
+    expect(profiles).toEqual([]);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("should return empty when MRI list is empty", async () => {
+    const profiles = await fetchProfiles(tokenWithBearer, []);
+    expect(profiles).toEqual([]);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("should return empty on non-auth failure", async () => {
+    mockFetchResponse({}, 500);
+    const profiles = await fetchProfiles(tokenWithBearer, ["8:orgid:user1"]);
+    expect(profiles).toEqual([]);
+  });
+
+  it("should throw ApiAuthError on 401", async () => {
+    mockFetchResponse({}, 401);
+    await expect(
+      fetchProfiles(tokenWithBearer, ["8:orgid:user1"]),
+    ).rejects.toThrow(ApiAuthError);
   });
 });
 

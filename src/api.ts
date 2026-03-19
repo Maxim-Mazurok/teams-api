@@ -16,6 +16,7 @@ import type {
   Reaction,
   Mention,
   SentMessage,
+  UserProfile,
 } from "./types.js";
 
 export class ApiAuthError extends Error {
@@ -157,6 +158,61 @@ export async function fetchMembers(
     displayName: member.userDisplayName ?? "",
     role: member.role ?? "member",
     memberType: member.id.startsWith("28:") ? "bot" as const : "person" as const,
+  }));
+}
+
+const MIDDLE_TIER_BASE = "https://teams.cloud.microsoft/api/mt";
+
+/**
+ * Resolve display names for a batch of MRIs via the Teams middle-tier profile endpoint.
+ *
+ * Requires a Bearer token (api.spaces.skype.com audience). Returns an empty array
+ * if the token is unavailable or the request fails.
+ */
+export async function fetchProfiles(
+  token: TeamsToken,
+  mris: string[],
+): Promise<UserProfile[]> {
+  if (!token.bearerToken || mris.length === 0) {
+    return [];
+  }
+
+  const url = `${MIDDLE_TIER_BASE}/${token.region}/beta/users/fetchShortProfile?isMailAddress=false&enableGuest=true&skypeTeamsInfo=true`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token.bearerToken}`,
+    },
+    body: JSON.stringify(mris),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Profile resolution authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
+    return [];
+  }
+
+  const data = (await response.json()) as {
+    value?: Array<{
+      mri?: string;
+      displayName?: string;
+      email?: string;
+      jobTitle?: string;
+      userType?: string;
+    }>;
+  };
+
+  return (data.value ?? []).map((profile) => ({
+    mri: profile.mri ?? "",
+    displayName: profile.displayName ?? "",
+    email: profile.email ?? "",
+    jobTitle: profile.jobTitle ?? "",
+    userType: profile.userType ?? "",
   }));
 }
 

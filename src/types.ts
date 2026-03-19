@@ -10,6 +10,11 @@ export interface TeamsToken {
   skypeToken: string;
   /** API region (e.g. "apac", "emea", "amer"). */
   region: string;
+  /**
+   * OAuth2 Bearer token for the Teams middle-tier API (api.spaces.skype.com audience).
+   * Used for profile resolution. Optional — only available when captured during auth.
+   */
+  bearerToken?: string;
 }
 
 /** Options for automatic token acquisition via FIDO2 passkey. */
@@ -123,6 +128,20 @@ export interface Member {
   role: string;
   /** Whether this member is a person or a bot/app (detected from MRI prefix). */
   memberType: "person" | "bot";
+}
+
+/** A user profile resolved from the Teams middle-tier API. */
+export interface UserProfile {
+  /** Full MRI of the user. */
+  mri: string;
+  /** Display name. */
+  displayName: string;
+  /** Email address. */
+  email: string;
+  /** Job title, or empty string. */
+  jobTitle: string;
+  /** User type (e.g. "Member", "Guest"). */
+  userType: string;
 }
 
 /** Result of sending a message. */
