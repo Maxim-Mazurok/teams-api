@@ -12,7 +12,7 @@
  *     TEAMS_BEARER_TOKEN    — Optional middle-tier bearer token for profile resolution
  *     TEAMS_SUBSTRATE_TOKEN — Optional Substrate bearer token for people/chat search
  *     TEAMS_REGION          — API region (required with TEAMS_TOKEN, optional otherwise)
- *     TEAMS_EMAIL           — Corporate email (for auto-login or interactive login)
+ *     TEAMS_EMAIL           — Corporate email (optional; the server prompts the AI agent if needed)
  *     TEAMS_AUTO            — Set to "true" to use auto-login (macOS + FIDO2)
  *     TEAMS_LOGIN           — Set to "true" to use interactive browser login (all platforms)
  *     TEAMS_DEBUG_PORT      — Chrome debug port (default: 9222)
@@ -24,8 +24,7 @@
  *         "command": "npx",
  *         "args": ["-y", "teams-api"],
  *         "env": {
- *           "TEAMS_AUTO": "true",
- *           "TEAMS_EMAIL": "user@company.com"
+ *           "TEAMS_LOGIN": "true"
  *         }
  *       }
  *     }
@@ -41,7 +40,17 @@ import type { ActionParameter, OutputFormat } from "./actions.js";
 
 let clientInstance: TeamsClient | null = null;
 
-async function getClient(): Promise<TeamsClient> {
+class NeedsEmailError extends Error {
+  constructor() {
+    super(
+      "I need your corporate email address to log into Teams. " +
+        "Please provide your email and call this tool again.",
+    );
+    this.name = "NeedsEmailError";
+  }
+}
+
+async function getClient(toolEmail?: string): Promise<TeamsClient> {
   if (clientInstance) {
     return clientInstance;
   }
@@ -50,7 +59,7 @@ async function getClient(): Promise<TeamsClient> {
   const envBearerToken = process.env.TEAMS_BEARER_TOKEN;
   const envSubstrateToken = process.env.TEAMS_SUBSTRATE_TOKEN;
   const envRegion = process.env.TEAMS_REGION;
-  const envEmail = process.env.TEAMS_EMAIL;
+  const email = process.env.TEAMS_EMAIL || toolEmail;
   const envAuto = process.env.TEAMS_AUTO === "true";
   const envLogin = process.env.TEAMS_LOGIN === "true";
   const envDebugPort = process.env.TEAMS_DEBUG_PORT
@@ -67,9 +76,12 @@ async function getClient(): Promise<TeamsClient> {
       envBearerToken,
       envSubstrateToken,
     );
-  } else if (envAuto && envEmail) {
+  } else if (envAuto) {
+    if (!email) {
+      throw new NeedsEmailError();
+    }
     clientInstance = await TeamsClient.create({
-      email: envEmail,
+      email,
       region: envRegion,
       headless: true,
       verbose: false,
@@ -77,7 +89,7 @@ async function getClient(): Promise<TeamsClient> {
   } else if (envLogin) {
     clientInstance = await TeamsClient.fromInteractiveLogin({
       region: envRegion,
-      email: envEmail,
+      email,
       verbose: false,
     });
   } else {
@@ -128,6 +140,13 @@ for (const action of actions) {
     .enum(["json", "text", "md", "toon"])
     .describe("Output format (default: toon)")
     .optional();
+  inputSchema["email"] = z
+    .string()
+    .describe(
+      "Corporate email address for Teams login. " +
+        "Only needed if the server asks for it.",
+    )
+    .optional();
 
   server.registerTool(
     toolName,
@@ -137,27 +156,39 @@ for (const action of actions) {
       inputSchema,
     },
     async (parameters) => {
-      const client = await getClient();
-      const outputFormat = (parameters.format as OutputFormat) ?? "toon";
-      const result = await action.execute(
-        client,
-        parameters as Record<string, unknown>,
-      );
+      try {
+        const client = await getClient(parameters.email as string | undefined);
+        const outputFormat = (parameters.format as OutputFormat) ?? "toon";
+        const result = await action.execute(
+          client,
+          parameters as Record<string, unknown>,
+        );
 
-      const structuredContent =
-        result !== null && typeof result === "object" && !Array.isArray(result)
-          ? (result as Record<string, unknown>)
-          : { data: result };
+        const structuredContent =
+          result !== null &&
+          typeof result === "object" &&
+          !Array.isArray(result)
+            ? (result as Record<string, unknown>)
+            : { data: result };
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: formatOutput(action, result, outputFormat),
-          },
-        ],
-        structuredContent,
-      };
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: formatOutput(action, result, outputFormat),
+            },
+          ],
+          structuredContent,
+        };
+      } catch (error) {
+        if (error instanceof NeedsEmailError) {
+          return {
+            content: [{ type: "text" as const, text: error.message }],
+            isError: true,
+          };
+        }
+        throw error;
+      }
     },
   );
 }

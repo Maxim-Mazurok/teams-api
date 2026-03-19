@@ -53,8 +53,7 @@ Add to your VS Code MCP config (`.vscode/mcp.json` or User Settings):
       "command": "npx",
       "args": ["-y", "teams-api@latest"],
       "env": {
-        "TEAMS_LOGIN": "true",
-        "TEAMS_EMAIL": "you@example.com"
+        "TEAMS_LOGIN": "true"
       }
     }
   }
@@ -75,8 +74,7 @@ Click the **Install in Cursor** badge at the top, or add to `~/.cursor/mcp.json`
       "command": "npx",
       "args": ["-y", "teams-api@latest"],
       "env": {
-        "TEAMS_LOGIN": "true",
-        "TEAMS_EMAIL": "you@example.com"
+        "TEAMS_LOGIN": "true"
       }
     }
   }
@@ -97,8 +95,7 @@ Add to `claude_desktop_config.json` ([how to find it](https://modelcontextprotoc
       "command": "npx",
       "args": ["-y", "teams-api@latest"],
       "env": {
-        "TEAMS_LOGIN": "true",
-        "TEAMS_EMAIL": "you@example.com"
+        "TEAMS_LOGIN": "true"
       }
     }
   }
@@ -114,7 +111,7 @@ Add to `claude_desktop_config.json` ([how to find it](https://modelcontextprotoc
 claude mcp add teams -- npx -y teams-api@latest
 ```
 
-Then set the environment variables `TEAMS_LOGIN=true` and `TEAMS_EMAIL=you@example.com` in your shell before starting Claude Code.
+Then set the environment variable `TEAMS_LOGIN=true` in your shell before starting Claude Code. The server will ask for your email interactively on first use.
 
 </details>
 
@@ -130,8 +127,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
       "command": "npx",
       "args": ["-y", "teams-api@latest"],
       "env": {
-        "TEAMS_LOGIN": "true",
-        "TEAMS_EMAIL": "you@example.com"
+        "TEAMS_LOGIN": "true"
       }
     }
   }
@@ -354,16 +350,16 @@ Use this only if you already have tokens from another flow or need to avoid brow
 
 ### Environment variables
 
-| Variable                | Description                                                          |
-| ----------------------- | -------------------------------------------------------------------- |
-| `TEAMS_TOKEN`           | Pre-existing skype token                                             |
-| `TEAMS_BEARER_TOKEN`    | Optional middle-tier bearer token                                    |
-| `TEAMS_SUBSTRATE_TOKEN` | Optional Substrate bearer token                                      |
-| `TEAMS_REGION`          | API region override. Required with `TEAMS_TOKEN`; optional otherwise |
-| `TEAMS_EMAIL`           | Corporate email for auto-login or interactive login                  |
-| `TEAMS_AUTO`            | Set to `true` to enable auto-login (macOS + FIDO2)                   |
-| `TEAMS_LOGIN`           | Set to `true` to enable interactive browser login                    |
-| `TEAMS_DEBUG_PORT`      | Chrome debug port (default: 9222)                                    |
+| Variable                | Description                                                           |
+| ----------------------- | --------------------------------------------------------------------- |
+| `TEAMS_TOKEN`           | Pre-existing skype token                                              |
+| `TEAMS_BEARER_TOKEN`    | Optional middle-tier bearer token                                     |
+| `TEAMS_SUBSTRATE_TOKEN` | Optional Substrate bearer token                                       |
+| `TEAMS_REGION`          | API region override. Required with `TEAMS_TOKEN`; optional otherwise  |
+| `TEAMS_EMAIL`           | Corporate email. Optional — the server prompts the AI agent if needed |
+| `TEAMS_AUTO`            | Set to `true` to enable auto-login (macOS + FIDO2)                    |
+| `TEAMS_LOGIN`           | Set to `true` to enable interactive browser login                     |
+| `TEAMS_DEBUG_PORT`      | Chrome debug port (default: 9222)                                     |
 
 ### Available tools
 
