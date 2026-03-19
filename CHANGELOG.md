@@ -1,3 +1,11 @@
+## [0.2.2](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.1...v0.2.2) (2026-03-19)
+
+
+### Bug Fixes
+
+* correct server.json packageArguments to runtimeArguments format ([c6cb744](https://github.com/Maxim-Mazurok/teams-api/commit/c6cb744fc8e2bfca70f3633f286d0baac610cb14))
+* fix Prettier formatting and ignore auto-generated CHANGELOG.md ([75a886d](https://github.com/Maxim-Mazurok/teams-api/commit/75a886d97f4244af9afd28d25617007af728fe83))
+
 ## [0.2.1](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.0...v0.2.1) (2026-03-19)
 
 ### Bug Fixes
