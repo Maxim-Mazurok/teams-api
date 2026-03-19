@@ -18,9 +18,7 @@
         "type": "stdio"
       },
       "runtimeHint": "npx",
-      "runtimeArguments": [
-        { "type": "positional", "value": "-y" }
-      ],
+      "runtimeArguments": [{ "type": "positional", "value": "-y" }],
       "environmentVariables": [
         {
           "name": "TEAMS_EMAIL",

@@ -1,9 +1,8 @@
 ## [0.2.1](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.0...v0.2.1) (2026-03-19)
 
-
 ### Bug Fixes
 
-* add repository URL to package.json for npm provenance verification ([24de50d](https://github.com/Maxim-Mazurok/teams-api/commit/24de50d78fd2d00d8a483ac7c8a14164e7be1801))
+- add repository URL to package.json for npm provenance verification ([24de50d](https://github.com/Maxim-Mazurok/teams-api/commit/24de50d78fd2d00d8a483ac7c8a14164e7be1801))
 
 # [0.2.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.1.1...v0.2.0) (2026-03-19)
 
