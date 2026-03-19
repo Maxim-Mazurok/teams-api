@@ -3,7 +3,7 @@
   "name": "io.github.Maxim-Mazurok/teams-api",
   "title": "Microsoft Teams API",
   "description": "AI-native Microsoft Teams integration — read chats, send messages, search people",
-  "version": "0.2.4",
+  "version": "0.0.0",
   "repository": {
     "url": "https://github.com/Maxim-Mazurok/teams-api",
     "source": "github"
@@ -13,6 +13,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "teams-api",
+      "version": "0.0.0",
       "transport": {
         "type": "stdio"
       },

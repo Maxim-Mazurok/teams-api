@@ -70,6 +70,8 @@ jobs:
 
       - name: Publish to MCP Registry
         run: |
+          VERSION=$(node -p "require('./package.json').version")
+          sed -i "s/\"version\": \"0.0.0\"/\"version\": \"$VERSION\"/g" server.json
           mcp-publisher login github-oidc
           mcp-publisher validate
           mcp-publisher publish
