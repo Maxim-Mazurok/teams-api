@@ -3,6 +3,14 @@
   "version": "0.2.0",
   "description": "AI-native Microsoft Teams integration — read conversations, send messages, manage members via the Teams Chat Service REST API",
   "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Maxim-Mazurok/teams-api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Maxim-Mazurok/teams-api/issues"
+  },
+  "homepage": "https://github.com/Maxim-Mazurok/teams-api#readme",
   "main": "dist/teams-client.js",
   "types": "dist/teams-client.d.ts",
   "bin": {
