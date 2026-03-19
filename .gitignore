@@ -4,6 +4,7 @@ dist/
 *.d.ts
 *.js.map
 !vitest.config.ts
+!scripts/**/*.js
 .tmp_*
 .DS_Store
 .playwright-mcp/

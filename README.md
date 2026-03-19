@@ -7,6 +7,32 @@ Designed for autonomous AI agents that need to interact with Teams: read message
 > [!NOTE]
 > This project was AI-generated using Claude Opus 4.6 with human guidance and review.
 
+## Installation
+
+### As an npm package (recommended for MCP usage)
+
+```bash
+npm install -g teams-api-mcp
+```
+
+Or run directly via `npx` without installing:
+
+```bash
+npx -y teams-api-mcp
+```
+
+### From source (for development)
+
+```bash
+git clone https://github.com/Maxim-Mazurok/teams-api.git
+cd teams-api
+npm install
+```
+
+All dependencies (including `commander`, `playwright`, `zod`, etc.) are installed automatically by `npm install`.
+
+To run commands from source, use `npx -y tsx src/cli.ts` instead of `teams-api`.
+
 ## Quick start
 
 ```typescript
@@ -172,7 +198,59 @@ The MCP server exposes Teams operations as tools for AI agents via stdio transpo
 
 ### Configuration
 
-**macOS (auto-login with FIDO2):**
+**macOS (auto-login with FIDO2) — via npm package:**
+
+```json
+{
+  "mcpServers": {
+    "teams": {
+      "command": "npx",
+      "args": ["-y", "teams-api-mcp"],
+      "env": {
+        "TEAMS_AUTO": "true",
+        "TEAMS_EMAIL": "you@example.com"
+      }
+    }
+  }
+}
+```
+
+**All platforms (interactive login) — via npm package:**
+
+```json
+{
+  "mcpServers": {
+    "teams": {
+      "command": "npx",
+      "args": ["-y", "teams-api-mcp"],
+      "env": {
+        "TEAMS_LOGIN": "true",
+        "TEAMS_EMAIL": "you@example.com",
+        "TEAMS_REGION": "emea"
+      }
+    }
+  }
+}
+```
+
+**All platforms (direct token) — via npm package:**
+
+```json
+{
+  "mcpServers": {
+    "teams": {
+      "command": "npx",
+      "args": ["-y", "teams-api-mcp"],
+      "env": {
+        "TEAMS_TOKEN": "<paste-skype-token-here>",
+        "TEAMS_REGION": "emea"
+      }
+    }
+  }
+}
+```
+
+**From source (development):**
 
 ```json
 {
@@ -189,25 +267,8 @@ The MCP server exposes Teams operations as tools for AI agents via stdio transpo
 }
 ```
 
-**All platforms (direct token):**
-
-```json
-{
-  "mcpServers": {
-    "teams": {
-      "command": "npx",
-      "args": ["-y", "tsx", "/path/to/teams-api/src/mcp-server.ts"],
-      "env": {
-        "TEAMS_TOKEN": "<paste-skype-token-here>",
-        "TEAMS_REGION": "emea"
-      }
-    }
-  }
-}
-```
-
 > [!TIP]
-> To get a token for the MCP config, run `npx tsx src/cli.ts auth --login --region emea` and copy the `skypeToken` value from the output.
+> To get a token for the MCP config, run `npx -y tsx src/cli.ts auth --login --region emea` and copy the `skypeToken` value from the output.
 
 ````
 

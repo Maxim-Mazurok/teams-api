@@ -1,16 +1,22 @@
 {
-  "name": "teams-api",
+  "name": "teams-api-mcp",
   "version": "0.1.0",
   "description": "AI-native Microsoft Teams integration — read conversations, send messages, manage members via the Teams Chat Service REST API",
-  "private": true,
   "type": "commonjs",
-  "main": "src/teams-client.ts",
-  "types": "src/teams-client.ts",
+  "main": "dist/teams-client.js",
+  "types": "dist/teams-client.d.ts",
   "bin": {
-    "teams-api": "./src/cli.ts"
+    "teams-api": "dist/cli.js",
+    "teams-api-mcp": "dist/mcp-server.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "SKILL.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc --project tsconfig.build.json",
+    "build": "tsc --project tsconfig.build.json && node scripts/add-shebangs.js",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
@@ -19,7 +25,8 @@
     "test:watch": "vitest",
     "lint": "prettier --check .",
     "format": "prettier --write .",
-    "mcp": "npx -y tsx src/mcp-server.ts"
+    "mcp": "npx -y tsx src/mcp-server.ts",
+    "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
     "teams",

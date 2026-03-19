@@ -157,7 +157,9 @@ export async function fetchMembers(
     id: member.id,
     displayName: member.userDisplayName ?? "",
     role: member.role ?? "member",
-    memberType: member.id.startsWith("28:") ? "bot" as const : "person" as const,
+    memberType: member.id.startsWith("28:")
+      ? ("bot" as const)
+      : ("person" as const),
   }));
 }
 

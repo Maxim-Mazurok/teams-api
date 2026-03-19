@@ -1,0 +1,19 @@
+# Source
+src/
+tests/
+scripts/
+exports/
+docs/
+
+# Config
+tsconfig.json
+tsconfig.build.json
+vitest.config.mts
+.github/
+.prettierrc
+.prettierignore
+
+# Dev files
+*.test.ts
+*.test.js
+.tmp_*

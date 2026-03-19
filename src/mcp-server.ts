@@ -20,7 +20,7 @@
  *     "mcpServers": {
  *       "teams": {
  *         "command": "npx",
- *         "args": ["-y", "tsx", "/path/to/teams-api/src/mcp-server.ts"],
+ *         "args": ["-y", "teams-api-mcp"],
  *         "env": {
  *           "TEAMS_AUTO": "true",
  *           "TEAMS_EMAIL": "user@company.com"
