@@ -18,6 +18,7 @@ import type {
   InteractiveLoginOptions,
   ManualTokenOptions,
 } from "./types.js";
+import { launchInteractiveBrowser } from "./browser-runtime.js";
 import { detectTeamsRegionFromUrl, resolveTeamsRegion } from "./region.js";
 
 const TEAMS_URL = "https://teams.cloud.microsoft/";
@@ -435,7 +436,7 @@ const INTERACTIVE_LOGIN_TIMEOUT = 5 * 60 * 1_000;
 /**
  * Acquire a Teams skype token via interactive browser login.
  *
- * Opens a visible Chromium window (Playwright's bundled browser),
+ * Opens a visible Chromium-based browser window,
  * navigates to Teams, and waits for the user to complete login
  * manually. Once Teams loads, the skype token is captured via
  * CDP Fetch interception.
@@ -452,7 +453,7 @@ export async function acquireTokenViaInteractiveLogin(
     : () => {};
 
   log("Launching browser for interactive login...");
-  const browser = await chromium.launch({ headless: false });
+  const browser = await launchInteractiveBrowser(chromium, log);
   const context = await browser.newContext();
   const page = await context.newPage();
 

@@ -209,7 +209,7 @@ teams-api auth --login --email you@example.com
 ```
 
 > [!NOTE]
-> Interactive login uses Playwright's bundled Chromium. No system Chrome installation is required.
+> Interactive login prefers an installed Microsoft Edge / Google Chrome when available. If neither is available, `teams-api` installs Playwright Chromium automatically on first use. That first login may take a minute while the browser runtime downloads.
 
 ### Advanced / manual methods
 
