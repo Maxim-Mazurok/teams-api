@@ -18,7 +18,9 @@
         "type": "stdio"
       },
       "runtimeHint": "npx",
-      "packageArguments": ["-y", "teams-api"],
+      "runtimeArguments": [
+        { "type": "positional", "value": "-y" }
+      ],
       "environmentVariables": [
         {
           "name": "TEAMS_EMAIL",
