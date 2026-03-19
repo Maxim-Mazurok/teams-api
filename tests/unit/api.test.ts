@@ -15,6 +15,7 @@ import {
   fetchUserProperties,
   parseRawMessage,
   ApiAuthError,
+  ApiRateLimitError,
 } from "../../src/api.js";
 import type { TeamsToken } from "../../src/types.js";
 
@@ -33,13 +34,18 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-function mockFetchResponse(body: unknown, status = 200): void {
+function mockFetchResponse(
+  body: unknown,
+  status = 200,
+  responseHeaders: Record<string, string> = {},
+): void {
   (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
     ok: status >= 200 && status < 300,
     status,
     statusText: status === 200 ? "OK" : "Error",
     json: () => Promise.resolve(body),
     text: () => Promise.resolve(JSON.stringify(body)),
+    headers: new Headers(responseHeaders),
   });
 }
 
@@ -314,13 +320,13 @@ describe("fetchProfiles", () => {
 });
 
 describe("postMessage", () => {
-  it("should send POST request with correct body", async () => {
+  it("should default to markdown format and convert to HTML", async () => {
     mockFetchResponse({ OriginalArrivalTime: 1773000000000, id: "msg-123" });
 
     const result = await postMessage(
       testToken,
       "conv-id",
-      "Hello!",
+      "**Hello!**",
       "Test User",
     );
 
@@ -336,9 +342,74 @@ describe("postMessage", () => {
       string,
       unknown
     >;
+    expect(sentBody.content).toContain("<strong>Hello!</strong>");
+    expect(sentBody.messagetype).toBe("RichText/Html");
+    expect(sentBody.imdisplayname).toBe("Test User");
+  });
+
+  it("should send plain text when format is text", async () => {
+    mockFetchResponse({ OriginalArrivalTime: 1773000000000, id: "msg-456" });
+
+    await postMessage(testToken, "conv-id", "Hello!", "Test User", "text");
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    const sentBody = JSON.parse(fetchCall[1].body as string) as Record<
+      string,
+      unknown
+    >;
     expect(sentBody.content).toBe("Hello!");
     expect(sentBody.messagetype).toBe("Text");
-    expect(sentBody.imdisplayname).toBe("Test User");
+  });
+
+  it("should pass through raw HTML when format is html", async () => {
+    mockFetchResponse({ OriginalArrivalTime: 1773000000000, id: "msg-789" });
+
+    const htmlContent = "<b>Bold</b> and <i>italic</i>";
+    await postMessage(testToken, "conv-id", htmlContent, "Test User", "html");
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    const sentBody = JSON.parse(fetchCall[1].body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(sentBody.content).toBe(htmlContent);
+    expect(sentBody.messagetype).toBe("RichText/Html");
+  });
+
+  it("should convert markdown features to HTML", async () => {
+    mockFetchResponse({ OriginalArrivalTime: 1773000000000, id: "msg-md" });
+
+    const markdownContent = [
+      "# Heading",
+      "",
+      "**bold** and *italic*",
+      "",
+      "- item one",
+      "- item two",
+    ].join("\n");
+    await postMessage(
+      testToken,
+      "conv-id",
+      markdownContent,
+      "Test User",
+      "markdown",
+    );
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    const sentBody = JSON.parse(fetchCall[1].body as string) as Record<
+      string,
+      unknown
+    >;
+    const content = sentBody.content as string;
+    expect(content).toContain("<h1>Heading</h1>");
+    expect(content).toContain("<strong>bold</strong>");
+    expect(content).toContain("<em>italic</em>");
+    expect(content).toContain("<li>item one</li>");
+    expect(content).toContain("<li>item two</li>");
+    expect(sentBody.messagetype).toBe("RichText/Html");
   });
 
   it("should use clientMessageId as fallback when server returns no id", async () => {
@@ -517,5 +588,105 @@ describe("parseRawMessage", () => {
     expect(message.senderMri).toBe("");
     expect(message.senderDisplayName).toBe("");
     expect(message.content).toBe("");
+  });
+});
+
+describe("rate limit retry (429 handling)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("should retry on 429 and succeed when next attempt returns 200", async () => {
+    mockFetchResponse({ errorCode: 429, message: "Rate limited" }, 429, {
+      "Retry-After": "1",
+    });
+    mockFetchResponse({ conversations: [] });
+
+    const promise = fetchConversations(testToken, 50);
+    await vi.advanceTimersByTimeAsync(1_000);
+    const result = await promise;
+
+    expect(result).toEqual([]);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("should use exponential backoff on repeated 429 responses", async () => {
+    // 3 consecutive 429s, then success
+    mockFetchResponse({ errorCode: 429 }, 429, { "Retry-After": "1" });
+    mockFetchResponse({ errorCode: 429 }, 429, { "Retry-After": "1" });
+    mockFetchResponse({ errorCode: 429 }, 429, { "Retry-After": "1" });
+    mockFetchResponse({ conversations: [] });
+
+    const promise = fetchConversations(testToken, 50);
+
+    // Attempt 0: backoff = 1s * 2^0 = 1s
+    await vi.advanceTimersByTimeAsync(1_000);
+    // Attempt 1: backoff = 1s * 2^1 = 2s
+    await vi.advanceTimersByTimeAsync(2_000);
+    // Attempt 2: backoff = 1s * 2^2 = 4s
+    await vi.advanceTimersByTimeAsync(4_000);
+
+    const result = await promise;
+    expect(result).toEqual([]);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("should throw ApiRateLimitError after exhausting all retries", async () => {
+    for (let i = 0; i <= 5; i++) {
+      mockFetchResponse({ errorCode: 429, message: "Rate limited" }, 429, {
+        "Retry-After": "1",
+      });
+    }
+
+    const promise = fetchConversations(testToken, 50);
+    // Prevent unhandled rejection warning while advancing timers
+    const errorPromise = promise.then(
+      () => {
+        throw new Error("Expected promise to reject");
+      },
+      (error: unknown) => error,
+    );
+
+    // Advance past all retry delays: 1s, 2s, 4s, 8s, 16s
+    for (const seconds of [1, 2, 4, 8, 16]) {
+      await vi.advanceTimersByTimeAsync(seconds * 1_000);
+    }
+
+    const caughtError = await errorPromise;
+    expect(caughtError).toBeInstanceOf(ApiRateLimitError);
+    expect((caughtError as ApiRateLimitError).message).toMatch(
+      /Rate limit exceeded after 6 attempts/,
+    );
+    expect(globalThis.fetch).toHaveBeenCalledTimes(6);
+  });
+
+  it("should default to 2s backoff when Retry-After header is missing", async () => {
+    mockFetchResponse({ errorCode: 429 }, 429);
+    mockFetchResponse({ conversations: [] });
+
+    const promise = fetchConversations(testToken, 50);
+
+    // Default: 2s * 2^0 = 2s
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    const result = await promise;
+    expect(result).toEqual([]);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("should retry 429 for fetchMessagesPage", async () => {
+    mockFetchResponse({ errorCode: 429 }, 429, { "Retry-After": "1" });
+    mockFetchResponse({ messages: [], _metadata: {} });
+
+    const promise = fetchMessagesPage(testToken, "conv-id", 50);
+    await vi.advanceTimersByTimeAsync(1_000);
+    const result = await promise;
+
+    expect(result.messages).toEqual([]);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 });

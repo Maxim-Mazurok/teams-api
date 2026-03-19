@@ -16,6 +16,7 @@ import type {
   Conversation,
   Message,
   Member,
+  MessageFormat,
   OneOnOneSearchResult,
 } from "./types.js";
 
@@ -524,17 +525,26 @@ const sendMessage: ActionDefinition = {
   name: "send-message",
   title: "Send Message",
   description:
-    "Send a plain-text message to a conversation. " +
+    "Send a message to a conversation. " +
     "Identify the conversation by topic name (--chat), " +
     "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
-    "At least one identifier is required.",
+    "At least one identifier is required. " +
+    "Content is interpreted as Markdown by default and converted to rich HTML.",
   parameters: [
     ...conversationParameters,
     {
       name: "content",
       type: "string",
-      description: "Message text to send",
+      description: "Message content to send",
       required: true,
+    },
+    {
+      name: "messageFormat",
+      type: "string",
+      description:
+        'Content format: "markdown" (default, converted to HTML), "html" (raw HTML), or "text" (plain text)',
+      required: false,
+      default: "markdown",
     },
   ],
   execute: async (client, parameters) => {
@@ -543,7 +553,13 @@ const sendMessage: ActionDefinition = {
       parameters,
     );
     const content = parameters.content as string;
-    const result = await client.sendMessage(conversationId, content);
+    const messageFormat =
+      (parameters.messageFormat as MessageFormat | undefined) ?? "markdown";
+    const result = await client.sendMessage(
+      conversationId,
+      content,
+      messageFormat,
+    );
     return { ...result, conversation: label };
   },
   formatResult: (result) => {

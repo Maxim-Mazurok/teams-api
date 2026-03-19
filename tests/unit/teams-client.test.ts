@@ -218,19 +218,68 @@ describe("findOneOnOneConversation", () => {
 
     mockedApi.fetchMessagesPage.mockResolvedValue(
       makeMessagesPage([
-        makeMessage({ senderDisplayName: "Alice Smith" }),
-        makeMessage({ senderDisplayName: "Bob Jones" }),
+        makeMessage({
+          senderDisplayName: "Alice Smith",
+          senderMri: "8:orgid:alice-uuid",
+        }),
+        makeMessage({
+          senderDisplayName: "Bob Jones",
+          senderMri: "8:orgid:bob-uuid",
+        }),
       ]),
     );
 
-    // Also need to mock for getCurrentUserDisplayName (called for self-chat check
-    // when there's no 48:notes conversation)
+    // getCurrentUserDisplayName fallback (no 48:notes, no displayname property)
+    mockedApi.fetchUserProperties.mockResolvedValue({});
 
     const client = TeamsClient.fromToken("token");
     const result = await client.findOneOnOneConversation("Alice");
 
     expect(result).not.toBeNull();
     expect(result!.memberDisplayName).toBe("Alice Smith");
+  });
+
+  it("should not match own name in other people's chats", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes", threadType: "streamofnotes" }),
+      makeConversation({
+        id: "19:me_varen@unq.gbl.spaces",
+        threadType: "chat",
+        topic: "",
+      }),
+    ]);
+
+    // First fetchMessagesPage call: for getCurrentUserDisplayName (from 48:notes)
+    mockedApi.fetchMessagesPage
+      .mockResolvedValueOnce(
+        makeMessagesPage([
+          makeMessage({
+            senderDisplayName: "Maxim Mazurok",
+            senderMri: "8:orgid:maxim-uuid",
+          }),
+        ]),
+      )
+      // Second call: scanning the untitled chat with Varen
+      .mockResolvedValueOnce(
+        makeMessagesPage([
+          makeMessage({
+            senderDisplayName: "Maxim Mazurok",
+            senderMri: "8:orgid:maxim-uuid",
+          }),
+          makeMessage({
+            senderDisplayName: "Varen Yogananthan",
+            senderMri: "8:orgid:varen-uuid",
+          }),
+        ]),
+      );
+
+    const client = TeamsClient.fromToken("token");
+    // Searching for "Maxim" should match self-chat, NOT Varen's chat
+    const result = await client.findOneOnOneConversation("Maxim");
+
+    expect(result).not.toBeNull();
+    expect(result!.conversationId).toBe("48:notes");
+    expect(result!.memberDisplayName).toContain("Maxim Mazurok");
   });
 
   it("should return null when no match found", async () => {
@@ -241,6 +290,9 @@ describe("findOneOnOneConversation", () => {
     mockedApi.fetchMessagesPage.mockResolvedValue(
       makeMessagesPage([makeMessage({ senderDisplayName: "Someone Else" })]),
     );
+
+    // getCurrentUserDisplayName fallback
+    mockedApi.fetchUserProperties.mockResolvedValue({});
 
     const client = TeamsClient.fromToken("token");
     const result = await client.findOneOnOneConversation("Nonexistent Person");
@@ -311,7 +363,7 @@ describe("getMessages", () => {
 });
 
 describe("sendMessage", () => {
-  it("should resolve display name and send", async () => {
+  it("should resolve display name and send with default markdown format", async () => {
     // getCurrentUserDisplayName will call fetchConversations + fetchMessagesPage
     mockedApi.fetchConversations.mockResolvedValue([
       makeConversation({ id: "48:notes" }),
@@ -335,6 +387,31 @@ describe("sendMessage", () => {
       "conv-id",
       "Hello!",
       "Test User",
+      "markdown",
+    );
+  });
+
+  it("should pass explicit format to postMessage", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes" }),
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
+    );
+    mockedApi.postMessage.mockResolvedValue({
+      messageId: "msg-2",
+      arrivalTime: 1773000000000,
+    });
+
+    const client = TeamsClient.fromToken("token");
+    await client.sendMessage("conv-id", "<b>Bold</b>", "html");
+
+    expect(mockedApi.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ skypeToken: "token" }),
+      "conv-id",
+      "<b>Bold</b>",
+      "Test User",
+      "html",
     );
   });
 });
@@ -733,6 +810,31 @@ describe("getCurrentUserDisplayName", () => {
     mockedApi.fetchConversations.mockResolvedValue([]);
     mockedApi.fetchUserProperties.mockResolvedValue({
       displayname: "From Properties",
+    });
+
+    const client = TeamsClient.fromToken("token");
+    const name = await client.getCurrentUserDisplayName();
+
+    expect(name).toBe("From Properties");
+  });
+
+  it("should fallback to userDetails JSON in user properties", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([]);
+    mockedApi.fetchUserProperties.mockResolvedValue({
+      userDetails: JSON.stringify({ name: "Maxim Mazurok" }),
+    });
+
+    const client = TeamsClient.fromToken("token");
+    const name = await client.getCurrentUserDisplayName();
+
+    expect(name).toBe("Maxim Mazurok");
+  });
+
+  it("should prefer displayname over userDetails", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([]);
+    mockedApi.fetchUserProperties.mockResolvedValue({
+      displayname: "From Properties",
+      userDetails: JSON.stringify({ name: "From UserDetails" }),
     });
 
     const client = TeamsClient.fromToken("token");

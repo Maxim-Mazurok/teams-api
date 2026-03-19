@@ -144,6 +144,9 @@ export interface UserProfile {
   userType: string;
 }
 
+/** Format for sending messages. */
+export type MessageFormat = "text" | "markdown" | "html";
+
 /** Result of sending a message. */
 export interface SentMessage {
   /** Server-assigned or client-generated message ID. */

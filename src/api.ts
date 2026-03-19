@@ -11,6 +11,7 @@ import type {
   TeamsToken,
   Conversation,
   Message,
+  MessageFormat,
   MessagesPage,
   Member,
   Reaction,
@@ -18,12 +19,77 @@ import type {
   SentMessage,
   UserProfile,
 } from "./types.js";
+import MarkdownIt from "markdown-it";
+
+const markdownRenderer = new MarkdownIt({ html: true, breaks: true });
 
 export class ApiAuthError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ApiAuthError";
   }
+}
+
+export class ApiRateLimitError extends Error {
+  public readonly retryAfterMilliseconds: number;
+
+  constructor(message: string, retryAfterMilliseconds: number) {
+    super(message);
+    this.name = "ApiRateLimitError";
+    this.retryAfterMilliseconds = retryAfterMilliseconds;
+  }
+}
+
+const MAX_RETRY_ATTEMPTS = 5;
+const INITIAL_BACKOFF_MILLISECONDS = 2_000;
+
+function parseRetryAfter(response: Response): number {
+  const retryAfterHeader = response.headers.get("Retry-After");
+  if (!retryAfterHeader) {
+    return INITIAL_BACKOFF_MILLISECONDS;
+  }
+  const seconds = Number(retryAfterHeader);
+  if (!Number.isNaN(seconds) && seconds > 0) {
+    return seconds * 1_000;
+  }
+  return INITIAL_BACKOFF_MILLISECONDS;
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+/**
+ * Wrapper around `fetch` that automatically retries on 429 (rate limit) responses.
+ *
+ * Uses the `Retry-After` header when present; otherwise applies exponential backoff
+ * starting at 2 seconds. Retries up to 5 times before throwing `ApiRateLimitError`.
+ */
+async function fetchWithRetry(
+  input: string | URL | Request,
+  init?: RequestInit,
+): Promise<Response> {
+  for (let attempt = 0; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+    const response = await fetch(input, init);
+
+    if (response.status !== 429) {
+      return response;
+    }
+
+    if (attempt === MAX_RETRY_ATTEMPTS) {
+      const errorText = await response.text();
+      throw new ApiRateLimitError(
+        `Rate limit exceeded after ${MAX_RETRY_ATTEMPTS + 1} attempts: ${response.status} ${errorText}`,
+        parseRetryAfter(response),
+      );
+    }
+
+    const retryAfterMilliseconds = parseRetryAfter(response);
+    const backoffMilliseconds = retryAfterMilliseconds * Math.pow(2, attempt);
+    await delay(backoffMilliseconds);
+  }
+
+  throw new Error("Unreachable: fetchWithRetry loop exited unexpectedly");
 }
 
 const chatServiceBase = (region: string) =>
@@ -45,7 +111,7 @@ export async function fetchConversations(
 ): Promise<Conversation[]> {
   const url = `${chatServiceBase(token.region)}/users/ME/conversations?view=mychats&pageSize=${pageSize}`;
 
-  const response = await fetch(url, { headers: authHeaders(token) });
+  const response = await fetchWithRetry(url, { headers: authHeaders(token) });
   if (!response.ok) {
     if (response.status === 401) {
       throw new ApiAuthError(
@@ -98,7 +164,7 @@ export async function fetchMessagesPage(
     backwardLink ??
     `${chatServiceBase(token.region)}/users/ME/conversations/${encodeURIComponent(conversationId)}/messages?pageSize=${pageSize}`;
 
-  const response = await fetch(url, { headers: authHeaders(token) });
+  const response = await fetchWithRetry(url, { headers: authHeaders(token) });
   if (!response.ok) {
     if (response.status === 401) {
       throw new ApiAuthError(
@@ -133,7 +199,7 @@ export async function fetchMembers(
 ): Promise<Member[]> {
   const url = `${chatServiceBase(token.region)}/threads/${encodeURIComponent(conversationId)}/members`;
 
-  const response = await fetch(url, { headers: authHeaders(token) });
+  const response = await fetchWithRetry(url, { headers: authHeaders(token) });
   if (!response.ok) {
     if (response.status === 401) {
       throw new ApiAuthError(
@@ -181,7 +247,7 @@ export async function fetchProfiles(
 
   const url = `${MIDDLE_TIER_BASE}/${token.region}/beta/users/fetchShortProfile?isMailAddress=false&enableGuest=true&skypeTeamsInfo=true`;
 
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -219,22 +285,67 @@ export async function fetchProfiles(
 }
 
 /**
- * Send a plain-text message to a conversation.
+ * Convert content to the appropriate format for the Teams API.
+ *
+ * - "text": sent as-is with messagetype "Text"
+ * - "markdown": converted from Markdown to HTML, sent as "RichText/Html"
+ * - "html": sent as-is with messagetype "RichText/Html"
+ */
+function resolveMessageContent(
+  content: string,
+  format: MessageFormat,
+): { resolvedContent: string; messagetype: string; contenttype: string } {
+  switch (format) {
+    case "text":
+      return {
+        resolvedContent: content,
+        messagetype: "Text",
+        contenttype: "text",
+      };
+    case "html":
+      return {
+        resolvedContent: content,
+        messagetype: "RichText/Html",
+        contenttype: "text",
+      };
+    case "markdown": {
+      const htmlContent = markdownRenderer.render(content);
+      return {
+        resolvedContent: htmlContent,
+        messagetype: "RichText/Html",
+        contenttype: "text",
+      };
+    }
+  }
+}
+
+/**
+ * Send a message to a conversation.
+ *
+ * The `format` parameter controls how `content` is interpreted:
+ * - `"text"` — plain text, sent as-is
+ * - `"markdown"` (default) — converted from Markdown to HTML
+ * - `"html"` — raw HTML, sent as-is
  */
 export async function postMessage(
   token: TeamsToken,
   conversationId: string,
   content: string,
   senderDisplayName: string,
+  format: MessageFormat = "markdown",
 ): Promise<SentMessage> {
   const url = `${chatServiceBase(token.region)}/users/ME/conversations/${encodeURIComponent(conversationId)}/messages`;
 
   const clientMessageId = String(Date.now());
+  const { resolvedContent, messagetype, contenttype } = resolveMessageContent(
+    content,
+    format,
+  );
 
   const body = {
-    content,
-    messagetype: "Text",
-    contenttype: "text",
+    content: resolvedContent,
+    messagetype,
+    contenttype,
     clientmessageid: clientMessageId,
     imdisplayname: senderDisplayName,
     properties: {
@@ -243,7 +354,7 @@ export async function postMessage(
     },
   };
 
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     method: "POST",
     headers: {
       ...authHeaders(token),
@@ -283,7 +394,7 @@ export async function fetchUserProperties(
   token: TeamsToken,
 ): Promise<Record<string, unknown>> {
   const url = `${chatServiceBase(token.region)}/users/ME/properties`;
-  const response = await fetch(url, { headers: authHeaders(token) });
+  const response = await fetchWithRetry(url, { headers: authHeaders(token) });
 
   if (!response.ok) {
     if (response.status === 401) {

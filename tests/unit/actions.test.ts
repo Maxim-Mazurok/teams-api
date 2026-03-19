@@ -650,9 +650,54 @@ describe("send-message", () => {
     expect(client.sendMessage).toHaveBeenCalledWith(
       "19:chat@thread.v2",
       "Hello!",
+      "markdown",
     );
     expect(result.messageId).toBe("msg-123");
     expect(result.conversation).toBe("Design Review");
+  });
+
+  it("should pass explicit messageFormat to sendMessage", async () => {
+    const sentMessage: SentMessage = {
+      messageId: "msg-text",
+      arrivalTime: 1773000000000,
+    };
+    const client = createMockClient({
+      sendMessage: vi.fn().mockResolvedValue(sentMessage),
+    });
+
+    await action.execute(client, {
+      conversationId: "19:direct@thread.v2",
+      content: "plain text",
+      messageFormat: "text",
+    });
+
+    expect(client.sendMessage).toHaveBeenCalledWith(
+      "19:direct@thread.v2",
+      "plain text",
+      "text",
+    );
+  });
+
+  it("should pass html messageFormat to sendMessage", async () => {
+    const sentMessage: SentMessage = {
+      messageId: "msg-html",
+      arrivalTime: 1773000000000,
+    };
+    const client = createMockClient({
+      sendMessage: vi.fn().mockResolvedValue(sentMessage),
+    });
+
+    await action.execute(client, {
+      conversationId: "19:direct@thread.v2",
+      content: "<b>Bold</b>",
+      messageFormat: "html",
+    });
+
+    expect(client.sendMessage).toHaveBeenCalledWith(
+      "19:direct@thread.v2",
+      "<b>Bold</b>",
+      "html",
+    );
   });
 
   it("should resolve 1:1 conversation via --to", async () => {

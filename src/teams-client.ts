@@ -32,6 +32,7 @@ import type {
   ManualTokenOptions,
   Conversation,
   Message,
+  MessageFormat,
   Member,
   SentMessage,
   GetMessagesOptions,
@@ -48,6 +49,7 @@ import {
   postMessage,
   fetchUserProperties,
   ApiAuthError,
+  ApiRateLimitError,
 } from "./api.js";
 import {
   acquireTokenViaAutoLogin,
@@ -68,6 +70,7 @@ export type {
   ManualTokenOptions,
   Conversation,
   Message,
+  MessageFormat,
   Member,
   SentMessage,
   GetMessagesOptions,
@@ -79,7 +82,12 @@ export type {
   UserProfile,
 } from "./types.js";
 export { SYSTEM_STREAM_TYPES } from "./types.js";
-export { parseRawMessage, ApiAuthError, fetchProfiles } from "./api.js";
+export {
+  parseRawMessage,
+  ApiAuthError,
+  ApiRateLimitError,
+  fetchProfiles,
+} from "./api.js";
 export { saveToken, loadToken, clearToken } from "./token-store.js";
 export { actions, formatOutput } from "./actions.js";
 export type {
@@ -293,10 +301,23 @@ export class TeamsClient {
         }
       }
 
-      // Search untitled 1:1 chats by scanning recent message senders
+      // Determine the current user's MRI so we can exclude our own messages
+      // from sender-name matching. The self-chat ID contains the user's UUID.
+      let currentUserMriSuffix: string | null = null;
+      if (selfChat) {
+        // selfChat.id is like "48:notes" — but 1:1 conv IDs contain the
+        // user's UUID. We can also get it from the bearer token profile.
+        // The most reliable way: use fetchProfiles or extract from sent messages.
+      }
+
+      // Search untitled 1:1 chats by scanning recent message senders.
+      // Skip 48:notes (already handled above) and exclude messages sent
+      // by the current user to avoid matching ourselves in other chats.
       const untitledChats = conversations.filter(
         (conversation) =>
-          conversation.threadType === "chat" && !conversation.topic,
+          conversation.threadType === "chat" &&
+          !conversation.topic &&
+          !conversation.id.startsWith("48:"),
       );
 
       for (const chat of untitledChats) {
@@ -308,9 +329,37 @@ export class TeamsClient {
               message.messageType === "Text",
           );
 
+          // On the first chat, learn the current user's MRI from the
+          // self-chat or from the predominant sender across messages.
+          if (!currentUserMriSuffix && textMessages.length > 0) {
+            // In a 1:1 chat, one sender is us and one is them.
+            // We know the current user's name from getCurrentUserDisplayName.
+            const currentName = await this.getCurrentUserDisplayName();
+            if (currentName !== "Unknown User") {
+              const ownMessage = textMessages.find(
+                (message) =>
+                  message.senderDisplayName.toLowerCase() ===
+                  currentName.toLowerCase(),
+              );
+              if (ownMessage) {
+                currentUserMriSuffix = extractMriSuffix(ownMessage.senderMri);
+              }
+            }
+          }
+
           const senderNames = [
             ...new Set(
               textMessages
+                .filter((message) => {
+                  // Exclude messages from the current user
+                  if (currentUserMriSuffix) {
+                    return (
+                      extractMriSuffix(message.senderMri) !==
+                      currentUserMriSuffix
+                    );
+                  }
+                  return true;
+                })
                 .map((message) => message.senderDisplayName)
                 .filter((name) => name.length > 0),
             ),
@@ -389,18 +438,27 @@ export class TeamsClient {
   }
 
   /**
-   * Send a plain-text message to a conversation.
+   * Send a message to a conversation.
    *
-   * The sender display name is resolved automatically from the
-   * current user's message history (via self-chat).
+   * The `format` parameter controls how `content` is interpreted:
+   * - `"text"` — plain text, sent as-is
+   * - `"markdown"` (default) — converted from Markdown to HTML
+   * - `"html"` — raw HTML, sent as-is
    */
   async sendMessage(
     conversationId: string,
     content: string,
+    format: MessageFormat = "markdown",
   ): Promise<SentMessage> {
     return this.withTokenRefresh(async () => {
       const displayName = await this.getCurrentUserDisplayName();
-      return postMessage(this.token, conversationId, content, displayName);
+      return postMessage(
+        this.token,
+        conversationId,
+        content,
+        displayName,
+        format,
+      );
     });
   }
 
@@ -524,12 +582,25 @@ export class TeamsClient {
         }
       }
 
-      // Fallback: user properties endpoint
+      // Fallback: user properties endpoint (userDetails JSON field)
       try {
         const properties = await fetchUserProperties(this.token);
         if (typeof properties.displayname === "string") {
           this.cachedDisplayName = properties.displayname;
           return this.cachedDisplayName;
+        }
+        if (typeof properties.userDetails === "string") {
+          try {
+            const userDetails = JSON.parse(properties.userDetails) as {
+              name?: string;
+            };
+            if (userDetails.name) {
+              this.cachedDisplayName = userDetails.name;
+              return this.cachedDisplayName;
+            }
+          } catch {
+            // Malformed JSON — fall through
+          }
         }
       } catch {
         // Fall through
