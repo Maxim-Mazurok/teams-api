@@ -155,7 +155,6 @@ Use conventional commit messages on PR titles and squash merges so every push to
 
 If you use VS Code's Generate Commit Message action, this repo includes workspace settings and a dedicated Copilot instruction file so generated commit messages follow the expected Conventional Commit format by default.
 
-
 ## Implementation notes
 
 ### 1:1 chat name resolution
