@@ -9,8 +9,6 @@ Designed for autonomous AI agents that need to interact with Teams: read message
 
 ## Installation
 
-### As an npm package (recommended for MCP usage)
-
 ```bash
 npm install -g teams-api-mcp
 ```
@@ -21,22 +19,10 @@ Or run directly via `npx` without installing:
 npx -y teams-api-mcp
 ```
 
-### From source (for development)
-
-```bash
-git clone https://github.com/Maxim-Mazurok/teams-api.git
-cd teams-api
-npm install
-```
-
-All dependencies (including `commander`, `playwright`, `zod`, etc.) are installed automatically by `npm install`.
-
-To run commands from source, use `npx -y tsx src/cli.ts` instead of `teams-api`.
-
 ## Quick start
 
 ```typescript
-import { TeamsClient } from "./src/teams-client.js";
+import { TeamsClient } from "teams-api-mcp";
 
 // Interactive login — opens a browser, you log in manually (all platforms)
 const client = await TeamsClient.fromInteractiveLogin({ region: "emea" });
@@ -96,13 +82,13 @@ All access requires a **skype token** from an authenticated Teams web session. T
 The easiest cross-platform option. A browser window opens, you log in with any method your organization supports (password, MFA, passkey, etc.), and the token is captured automatically:
 
 ```bash
-npx tsx src/cli.ts auth --login --region emea
+teams-api auth --login --region emea
 ```
 
 Optionally pre-fill your email:
 
 ```bash
-npx tsx src/cli.ts auth --login --email you@example.com --region emea
+teams-api auth --login --email you@example.com --region emea
 ```
 
 > [!NOTE]
@@ -117,13 +103,13 @@ Requires macOS with a platform authenticator (e.g. Intune Company Portal) and a 
 **Debug session** — start Chrome with `--remote-debugging-port=9222`, navigate to Teams and log in, then run:
 
 ```bash
-npx tsx src/cli.ts auth --debug-port 9222 --region emea
+teams-api auth --debug-port 9222 --region emea
 ```
 
 **Direct token** — extract `x-skypetoken` from browser DevTools (Network tab) and pass it directly:
 
 ```bash
-npx tsx src/cli.ts list-conversations --token "<paste-token-here>" --region emea
+teams-api list-conversations --token "<paste-token-here>" --region emea
 ```
 
 > [!TIP]
@@ -131,7 +117,7 @@ npx tsx src/cli.ts list-conversations --token "<paste-token-here>" --region emea
 
 ## CLI
 
-Run commands with `npx tsx src/cli.ts`.
+After installing globally (`npm install -g teams-api-mcp`), run commands with `teams-api`.
 
 ### Auth flags (available on all commands)
 
@@ -150,46 +136,46 @@ Run commands with `npx tsx src/cli.ts`.
 
 ```bash
 # Acquire a token (interactive — all platforms)
-npx tsx src/cli.ts auth --login --region emea
+teams-api auth --login --region emea
 
 # Acquire a token (auto — macOS with FIDO2)
-npx tsx src/cli.ts auth --auto --email you@example.com
+teams-api auth --auto --email you@example.com
 
 # List conversations
-npx tsx src/cli.ts list-conversations --login --region emea --limit 20 --format json
+teams-api list-conversations --login --region emea --limit 20 --format json
 
 # Find a conversation by topic
-npx tsx src/cli.ts find-conversation --auto --email you@example.com --query "Design Review"
+teams-api find-conversation --auto --email you@example.com --query "Design Review"
 
 # Find a 1:1 chat by person name
-npx tsx src/cli.ts find-one-on-one --auto --email you@example.com --person-name "Jane Doe"
+teams-api find-one-on-one --auto --email you@example.com --person-name "Jane Doe"
 
 # Read messages (by topic name, person name, or direct ID)
-npx tsx src/cli.ts get-messages --auto --email you@example.com --chat "Design Review"
-npx tsx src/cli.ts get-messages --auto --email you@example.com --to "Jane Doe" --max-pages 5
-npx tsx src/cli.ts get-messages --auto --email you@example.com --conversation-id "19:abc@thread.v2" --format json
+teams-api get-messages --auto --email you@example.com --chat "Design Review"
+teams-api get-messages --auto --email you@example.com --to "Jane Doe" --max-pages 5
+teams-api get-messages --auto --email you@example.com --conversation-id "19:abc@thread.v2" --format json
 
 # Newest-first order (API returns newest-first; default is oldest-first/chronological)
-npx tsx src/cli.ts get-messages --auto --email you@example.com --chat "General" --order newest-first
+teams-api get-messages --auto --email you@example.com --chat "General" --order newest-first
 
 # Send a message
-npx tsx src/cli.ts send-message --auto --email you@example.com --to "Jane Doe" --content "Hello!"
-npx tsx src/cli.ts send-message --auto --email you@example.com --chat "Design Review" --content "Status update"
+teams-api send-message --auto --email you@example.com --to "Jane Doe" --content "Hello!"
+teams-api send-message --auto --email you@example.com --chat "Design Review" --content "Status update"
 
 # List members
-npx tsx src/cli.ts get-members --auto --email you@example.com --chat "Design Review" --format md
+teams-api get-members --auto --email you@example.com --chat "Design Review" --format md
 
 # Get current user info
-npx tsx src/cli.ts whoami --auto --email you@example.com
+teams-api whoami --auto --email you@example.com
 
 # Export messages to a file (default format: md)
-npx tsx src/cli.ts get-messages --auto --email you@example.com --chat "General" --output exports/general.md
+teams-api get-messages --auto --email you@example.com --chat "General" --output exports/general.md
 
 # Export as JSON to a file
-npx tsx src/cli.ts get-messages --auto --email you@example.com --chat "General" --format json --output exports/general.json
+teams-api get-messages --auto --email you@example.com --chat "General" --format json --output exports/general.json
 
 # Toon format (fun ASCII art output)
-npx tsx src/cli.ts list-conversations --auto --email you@example.com --format toon
+teams-api list-conversations --auto --email you@example.com --format toon
 ```
 
 ## MCP server
@@ -198,7 +184,7 @@ The MCP server exposes Teams operations as tools for AI agents via stdio transpo
 
 ### Configuration
 
-**macOS (auto-login with FIDO2) — via npm package:**
+**macOS (auto-login with FIDO2):**
 
 ```json
 {
@@ -215,7 +201,7 @@ The MCP server exposes Teams operations as tools for AI agents via stdio transpo
 }
 ```
 
-**All platforms (interactive login) — via npm package:**
+**All platforms (interactive login):**
 
 ```json
 {
@@ -233,7 +219,7 @@ The MCP server exposes Teams operations as tools for AI agents via stdio transpo
 }
 ```
 
-**All platforms (direct token) — via npm package:**
+**All platforms (direct token):**
 
 ```json
 {
@@ -250,27 +236,8 @@ The MCP server exposes Teams operations as tools for AI agents via stdio transpo
 }
 ```
 
-**From source (development):**
-
-```json
-{
-  "mcpServers": {
-    "teams": {
-      "command": "npx",
-      "args": ["-y", "tsx", "/absolute/path/to/teams-api/src/mcp-server.ts"],
-      "env": {
-        "TEAMS_AUTO": "true",
-        "TEAMS_EMAIL": "you@example.com"
-      }
-    }
-  }
-}
-```
-
 > [!TIP]
-> To get a token for the MCP config, run `npx -y tsx src/cli.ts auth --login --region emea` and copy the `skypeToken` value from the output.
-
-````
+> To get a token for the MCP config, run `teams-api auth --login --region emea` and copy the `skypeToken` value from the output.
 
 ### Environment variables
 
@@ -309,22 +276,6 @@ The Teams Chat Service URL varies by region. Use the `region` parameter or `TEAM
 | `emea` | `https://emea.ng.msg.teams.microsoft.com/v1` |
 | `amer` | `https://amer.ng.msg.teams.microsoft.com/v1` |
 
-## Testing
-
-```bash
-# Unit tests (mocked fetch, no network)
-npm test
-
-# Integration tests (requires a live token)
-TEAMS_TOKEN=<token> TEAMS_REGION=apac npm run test:integration
-
-# E2E tests (requires macOS + FIDO2 passkey)
-TEAMS_EMAIL=you@example.com npm run test:e2e
-
-# Watch mode
-npm run test:watch
-````
-
 ## Known limitations
 
 - Token lifetime is ~24 hours. After expiry, you must re-acquire.
@@ -336,7 +287,7 @@ npm run test:watch
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for architecture details, implementation notes, and development guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, architecture, and implementation notes.
 
 ## License
 

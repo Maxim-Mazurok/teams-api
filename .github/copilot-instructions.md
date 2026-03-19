@@ -2,6 +2,13 @@
 
 Instructions for AI agents working on this codebase. For human-readable architecture, setup, and development guidance, see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
+## Documentation boundaries
+
+- **README.md** is for **end users** — installation via npm, CLI usage with the `teams-api` binary, MCP server config via the `teams-api-mcp` npm package, programmatic API quick start. No dev setup, testing, or source-based commands.
+- **CONTRIBUTING.md** is for **contributors/developers** — cloning the repo, running from source (`npx -y tsx src/cli.ts`), architecture, testing, code style, implementation notes, MCP from-source config.
+- When adding new content, put it in the right file based on the audience. User-facing features go in README; dev tooling, internals, and build instructions go in CONTRIBUTING.
+- CLI examples in README use the installed binary name (`teams-api`), not `npx tsx src/cli.ts`. Source-based commands belong only in CONTRIBUTING.
+
 ## Project context
 
 - **What**: AI-native Microsoft Teams integration — CLI, MCP server, and programmatic TypeScript API

@@ -164,3 +164,79 @@ These findings are from the browser extension POC and may be useful for future h
 - Worker responses include `content`, `quotedMessages`, `fromUser.displayName`, `emotionsSummary`, and `emotions[].users[].userId`
 - When Teams serves from cache, the worker still returns structured data (from `indexedDB_NewGetRangeMethod`)
 - In a probe run: `worker-create: 3`, `worker-request: 57`, `worker-response: 47`, with `fetch: 0`, `xhr: 0`, `ws: 0`
+
+## Meeting transcript retrieval
+
+Meeting recordings and transcripts in Teams are stored on the recording initiator's OneDrive for Business (SharePoint). The transcript data can be accessed via two paths:
+
+### Path 1: AMS (Async Media Service) — uses existing skype token
+
+The simplest approach. The AMS transcript URL is embedded in the chat messages and can be fetched directly with the skype token.
+
+**Auth**: `Authorization: skype_token <skypeToken>` (note: `skype_token` with underscore, not the Chat Service format)
+
+**Endpoint**: `https://as-prod.asyncgw.teams.microsoft.com/v1/objects/<amsDocumentId>/views/transcript`
+
+**Response**: VTT format (`text/vtt`), with speaker names in `<v>` tags and timestamps. HTML entities are used (e.g. `&#39;` for apostrophe).
+
+### Path 2: SharePoint API — needs separate SharePoint token
+
+Used by the Teams web client for the Recap/Transcript UI. Requires a token for the `wisetechglobal-my.sharepoint.com` audience, which is acquired via MSAL in the browser.
+
+**Step 1**: Get transcript metadata from drive item:
+
+```
+GET https://<tenant>-my.sharepoint.com/_api/v2.1/drives/<driveId>/items/<itemId>?select=media/transcripts&$expand=media/transcripts
+Authorization: Bearer <sharepointToken>
+```
+
+Response includes `media.transcripts[]` with `id`, `displayName`, `temporaryDownloadUrl`, `languageTag`, etc.
+
+**Step 2**: Download transcript content:
+
+```
+GET https://<tenant>-my.sharepoint.com/_api/v2.1/drives/<driveId>/items/<itemId>/media/transcripts/<transcriptId>/streamContent?is=1&applymediaedits=false
+Authorization: Bearer <sharepointToken>
+```
+
+Response: VTT format.
+
+### How to find transcript URLs from chat messages
+
+Transcript metadata is embedded in two message types in the Chat Service API:
+
+#### `RichText/Media_CallTranscript` message
+
+Content is JSON with fields:
+- `scopeId` / `callId` — the call identifier
+- `storageId` — `<userId>@<tenantId>` identifying the OneDrive storage
+- `isExportedToOdsp` — whether the transcript has been exported to SharePoint
+
+#### `RichText/Media_CallRecording` message (status="Success")
+
+Content is XML (`<URIObject>`) containing `<RecordingContent>` with `<item>` elements:
+- `type="amsTranscript"` → AMS URL: `https://as-prod.asyncgw.teams.microsoft.com/v1/objects/<id>/views/transcript`
+- `type="onedriveForBusinessTranscript"` → SharePoint URL with `driveId`, `driveItemId`, and transcript `id`
+- `type="onedriveForBusinessVideo"` → SharePoint sharing URL with `driveId` and `driveItemId`
+
+The `properties.atp` field contains the SharePoint sharing URL with encoded access tokens.
+
+### Recommended implementation approach
+
+Use **Path 1 (AMS)** since it works with the existing skype token — no new token acquisition needed.
+
+1. Fetch chat messages for the conversation
+2. Find `RichText/Media_CallRecording` messages with `RecordingStatus status="Success"`
+3. Parse the XML content to extract `<item type="amsTranscript" uri="...">` URL
+4. Fetch the transcript VTT from the AMS URL with `Authorization: skype_token <skypeToken>`
+5. Parse VTT to extract speaker names and text
+
+### Additional API surfaces observed
+
+| Host                                              | Auth                                   | Purpose                                             |
+| ------------------------------------------------- | -------------------------------------- | --------------------------------------------------- |
+| `as-prod.asyncgw.teams.microsoft.com`             | `Authorization: skype_token <token>`   | AMS: transcript VTT, video, roster events           |
+| `substrate.office.com`                             | Bearer token (substrate audience)      | WorkingSetFiles API, search, signals                |
+| `<tenant>-my.sharepoint.com`                       | Bearer token (SharePoint audience)     | Drive items, transcript metadata, stream content    |
+| `graph.microsoft.com`                              | Bearer token (Graph audience)          | Drive items, shares resolution, user license details |
+| `australiaeast1-mediap.svc.ms`                     | URL-embedded auth params               | Video manifest/streaming                            |

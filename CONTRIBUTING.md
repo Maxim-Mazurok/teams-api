@@ -1,6 +1,38 @@
 # Contributing
 
-Development guide for the teams-api project.
+Development guide for the teams-api project. For user-facing documentation (installation, CLI usage, MCP setup), see [README.md](README.md).
+
+## Getting started
+
+```bash
+git clone https://github.com/Maxim-Mazurok/teams-api.git
+cd teams-api
+npm install
+```
+
+To run commands from source, use `npx -y tsx src/cli.ts` instead of `teams-api`:
+
+```bash
+npx -y tsx src/cli.ts auth --login --region emea
+npx -y tsx src/cli.ts list-conversations --login --region emea
+```
+
+### MCP server from source
+
+```json
+{
+  "mcpServers": {
+    "teams": {
+      "command": "npx",
+      "args": ["-y", "tsx", "/absolute/path/to/teams-api/src/mcp-server.ts"],
+      "env": {
+        "TEAMS_AUTO": "true",
+        "TEAMS_EMAIL": "you@example.com"
+      }
+    }
+  }
+}
+```
 
 ## Architecture
 
@@ -62,12 +94,6 @@ See [docs/findings.md](docs/findings.md) for detailed REST API endpoint document
 - Node.js 20+
 - npm
 
-### Setup
-
-```bash
-npm install
-```
-
 ### Scripts
 
 | Command                    | Description                                 |
@@ -86,9 +112,21 @@ npm install
 
 **Unit tests** (`tests/unit/`): Mock `fetch` globally and test the API and client layers in isolation. No network access required.
 
+```bash
+npm test
+```
+
 **Integration tests** (`tests/integration/`): Hit the real Teams API. Skipped by default — set `TEAMS_TOKEN` and `TEAMS_REGION` env vars to run.
 
+```bash
+TEAMS_TOKEN=<token> TEAMS_REGION=apac npm run test:integration
+```
+
 **E2E tests** (`tests/e2e/`): Full auto-login → read → write flow. Skipped by default — set `TEAMS_EMAIL` to run. Requires macOS with a platform authenticator and FIDO2 passkey.
+
+```bash
+TEAMS_EMAIL=you@example.com npm run test:e2e
+```
 
 ### Code style
 
