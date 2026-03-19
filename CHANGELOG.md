@@ -1,3 +1,10 @@
+## [0.2.5](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.4...v0.2.5) (2026-03-19)
+
+
+### Bug Fixes
+
+* update server.json version and remove pinned package version ([6022f6e](https://github.com/Maxim-Mazurok/teams-api/commit/6022f6e4e3d5359891ced38e498c854a80563781))
+
 ## [0.2.4](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.3...v0.2.4) (2026-03-19)
 
 
