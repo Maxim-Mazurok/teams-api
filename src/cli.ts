@@ -8,6 +8,10 @@
  *
  * Special commands (auth, logout) are defined here directly since
  * they handle authentication rather than Teams data operations.
+ *
+ * Default auth: Smart login (auto-login on macOS if prerequisites met,
+ * interactive browser login otherwise). Use --auto, --login, --debug,
+ * or --token for explicit auth strategies.
  */
 
 import { writeFileSync } from "node:fs";
@@ -36,6 +40,7 @@ program
 interface AuthFlags {
   auto?: boolean;
   login?: boolean;
+  debug?: boolean;
   email?: string;
   token?: string;
   bearerToken?: string;
@@ -51,9 +56,10 @@ function addAuthOptions(command: Command): Command {
       "--login",
       "Interactive browser login (all platforms, no FIDO2 needed)",
     )
+    .option("--debug", "Connect to a running Chrome debug session")
     .option(
       "--email <email>",
-      "Corporate email (required with --auto, optional with --login)",
+      "Corporate email (required with --auto, optional otherwise)",
     )
     .option("--token <token>", "Use an existing skype token directly")
     .option(
@@ -66,7 +72,7 @@ function addAuthOptions(command: Command): Command {
     )
     .option(
       "--debug-port <port>",
-      "Chrome debug port for manual token capture",
+      "Chrome debug port for debug session",
       "9222",
     )
     .option(
@@ -112,11 +118,20 @@ async function createClient(flags: AuthFlags): Promise<TeamsClient> {
     return TeamsClient.fromInteractiveLogin(interactiveLoginOptions);
   }
 
-  const manualOptions: ManualTokenOptions = {
-    debugPort: Number(flags.debugPort),
+  if (flags.debug) {
+    const manualOptions: ManualTokenOptions = {
+      debugPort: Number(flags.debugPort),
+      region: flags.region,
+    };
+    return TeamsClient.fromDebugSession(manualOptions);
+  }
+
+  // Default: smart login (zero-config)
+  return TeamsClient.connect({
+    email: flags.email,
     region: flags.region,
-  };
-  return TeamsClient.fromDebugSession(manualOptions);
+    verbose: true,
+  });
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -253,7 +268,7 @@ addAuthOptions(
 
 program
   .command("logout")
-  .description("Clear cached token from the macOS Keychain")
+  .description("Clear cached token from the credential store")
   .requiredOption("--email <email>", "Email whose cached token to clear")
   .action((flags: { email: string }) => {
     TeamsClient.clearCachedToken(flags.email);

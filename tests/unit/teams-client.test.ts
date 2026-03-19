@@ -12,6 +12,7 @@ import * as api from "../../src/api.js";
 import { ApiAuthError } from "../../src/api.js";
 import * as tokenStore from "../../src/token-store.js";
 import * as auth from "../../src/auth.js";
+import * as smartLogin from "../../src/smart-login.js";
 import type {
   Conversation,
   Message,
@@ -36,8 +37,11 @@ vi.mock("../../src/api.js", async (importOriginal) => {
 });
 vi.mock("../../src/token-store.js");
 vi.mock("../../src/auth.js");
+vi.mock("../../src/smart-login.js");
+vi.mock("../../src/platform.js");
 
 const mockedApi = vi.mocked(api);
+const mockedSmartLogin = vi.mocked(smartLogin);
 const mockedTokenStore = vi.mocked(tokenStore);
 const mockedAuth = vi.mocked(auth);
 
@@ -1206,6 +1210,108 @@ describe("withTokenRefresh (automatic 401 retry)", () => {
 
     await expect(client.listConversations()).rejects.toThrow(
       "Authentication failed: 401",
+    );
+  });
+});
+
+describe("TeamsClient.connect", () => {
+  it("should use cached token when email is provided and cache exists", async () => {
+    const cachedToken = { skypeToken: "cached-token", region: "apac" };
+    mockedTokenStore.loadToken.mockReturnValue(cachedToken);
+
+    const client = await TeamsClient.connect({
+      email: "user@company.com",
+    });
+
+    expect(mockedTokenStore.loadToken).toHaveBeenCalledWith("user@company.com");
+    expect(mockedSmartLogin.acquireTokenViaSmartLogin).not.toHaveBeenCalled();
+    expect(client.getToken()).toEqual(cachedToken);
+  });
+
+  it("should call smart login when no cached token exists", async () => {
+    const freshToken = { skypeToken: "fresh-token", region: "apac" };
+    mockedTokenStore.loadToken.mockReturnValue(null);
+    mockedSmartLogin.acquireTokenViaSmartLogin.mockResolvedValue(freshToken);
+
+    const client = await TeamsClient.connect({
+      email: "user@company.com",
+    });
+
+    expect(mockedSmartLogin.acquireTokenViaSmartLogin).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "user@company.com" }),
+    );
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "user@company.com",
+      freshToken,
+    );
+    expect(client.getToken()).toEqual(freshToken);
+  });
+
+  it("should call smart login without caching when no email provided", async () => {
+    const freshToken = { skypeToken: "fresh-token", region: "apac" };
+    mockedSmartLogin.acquireTokenViaSmartLogin.mockResolvedValue(freshToken);
+
+    const client = await TeamsClient.connect();
+
+    expect(mockedTokenStore.loadToken).not.toHaveBeenCalled();
+    expect(mockedSmartLogin.acquireTokenViaSmartLogin).toHaveBeenCalledWith(
+      undefined,
+    );
+    expect(mockedTokenStore.saveToken).not.toHaveBeenCalled();
+    expect(client.getToken()).toEqual(freshToken);
+  });
+
+  it("should apply an explicit region override to a cached token", async () => {
+    const cachedToken = { skypeToken: "cached-token", region: "apac" };
+    mockedTokenStore.loadToken.mockReturnValue(cachedToken);
+
+    const client = await TeamsClient.connect({
+      email: "user@company.com",
+      region: "emea",
+    });
+
+    expect(mockedSmartLogin.acquireTokenViaSmartLogin).not.toHaveBeenCalled();
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "user@company.com",
+      { ...cachedToken, region: "emea" },
+    );
+    expect(client.getToken()).toEqual({
+      ...cachedToken,
+      region: "emea",
+    });
+  });
+
+  it("should refresh token via smart login on 401", async () => {
+    const initialToken = { skypeToken: "old-token", region: "apac" };
+    const refreshedToken = { skypeToken: "new-token", region: "apac" };
+    mockedTokenStore.loadToken.mockReturnValue(initialToken);
+
+    const client = await TeamsClient.connect({
+      email: "user@company.com",
+    });
+
+    // First call fails with 401
+    mockedApi.fetchConversations
+      .mockRejectedValueOnce(new ApiAuthError("Authentication failed: 401"))
+      .mockResolvedValueOnce([makeConversation({ topic: "After Refresh" })]);
+
+    mockedSmartLogin.acquireTokenViaSmartLogin.mockResolvedValue(
+      refreshedToken,
+    );
+
+    const conversations = await client.listConversations();
+
+    expect(conversations).toHaveLength(1);
+    expect(conversations[0].topic).toBe("After Refresh");
+
+    // Verify smart login refresh happened
+    expect(mockedTokenStore.clearToken).toHaveBeenCalledWith(
+      "user@company.com",
+    );
+    expect(mockedSmartLogin.acquireTokenViaSmartLogin).toHaveBeenCalled();
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "user@company.com",
+      refreshedToken,
     );
   });
 });
