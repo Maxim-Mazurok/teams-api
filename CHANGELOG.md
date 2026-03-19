@@ -1,3 +1,10 @@
+# [0.3.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.7...v0.3.0) (2026-03-19)
+
+
+### Features
+
+* prompt AI agent for email instead of requiring it in config ([0c908f0](https://github.com/Maxim-Mazurok/teams-api/commit/0c908f0e64d2bf94e364a19b801f3781fd2328f1))
+
 ## [0.2.7](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.6...v0.2.7) (2026-03-19)
 
 ## [0.2.6](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.5...v0.2.6) (2026-03-19)
