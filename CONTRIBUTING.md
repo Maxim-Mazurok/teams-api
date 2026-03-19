@@ -136,6 +136,23 @@ TEAMS_EMAIL=you@example.com npm run test:e2e
 - Named exports only
 - ESM syntax in `.ts` files, CommonJS in `package.json`
 
+### Releases
+
+Releases are fully automated on every push to `main`. After the CI matrix passes, GitHub Actions runs `semantic-release` to:
+
+- determine the next version
+- create the Git tag and GitHub release
+- publish the package to npm
+- commit the updated `package.json`, `package-lock.json`, and `CHANGELOG.md` back to `main`
+
+Versioning follows conventional commit prefixes:
+
+- `feat` triggers a minor release
+- `BREAKING CHANGE` in the commit footer triggers a major release
+- `fix`, `docs`, `chore`, `ci`, `refactor`, `test`, `style`, `build`, `perf`, and `revert` trigger a patch release
+
+Use conventional commit messages on PR titles and squash merges so every push to `main` produces the expected automated release.
+
 ## Implementation notes
 
 ### 1:1 chat name resolution

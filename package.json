@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "AI-native Microsoft Teams integration — read conversations, send messages, manage members via the Teams Chat Service REST API",
   "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Maxim-Mazurok/teams-api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Maxim-Mazurok/teams-api/issues"
+  },
+  "homepage": "https://github.com/Maxim-Mazurok/teams-api#readme",
   "main": "dist/teams-client.js",
   "types": "dist/teams-client.d.ts",
   "bin": {
@@ -26,6 +34,8 @@
     "lint": "prettier --check .",
     "format": "prettier --write .",
     "mcp": "npx -y tsx src/mcp-server.ts",
+    "release": "semantic-release",
+    "release:dry-run": "semantic-release --dry-run",
     "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
@@ -47,9 +57,12 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^25.5.0",
     "prettier": "^3.8.1",
+    "semantic-release": "^25.0.3",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
   }
