@@ -4,6 +4,12 @@ AI-native Microsoft Teams integration — read conversations, send messages, and
 
 Designed for autonomous AI agents that need to interact with Teams: read messages, reply to people, monitor conversations, and participate in team workflows.
 
+[<img src="https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white" alt="Install in VS Code">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522teams%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522teams-api%2540latest%2522%255D%252C%2522env%2522%253A%257B%2522TEAMS_LOGIN%2522%253A%2522true%2522%257D%257D)
+[<img src="https://img.shields.io/badge/VS_Code_Insiders-Install_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white" alt="Install in VS Code Insiders">](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522teams%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522teams-api%2540latest%2522%255D%252C%2522env%2522%253A%257B%2522TEAMS_LOGIN%2522%253A%2522true%2522%257D%257D)
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=teams&config=%7B%22name%22%3A%22teams%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22teams-api%40latest%22%5D%2C%22env%22%3A%7B%22TEAMS_LOGIN%22%3A%22true%22%7D%7D)
+[![npm version](https://img.shields.io/npm/v/teams-api?style=flat-square)](https://www.npmjs.com/package/teams-api)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-teams--api-green?style=flat-square)](https://registry.modelcontextprotocol.io)
+
 > [!NOTE]
 > This project was AI-generated using Claude Opus 4.6 with human guidance and review.
 
@@ -11,32 +17,34 @@ Designed for autonomous AI agents that need to interact with Teams: read message
 
 `teams-api` can be used in three ways:
 
-1. As an MCP server for editors and AI tools. This is the recommended path for most users.
-2. As a CLI for direct terminal use.
-3. As a programmatic Node.js library. This is the advanced path and is documented near the end.
+1. **MCP server** for editors and AI tools — the recommended path for most users.
+2. **CLI** for direct terminal use.
+3. **Programmatic Node.js library** — advanced, documented near the end.
 
-### Recommended: MCP via `npx @latest`
+### Install in your editor
 
-Prefer running from `npx` so you always pick up the latest published version while the project is evolving quickly.
+The quickest way to get started is to click one of the install badges above, or follow the instructions for your editor below.
 
-If you are on macOS and already use a platform authenticator / FIDO2 passkey, start with auto-login:
+<details>
+<summary><strong>VS Code / VS Code Insiders</strong></summary>
 
-```json
-{
-  "mcpServers": {
-    "teams": {
-      "command": "npx",
-      "args": ["-y", "teams-api@latest"],
-      "env": {
-        "TEAMS_AUTO": "true",
-        "TEAMS_EMAIL": "you@example.com"
-      }
-    }
-  }
-}
+**Option 1 — One-click install:**
+
+Click the badge at the top of this README, or press `Cmd+Shift+X` / `Ctrl+Shift+X`, type `@mcp` in the search field, and look for **Microsoft Teams API**.
+
+**Option 2 — CLI:**
+
+```bash
+# VS Code
+code --add-mcp '{"name":"teams","command":"npx","args":["-y","teams-api@latest"],"env":{"TEAMS_LOGIN":"true"}}'
+
+# VS Code Insiders
+code-insiders --add-mcp '{"name":"teams","command":"npx","args":["-y","teams-api@latest"],"env":{"TEAMS_LOGIN":"true"}}'
 ```
 
-If you are on Windows or Linux, or you want a visible browser login flow, use interactive login instead:
+**Option 3 — Manual config:**
+
+Add to your VS Code MCP config (`.vscode/mcp.json` or User Settings):
 
 ```json
 {
@@ -53,8 +61,87 @@ If you are on Windows or Linux, or you want a visible browser login flow, use in
 }
 ```
 
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Click the **Install in Cursor** badge at the top, or add to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "teams": {
+      "command": "npx",
+      "args": ["-y", "teams-api@latest"],
+      "env": {
+        "TEAMS_LOGIN": "true",
+        "TEAMS_EMAIL": "you@example.com"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+Add to `claude_desktop_config.json` ([how to find it](https://modelcontextprotocol.io/quickstart/user)):
+
+```json
+{
+  "mcpServers": {
+    "teams": {
+      "command": "npx",
+      "args": ["-y", "teams-api@latest"],
+      "env": {
+        "TEAMS_LOGIN": "true",
+        "TEAMS_EMAIL": "you@example.com"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Claude Code</strong></summary>
+
+```bash
+claude mcp add teams -- npx -y teams-api@latest
+```
+
+Then set the environment variables `TEAMS_LOGIN=true` and `TEAMS_EMAIL=you@example.com` in your shell before starting Claude Code.
+
+</details>
+
+<details>
+<summary><strong>Windsurf</strong></summary>
+
+Add to `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "teams": {
+      "command": "npx",
+      "args": ["-y", "teams-api@latest"],
+      "env": {
+        "TEAMS_LOGIN": "true",
+        "TEAMS_EMAIL": "you@example.com"
+      }
+    }
+  }
+}
+```
+
+</details>
+
 > [!TIP]
-> In both recommended setups, `teams-api` captures the full token bundle automatically during login. Most users never need to copy tokens manually.
+> On macOS with a FIDO2 passkey, replace `TEAMS_LOGIN` with `TEAMS_AUTO` for fully unattended auth. See [Authentication](#authentication) for details.
 
 ### CLI
 
@@ -239,54 +326,11 @@ teams-api list-conversations --auto --email you@example.com --format toon
 
 ## MCP server
 
-The MCP server exposes Teams operations as tools for AI agents via stdio transport.
-
-### Recommended setup
-
-For most users, use one of these login-based configs. No manual token extraction is required.
-
-**macOS (auto-login with FIDO2):**
-
-```json
-{
-  "mcpServers": {
-    "teams": {
-      "command": "npx",
-      "args": ["-y", "teams-api@latest"],
-      "env": {
-        "TEAMS_AUTO": "true",
-        "TEAMS_EMAIL": "you@example.com"
-      }
-    }
-  }
-}
-```
-
-**All platforms (interactive login):**
-
-```json
-{
-  "mcpServers": {
-    "teams": {
-      "command": "npx",
-      "args": ["-y", "teams-api@latest"],
-      "env": {
-        "TEAMS_LOGIN": "true",
-        "TEAMS_EMAIL": "you@example.com"
-      }
-    }
-  }
-}
-```
-
-> [!TIP]
-> In the recommended configs above, `teams-api` captures the full token bundle automatically during login. You do not need to copy `skypeToken`, `bearerToken`, or `substrateToken` into the MCP config.
+The MCP server exposes Teams operations as tools for AI agents via stdio transport. See [Getting Started](#install-in-your-editor) for editor-specific setup.
 
 ### Advanced: direct token configuration
 
-Use this only if you already have tokens from another flow or need to avoid browser-based auth entirely.
-
-**All platforms (direct token):**
+Use this only if you already have tokens from another flow or need to avoid browser-based auth entirely:
 
 ```json
 {
