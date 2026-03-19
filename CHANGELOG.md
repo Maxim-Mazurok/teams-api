@@ -1,3 +1,10 @@
+## [0.2.6](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.5...v0.2.6) (2026-03-19)
+
+
+### Bug Fixes
+
+* dynamically inject version into server.json for MCP Registry publish ([ca34c9f](https://github.com/Maxim-Mazurok/teams-api/commit/ca34c9fb45fea9f3cb4cc6719deda92289cfd410))
+
 ## [0.2.5](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.4...v0.2.5) (2026-03-19)
 
 
