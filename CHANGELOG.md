@@ -1,3 +1,10 @@
+## [0.2.3](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.2...v0.2.3) (2026-03-19)
+
+
+### Bug Fixes
+
+* shorten MCP Registry description to fit 100 char limit ([13f851f](https://github.com/Maxim-Mazurok/teams-api/commit/13f851fce1804e09faf88a4aa55ff519068c69f5))
+
 ## [0.2.2](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.1...v0.2.2) (2026-03-19)
 
 
