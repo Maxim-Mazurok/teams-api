@@ -18,6 +18,10 @@ import type {
   Mention,
   SentMessage,
   UserProfile,
+  PersonSearchResult,
+  ChatSearchResult,
+  TranscriptEntry,
+  TranscriptResult,
 } from "./types.js";
 import MarkdownIt from "markdown-it";
 
@@ -484,5 +488,386 @@ function parseMentions(rawMentions: unknown): Mention[] {
   return parsed.map((mention) => ({
     id: mention.id ?? "",
     displayName: mention.displayName ?? "",
+  }));
+}
+
+// ── Transcript helpers ────────────────────────────────────────────────
+
+/**
+ * Extract the AMS transcript URL from a `RichText/Media_CallRecording` message.
+ *
+ * The message content is XML containing `<item type="amsTranscript" uri="...">`.
+ * Returns null if no transcript URL is found.
+ */
+export function extractTranscriptUrl(messageContent: string): string | null {
+  const match = messageContent.match(
+    /<item\s+[^>]*type="amsTranscript"[^>]*\buri="([^"]+)"/,
+  );
+  return match?.[1] ?? null;
+}
+
+/**
+ * Extract the meeting title from a `RichText/Media_CallRecording` message.
+ *
+ * The title is in the `<OriginalName>` element inside the XML content.
+ */
+export function extractMeetingTitle(messageContent: string): string {
+  const match = messageContent.match(/<OriginalName\b[^>]*v="([^"]*)"[^>]*\/>/);
+  return match?.[1] ?? "Unknown Meeting";
+}
+
+/**
+ * Check whether a `RichText/Media_CallRecording` message represents
+ * a successful recording (as opposed to started/failed).
+ */
+export function isSuccessfulRecording(messageContent: string): boolean {
+  return /<RecordingStatus\b[^>]*status="Success"/.test(messageContent);
+}
+
+/**
+ * Decode HTML entities to plain text (used for VTT content).
+ */
+function decodeVttEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#(\d+);/g, (_, code: string) =>
+      String.fromCharCode(Number(code)),
+    );
+}
+
+/**
+ * Parse VTT content into structured transcript entries.
+ *
+ * Handles the Teams VTT format with `<v Speaker Name>text</v>` tags
+ * and HTML entities.
+ */
+export function parseVtt(vttContent: string): TranscriptEntry[] {
+  const entries: TranscriptEntry[] = [];
+  const lines = vttContent.split("\n");
+
+  let currentStartTime = "";
+  let currentEndTime = "";
+
+  for (const line of lines) {
+    // Match timestamp lines: "00:00:00.000 --> 00:00:05.000"
+    const timestampMatch = line.match(
+      /^(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})/,
+    );
+    if (timestampMatch) {
+      currentStartTime = timestampMatch[1];
+      currentEndTime = timestampMatch[2];
+      continue;
+    }
+
+    // Match speaker lines: "<v Speaker Name>text</v>"
+    const speakerMatch = line.match(/^<v\s+([^>]+)>(.+)<\/v>\s*$/);
+    if (speakerMatch && currentStartTime) {
+      entries.push({
+        speaker: decodeVttEntities(speakerMatch[1]),
+        startTime: currentStartTime,
+        endTime: currentEndTime,
+        text: decodeVttEntities(speakerMatch[2]),
+      });
+      currentStartTime = "";
+      currentEndTime = "";
+    }
+  }
+
+  return entries;
+}
+
+/**
+ * Fetch a transcript from the AMS (Async Media Service).
+ *
+ * Uses `Authorization: skype_token <token>` header (note: different format
+ * from the Chat Service `Authentication: skypetoken=<token>` header).
+ */
+export async function fetchTranscriptVtt(
+  token: TeamsToken,
+  amsTranscriptUrl: string,
+): Promise<string> {
+  const response = await fetchWithRetry(amsTranscriptUrl, {
+    headers: {
+      Authorization: `skype_token ${token.skypeToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Transcript fetch authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
+    throw new Error(
+      `Failed to fetch transcript: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  return response.text();
+}
+
+/**
+ * Fetch and parse the transcript for a conversation.
+ *
+ * 1. Fetches messages from the conversation
+ * 2. Finds the latest `RichText/Media_CallRecording` message with status="Success"
+ * 3. Extracts the AMS transcript URL from the XML content
+ * 4. Fetches the VTT content from AMS
+ * 5. Parses the VTT into structured entries
+ */
+export async function fetchTranscript(
+  token: TeamsToken,
+  conversationId: string,
+): Promise<TranscriptResult> {
+  // Fetch messages to find the recording message
+  const pageSize = 200;
+  const maxPages = 20;
+  let backwardLink: string | undefined;
+  let amsTranscriptUrl: string | null = null;
+  let meetingTitle = "Unknown Meeting";
+
+  for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
+    const page = await fetchMessagesPage(
+      token,
+      conversationId,
+      pageSize,
+      backwardLink,
+    );
+
+    for (const message of page.messages) {
+      if (
+        message.messageType === "RichText/Media_CallRecording" &&
+        isSuccessfulRecording(message.content)
+      ) {
+        const transcriptUrl = extractTranscriptUrl(message.content);
+        if (transcriptUrl) {
+          amsTranscriptUrl = transcriptUrl;
+          meetingTitle = extractMeetingTitle(message.content);
+          break;
+        }
+      }
+    }
+
+    if (amsTranscriptUrl || !page.backwardLink) break;
+    backwardLink = page.backwardLink;
+  }
+
+  if (!amsTranscriptUrl) {
+    throw new Error(
+      "No meeting transcript found in this conversation. " +
+        "Make sure the conversation contains a recorded meeting with a transcript.",
+    );
+  }
+
+  const rawVtt = await fetchTranscriptVtt(token, amsTranscriptUrl);
+  const entries = parseVtt(rawVtt);
+
+  return { meetingTitle, rawVtt, entries };
+}
+
+// ── Substrate search API ──────────────────────────────────────────────
+
+const SUBSTRATE_SEARCH_BASE = "https://substrate.office.com";
+
+/**
+ * Search for people by name using the Substrate suggestions API.
+ *
+ * Requires a Substrate Bearer token (substrate.office.com audience).
+ * Returns matching people with their MRIs, emails, job titles, etc.
+ */
+export async function searchPeople(
+  token: TeamsToken,
+  query: string,
+  maxResults = 10,
+): Promise<PersonSearchResult[]> {
+  if (!token.substrateToken) {
+    return [];
+  }
+
+  const url = `${SUBSTRATE_SEARCH_BASE}/search/api/v1/suggestions?scenario=peoplepicker.newChat`;
+
+  const body = {
+    EntityRequests: [
+      {
+        Query: {
+          QueryString: query,
+          DisplayQueryString: query,
+        },
+        EntityType: "People",
+        Size: maxResults,
+        Fields: [
+          "Id",
+          "MRI",
+          "DisplayName",
+          "EmailAddresses",
+          "PeopleType",
+          "PeopleSubtype",
+          "UserPrincipalName",
+          "GivenName",
+          "Surname",
+          "JobTitle",
+          "Department",
+          "ExternalDirectoryObjectId",
+        ],
+        Filter: {
+          And: [
+            {
+              Or: [
+                { Term: { PeopleType: "Person" } },
+                { Term: { PeopleType: "Other" } },
+              ],
+            },
+            {
+              Or: [
+                { Term: { PeopleSubtype: "OrganizationUser" } },
+                { Term: { PeopleSubtype: "MTOUser" } },
+                { Term: { PeopleSubtype: "Guest" } },
+              ],
+            },
+            { Or: [{ Term: { Flags: "NonHidden" } }] },
+          ],
+        },
+        Provenances: ["Mailbox", "Directory"],
+        From: 0,
+      },
+    ],
+    Scenario: { Name: "peoplepicker.newChat" },
+    AppName: "Microsoft Teams",
+  };
+
+  const response = await fetchWithRetry(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token.substrateToken}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Substrate search authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
+    return [];
+  }
+
+  const data = (await response.json()) as {
+    Groups?: Array<{
+      Type?: string;
+      Suggestions?: Array<{
+        DisplayName?: string;
+        MRI?: string;
+        EmailAddresses?: string[];
+        UserPrincipalName?: string;
+        JobTitle?: string;
+        Department?: string;
+        ExternalDirectoryObjectId?: string;
+      }>;
+    }>;
+  };
+
+  const peopleGroup = data.Groups?.find((group) => group.Type === "People");
+  if (!peopleGroup?.Suggestions) return [];
+
+  return peopleGroup.Suggestions.map((suggestion) => ({
+    displayName: suggestion.DisplayName ?? "",
+    mri: suggestion.MRI ?? "",
+    email: suggestion.EmailAddresses?.[0] ?? suggestion.UserPrincipalName ?? "",
+    jobTitle: suggestion.JobTitle ?? "",
+    department: suggestion.Department ?? "",
+    objectId: suggestion.ExternalDirectoryObjectId ?? "",
+  }));
+}
+
+/**
+ * Search for chats by name or member using the Substrate suggestions API.
+ *
+ * Requires a Substrate Bearer token (substrate.office.com audience).
+ * Returns matching chats with their thread IDs, members, etc.
+ */
+export async function searchChats(
+  token: TeamsToken,
+  query: string,
+  maxResults = 10,
+): Promise<ChatSearchResult[]> {
+  if (!token.substrateToken) {
+    return [];
+  }
+
+  const url = `${SUBSTRATE_SEARCH_BASE}/search/api/v1/suggestions?scenario=peoplepicker.newChat`;
+
+  const body = {
+    EntityRequests: [
+      {
+        Query: {
+          QueryString: query,
+        },
+        EntityType: "Chat",
+        Size: maxResults,
+      },
+    ],
+    Scenario: { Name: "peoplepicker.newChat" },
+    AppName: "Microsoft Teams",
+  };
+
+  const response = await fetchWithRetry(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token.substrateToken}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Substrate search authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
+    return [];
+  }
+
+  const data = (await response.json()) as {
+    Groups?: Array<{
+      Type?: string;
+      Suggestions?: Array<{
+        Name?: string;
+        ThreadId?: string;
+        ThreadType?: string;
+        MatchingMembers?: Array<{
+          DisplayName?: string;
+          MRI?: string;
+        }>;
+        ChatMembers?: Array<{
+          DisplayName?: string;
+          MRI?: string;
+        }>;
+        TotalChatMembersCount?: number;
+      }>;
+    }>;
+  };
+
+  const chatGroup = data.Groups?.find((group) => group.Type === "Chat");
+  if (!chatGroup?.Suggestions) return [];
+
+  return chatGroup.Suggestions.map((suggestion) => ({
+    name: suggestion.Name ?? "",
+    threadId: suggestion.ThreadId ?? "",
+    threadType: suggestion.ThreadType ?? "",
+    matchingMembers: (suggestion.MatchingMembers ?? []).map((member) => ({
+      displayName: member.DisplayName ?? "",
+      mri: member.MRI ?? "",
+    })),
+    chatMembers: (suggestion.ChatMembers ?? []).map((member) => ({
+      displayName: member.DisplayName ?? "",
+      mri: member.MRI ?? "",
+    })),
+    totalMemberCount: suggestion.TotalChatMembersCount ?? 0,
   }));
 }

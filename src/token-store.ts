@@ -18,6 +18,7 @@ interface StoredToken {
   skypeToken: string;
   region: string;
   bearerToken?: string;
+  substrateToken?: string;
   acquiredAt: number;
 }
 
@@ -26,6 +27,7 @@ export function saveToken(email: string, token: TeamsToken): void {
     skypeToken: token.skypeToken,
     region: token.region,
     bearerToken: token.bearerToken,
+    substrateToken: token.substrateToken,
     acquiredAt: Date.now(),
   };
   const encoded = Buffer.from(JSON.stringify(storedToken)).toString("base64");
@@ -73,6 +75,7 @@ export function loadToken(email: string): TeamsToken | null {
     skypeToken: storedToken.skypeToken,
     region: storedToken.region,
     bearerToken: storedToken.bearerToken,
+    substrateToken: storedToken.substrateToken,
   };
 }
 

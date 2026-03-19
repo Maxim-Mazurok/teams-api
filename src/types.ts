@@ -15,6 +15,11 @@ export interface TeamsToken {
    * Used for profile resolution. Optional — only available when captured during auth.
    */
   bearerToken?: string;
+  /**
+   * OAuth2 Bearer token for the Substrate search API (substrate.office.com audience).
+   * Used for people/chat/channel search. Optional — only available when captured during auth.
+   */
+  substrateToken?: string;
 }
 
 /** Options for automatic token acquisition via FIDO2 passkey. */
@@ -191,6 +196,60 @@ export interface OneOnOneSearchResult {
   conversationId: string;
   /** Display name of the matched member. */
   memberDisplayName: string;
+}
+
+/** A single entry in a parsed meeting transcript. */
+export interface TranscriptEntry {
+  /** Speaker name as identified by Teams. */
+  speaker: string;
+  /** Start time in the recording (ISO 8601 duration or HH:MM:SS.mmm). */
+  startTime: string;
+  /** End time in the recording. */
+  endTime: string;
+  /** Spoken text content. */
+  text: string;
+}
+
+/** Result of fetching a meeting transcript. */
+export interface TranscriptResult {
+  /** Meeting title extracted from the recording message. */
+  meetingTitle: string;
+  /** The raw VTT content. */
+  rawVtt: string;
+  /** Parsed transcript entries with speaker, timestamps, and text. */
+  entries: TranscriptEntry[];
+}
+
+/** A person found via the Substrate people search API. */
+export interface PersonSearchResult {
+  /** Display name. */
+  displayName: string;
+  /** MRI (e.g. "8:orgid:uuid"). */
+  mri: string;
+  /** Email address. */
+  email: string;
+  /** Job title, or empty string. */
+  jobTitle: string;
+  /** Department, or empty string. */
+  department: string;
+  /** AAD object ID (without tenant). */
+  objectId: string;
+}
+
+/** A chat found via the Substrate chat search API. */
+export interface ChatSearchResult {
+  /** Chat display name or topic. */
+  name: string;
+  /** Thread ID (conversation ID). */
+  threadId: string;
+  /** Thread type (e.g. "Chat", "Meeting"). */
+  threadType: string;
+  /** Members whose names matched the query. */
+  matchingMembers: Array<{ displayName: string; mri: string }>;
+  /** Other members in the chat. */
+  chatMembers: Array<{ displayName: string; mri: string }>;
+  /** Total number of members. */
+  totalMemberCount: number;
 }
 
 /** Thread types that represent system streams, not user conversations. */

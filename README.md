@@ -241,14 +241,14 @@ The MCP server exposes Teams operations as tools for AI agents via stdio transpo
 
 ### Environment variables
 
-| Variable           | Description                                          |
-| ------------------ | ---------------------------------------------------- |
-| `TEAMS_TOKEN`      | Pre-existing skype token                             |
-| `TEAMS_REGION`     | API region (default: apac)                           |
-| `TEAMS_EMAIL`      | Corporate email for auto-login or interactive login  |
-| `TEAMS_AUTO`       | Set to `true` to enable auto-login (macOS + FIDO2)   |
-| `TEAMS_LOGIN`      | Set to `true` to enable interactive browser login    |
-| `TEAMS_DEBUG_PORT` | Chrome debug port (default: 9222)                    |
+| Variable           | Description                                         |
+| ------------------ | --------------------------------------------------- |
+| `TEAMS_TOKEN`      | Pre-existing skype token                            |
+| `TEAMS_REGION`     | API region (default: apac)                          |
+| `TEAMS_EMAIL`      | Corporate email for auto-login or interactive login |
+| `TEAMS_AUTO`       | Set to `true` to enable auto-login (macOS + FIDO2)  |
+| `TEAMS_LOGIN`      | Set to `true` to enable interactive browser login   |
+| `TEAMS_DEBUG_PORT` | Chrome debug port (default: 9222)                   |
 
 ### Available tools
 

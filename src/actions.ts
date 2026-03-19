@@ -18,6 +18,10 @@ import type {
   Member,
   MessageFormat,
   OneOnOneSearchResult,
+  PersonSearchResult,
+  ChatSearchResult,
+  TranscriptResult,
+  TranscriptEntry,
 } from "./types.js";
 
 // ── Parameter & Action types ─────────────────────────────────────────
@@ -276,6 +280,7 @@ const findConversation: ActionDefinition = {
   title: "Find Teams Conversation",
   description:
     "Find a conversation by topic name (case-insensitive partial match). " +
+    "When Substrate search is available, also matches by member names. " +
     "For 1:1 chats (which have no topic), use find-one-on-one instead.",
   parameters: [
     {
@@ -329,7 +334,8 @@ const findOneOnOne: ActionDefinition = {
   title: "Find 1:1 Conversation",
   description:
     "Find a 1:1 conversation with a person by name. " +
-    "Searches untitled chats by scanning recent message sender names. " +
+    "Uses Substrate people/chat search when available, " +
+    "falls back to scanning message senders. " +
     "Also finds the self-chat if the name matches the current user.",
   parameters: [
     {
@@ -722,14 +728,303 @@ const whoami: ActionDefinition = {
   },
 };
 
+// ── Transcript action ────────────────────────────────────────────────
+
+/** Format a VTT timestamp (HH:MM:SS.mmm) as a compact time string. */
+function formatTimestamp(timestamp: string): string {
+  // Strip leading "00:" hours if zero, and trim milliseconds
+  const withoutMilliseconds = timestamp.replace(/\.\d+$/, "");
+  return withoutMilliseconds.replace(/^00:/, "");
+}
+
+/** Group consecutive entries by the same speaker for more readable output. */
+function groupBySpeaker(
+  entries: TranscriptEntry[],
+): Array<{ speaker: string; startTime: string; segments: string[] }> {
+  const groups: Array<{
+    speaker: string;
+    startTime: string;
+    segments: string[];
+  }> = [];
+
+  for (const entry of entries) {
+    const lastGroup = groups[groups.length - 1];
+    if (lastGroup && lastGroup.speaker === entry.speaker) {
+      lastGroup.segments.push(entry.text);
+    } else {
+      groups.push({
+        speaker: entry.speaker,
+        startTime: entry.startTime,
+        segments: [entry.text],
+      });
+    }
+  }
+
+  return groups;
+}
+
+const getTranscript: ActionDefinition = {
+  name: "get-transcript",
+  title: "Get Meeting Transcript",
+  description:
+    "Get the meeting transcript from a conversation that contains a recorded meeting. " +
+    "Identify the conversation by topic name (--chat), " +
+    "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
+    "Use --raw-vtt to get the original VTT file instead of parsed output.",
+  parameters: [
+    ...conversationParameters,
+    {
+      name: "rawVtt",
+      type: "boolean",
+      description:
+        "Return the original VTT file content instead of parsed transcript (default: false)",
+      required: false,
+      default: false,
+    },
+  ],
+  execute: async (client, parameters) => {
+    const { conversationId } = await resolveConversationId(client, parameters);
+    const rawVtt = (parameters.rawVtt as boolean | undefined) ?? false;
+
+    const transcriptResult = await client.getTranscript(conversationId);
+
+    if (rawVtt) {
+      return { rawVtt: transcriptResult.rawVtt, format: "vtt" as const };
+    }
+
+    return transcriptResult;
+  },
+  formatResult: (result) => {
+    const data = result as TranscriptResult | { rawVtt: string; format: "vtt" };
+
+    if ("format" in data && data.format === "vtt") {
+      return data.rawVtt;
+    }
+
+    const transcript = data as TranscriptResult;
+    const groups = groupBySpeaker(transcript.entries);
+    const lines = [
+      `\nTranscript: ${transcript.meetingTitle} (${transcript.entries.length} segments)\n`,
+    ];
+
+    for (const group of groups) {
+      const time = formatTimestamp(group.startTime);
+      lines.push(`  [${time}] ${group.speaker}:`);
+      lines.push(`    ${group.segments.join(" ")}`);
+    }
+
+    return lines.join("\n");
+  },
+  formatMarkdown: (result) => {
+    const data = result as TranscriptResult | { rawVtt: string; format: "vtt" };
+
+    if ("format" in data && data.format === "vtt") {
+      return ["```vtt", data.rawVtt, "```"].join("\n");
+    }
+
+    const transcript = data as TranscriptResult;
+    const groups = groupBySpeaker(transcript.entries);
+    const lines = [
+      `## Transcript: ${transcript.meetingTitle}`,
+      "",
+      `*${transcript.entries.length} segments*`,
+      "",
+    ];
+
+    for (const group of groups) {
+      const time = formatTimestamp(group.startTime);
+      lines.push(`**${group.speaker}** *(${time})*`, "");
+      lines.push(group.segments.join(" "), "");
+    }
+
+    return lines.join("\n");
+  },
+  formatToon: (result) => {
+    const data = result as TranscriptResult | { rawVtt: string; format: "vtt" };
+
+    if ("format" in data && data.format === "vtt") {
+      return data.rawVtt;
+    }
+
+    const transcript = data as TranscriptResult;
+    const groups = groupBySpeaker(transcript.entries);
+    const lines = [
+      toonHeader(
+        "🎙️",
+        `Transcript: ${transcript.meetingTitle} (${transcript.entries.length} segments)`,
+      ),
+    ];
+
+    for (const group of groups) {
+      const time = formatTimestamp(group.startTime);
+      lines.push("");
+      lines.push(`  🗣️  ${group.speaker} · ${time}`);
+      lines.push(`      ${group.segments.join(" ")}`);
+    }
+
+    return lines.join("\n");
+  },
+};
+
+// ── find-people ──────────────────────────────────────────────────────
+
+const findPeopleAction: ActionDefinition = {
+  name: "find-people",
+  title: "Find People",
+  description:
+    "Search for people in the organization directory by name. " +
+    "Uses the Substrate search API (requires authentication via auto-login or interactive). " +
+    "Returns matching people with emails, job titles, and departments.",
+  parameters: [
+    {
+      name: "query",
+      type: "string",
+      description: "Name or partial name to search for",
+      required: true,
+    },
+    {
+      name: "maxResults",
+      type: "number",
+      description: "Maximum results to return (default: 10)",
+      required: false,
+      default: 10,
+    },
+  ],
+  execute: async (client, parameters) => {
+    const query = parameters.query as string;
+    const maxResults = (parameters.maxResults as number) ?? 10;
+    return client.findPeople(query, maxResults);
+  },
+  formatResult: (result) => {
+    const people = result as PersonSearchResult[];
+    if (people.length === 0) return "No people found.";
+    return people
+      .map(
+        (person) =>
+          `${person.displayName} <${person.email}> — ${person.jobTitle || "no title"}, ${person.department || "no department"}`,
+      )
+      .join("\n");
+  },
+  formatMarkdown: (result) => {
+    const people = result as PersonSearchResult[];
+    if (people.length === 0) return "No people found.";
+    const lines = [`## People (${people.length} found)`, ""];
+    for (const person of people) {
+      lines.push(`### ${person.displayName}`);
+      lines.push(`- **Email:** ${person.email}`);
+      if (person.jobTitle) lines.push(`- **Title:** ${person.jobTitle}`);
+      if (person.department)
+        lines.push(`- **Department:** ${person.department}`);
+      lines.push(`- **MRI:** ${person.mri}`);
+      lines.push("");
+    }
+    return lines.join("\n");
+  },
+  formatToon: (result) => {
+    const people = result as PersonSearchResult[];
+    if (people.length === 0) return "\n  🔍 No people found.";
+    const lines = [toonHeader("👥", `Found ${people.length} people`)];
+    for (const person of people) {
+      lines.push(`  👤 ${person.displayName}`);
+      lines.push(
+        `     📧 ${person.email} · ${person.jobTitle || "?"} · ${person.department || "?"}`,
+      );
+    }
+    return lines.join("\n");
+  },
+};
+
+// ── find-chats ───────────────────────────────────────────────────────
+
+const findChatsAction: ActionDefinition = {
+  name: "find-chats",
+  title: "Find Chats",
+  description:
+    "Search for chats by name or member name. " +
+    "Uses the Substrate search API (requires authentication via auto-login or interactive). " +
+    "Returns matching chats with member lists and thread IDs.",
+  parameters: [
+    {
+      name: "query",
+      type: "string",
+      description: "Chat name or member name to search for",
+      required: true,
+    },
+    {
+      name: "maxResults",
+      type: "number",
+      description: "Maximum results to return (default: 10)",
+      required: false,
+      default: 10,
+    },
+  ],
+  execute: async (client, parameters) => {
+    const query = parameters.query as string;
+    const maxResults = (parameters.maxResults as number) ?? 10;
+    return client.findChats(query, maxResults);
+  },
+  formatResult: (result) => {
+    const chats = result as ChatSearchResult[];
+    if (chats.length === 0) return "No chats found.";
+    return chats
+      .map((chat) => {
+        const name = chat.name || "(untitled)";
+        const members = chat.matchingMembers
+          .map((member) => member.displayName)
+          .join(", ");
+        return `${name} (${chat.threadType}, ${chat.totalMemberCount} members${members ? `, matched: ${members}` : ""}) — ${chat.threadId}`;
+      })
+      .join("\n");
+  },
+  formatMarkdown: (result) => {
+    const chats = result as ChatSearchResult[];
+    if (chats.length === 0) return "No chats found.";
+    const lines = [`## Chats (${chats.length} found)`, ""];
+    for (const chat of chats) {
+      lines.push(`### ${chat.name || "(untitled)"}`);
+      lines.push(`- **Thread ID:** ${chat.threadId}`);
+      lines.push(`- **Type:** ${chat.threadType}`);
+      lines.push(`- **Members:** ${chat.totalMemberCount}`);
+      if (chat.matchingMembers.length > 0) {
+        lines.push(
+          `- **Matched:** ${chat.matchingMembers.map((member) => member.displayName).join(", ")}`,
+        );
+      }
+      lines.push("");
+    }
+    return lines.join("\n");
+  },
+  formatToon: (result) => {
+    const chats = result as ChatSearchResult[];
+    if (chats.length === 0) return "\n  🔍 No chats found.";
+    const lines = [toonHeader("💬", `Found ${chats.length} chats`)];
+    for (const chat of chats) {
+      lines.push(`  💬 ${chat.name || "(untitled)"}`);
+      lines.push(
+        `     📁 ${chat.threadType} · ${chat.totalMemberCount} members`,
+      );
+      if (chat.matchingMembers.length > 0) {
+        const matched = chat.matchingMembers
+          .map((member) => member.displayName)
+          .join(", ");
+        lines.push(`     🎯 Matched: ${matched}`);
+      }
+    }
+    return lines.join("\n");
+  },
+};
+
 // ── Registry ─────────────────────────────────────────────────────────
 
 export const actions: ActionDefinition[] = [
   listConversations,
   findConversation,
   findOneOnOne,
+  findPeopleAction,
+  findChatsAction,
   getMessages,
   sendMessage,
   getMembers,
   whoami,
+  getTranscript,
 ];

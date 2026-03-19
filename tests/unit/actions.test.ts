@@ -30,6 +30,8 @@ function createMockClient(
     listConversations: vi.fn(),
     findConversation: vi.fn(),
     findOneOnOneConversation: vi.fn(),
+    findPeople: vi.fn(),
+    findChats: vi.fn(),
     getMessages: vi.fn(),
     getMessagesPage: vi.fn(),
     sendMessage: vi.fn(),
@@ -94,8 +96,8 @@ beforeEach(() => {
 // ── Registry tests ───────────────────────────────────────────────────
 
 describe("action registry", () => {
-  it("should contain all 7 actions", () => {
-    expect(actions).toHaveLength(7);
+  it("should contain all 10 actions", () => {
+    expect(actions).toHaveLength(10);
   });
 
   it("should have unique names", () => {
@@ -125,10 +127,13 @@ describe("action registry", () => {
     expect(names).toContain("list-conversations");
     expect(names).toContain("find-conversation");
     expect(names).toContain("find-one-on-one");
+    expect(names).toContain("find-people");
+    expect(names).toContain("find-chats");
     expect(names).toContain("get-messages");
     expect(names).toContain("send-message");
     expect(names).toContain("get-members");
     expect(names).toContain("whoami");
+    expect(names).toContain("get-transcript");
   });
 });
 
@@ -274,6 +279,132 @@ describe("find-one-on-one", () => {
   it("should format null result", () => {
     const output = action.formatResult(null);
     expect(output).toBe("No 1:1 conversation found.");
+  });
+});
+
+// ── find-people ──────────────────────────────────────────────────────
+
+describe("find-people", () => {
+  const action = getAction("find-people");
+
+  it("should call client.findPeople with query and maxResults", async () => {
+    const people = [
+      {
+        displayName: "Alice Smith",
+        mri: "8:orgid:alice-uuid",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Dev",
+        objectId: "alice-uuid",
+      },
+    ];
+    const client = createMockClient({
+      findPeople: vi.fn().mockResolvedValue(people),
+    });
+
+    const result = await action.execute(client, { query: "Alice" });
+
+    expect(client.findPeople).toHaveBeenCalledWith("Alice", 10);
+    expect(result).toEqual(people);
+  });
+
+  it("should pass custom maxResults", async () => {
+    const client = createMockClient({
+      findPeople: vi.fn().mockResolvedValue([]),
+    });
+
+    await action.execute(client, { query: "Alice", maxResults: 5 });
+
+    expect(client.findPeople).toHaveBeenCalledWith("Alice", 5);
+  });
+
+  it("should format found people", () => {
+    const people = [
+      {
+        displayName: "Alice Smith",
+        mri: "8:orgid:alice-uuid",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Dev",
+        objectId: "alice-uuid",
+      },
+    ];
+
+    const output = action.formatResult(people);
+
+    expect(output).toContain("Alice Smith");
+    expect(output).toContain("alice@example.com");
+    expect(output).toContain("Engineer");
+  });
+
+  it("should format empty result", () => {
+    const output = action.formatResult([]);
+    expect(output).toBe("No people found.");
+  });
+});
+
+// ── find-chats ───────────────────────────────────────────────────────
+
+describe("find-chats", () => {
+  const action = getAction("find-chats");
+
+  it("should call client.findChats with query and maxResults", async () => {
+    const chats = [
+      {
+        name: "Design Team",
+        threadId: "19:design@thread.v2",
+        threadType: "Chat",
+        matchingMembers: [
+          { displayName: "Alice Smith", mri: "8:orgid:alice-uuid" },
+        ],
+        chatMembers: [],
+        totalMemberCount: 4,
+      },
+    ];
+    const client = createMockClient({
+      findChats: vi.fn().mockResolvedValue(chats),
+    });
+
+    const result = await action.execute(client, { query: "Design" });
+
+    expect(client.findChats).toHaveBeenCalledWith("Design", 10);
+    expect(result).toEqual(chats);
+  });
+
+  it("should pass custom maxResults", async () => {
+    const client = createMockClient({
+      findChats: vi.fn().mockResolvedValue([]),
+    });
+
+    await action.execute(client, { query: "Design", maxResults: 3 });
+
+    expect(client.findChats).toHaveBeenCalledWith("Design", 3);
+  });
+
+  it("should format found chats", () => {
+    const chats = [
+      {
+        name: "Design Team",
+        threadId: "19:design@thread.v2",
+        threadType: "Chat",
+        matchingMembers: [
+          { displayName: "Alice Smith", mri: "8:orgid:alice-uuid" },
+        ],
+        chatMembers: [],
+        totalMemberCount: 4,
+      },
+    ];
+
+    const output = action.formatResult(chats);
+
+    expect(output).toContain("Design Team");
+    expect(output).toContain("19:design@thread.v2");
+    expect(output).toContain("Alice Smith");
+  });
+
+  it("should format empty result", () => {
+    const output = action.formatResult([]);
+    expect(output).toBe("No chats found.");
   });
 });
 

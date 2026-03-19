@@ -16,6 +16,12 @@ import {
   parseRawMessage,
   ApiAuthError,
   ApiRateLimitError,
+  extractTranscriptUrl,
+  extractMeetingTitle,
+  isSuccessfulRecording,
+  parseVtt,
+  fetchTranscriptVtt,
+  fetchTranscript,
 } from "../../src/api.js";
 import type { TeamsToken } from "../../src/types.js";
 
@@ -688,5 +694,274 @@ describe("rate limit retry (429 handling)", () => {
 
     expect(result.messages).toEqual([]);
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ── Transcript helpers ────────────────────────────────────────────────
+
+function mockFetchTextResponse(
+  text: string,
+  status = 200,
+  responseHeaders: Record<string, string> = {},
+): void {
+  (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? "OK" : "Error",
+    json: () => Promise.resolve({}),
+    text: () => Promise.resolve(text),
+    headers: new Headers(responseHeaders),
+  });
+}
+
+const sampleRecordingXml = `
+<URIObject type="Video.1/Message.1">
+  <OriginalName v="Test Meeting Title"/>
+  <RecordingStatus status="Success"/>
+  <RecordingContent>
+    <item type="amsTranscript" uri="https://as-prod.asyncgw.teams.microsoft.com/v1/objects/abc123/views/transcript"/>
+    <item type="onedriveForBusinessTranscript" uri="https://example.sharepoint.com/_api/v2.1/drives/driveId/items/itemId" driveId="driveId" driveItemId="itemId" id="transcriptId"/>
+    <item type="onedriveForBusinessVideo" uri="https://example.sharepoint.com/..." driveId="driveId" driveItemId="videoItemId"/>
+  </RecordingContent>
+</URIObject>`;
+
+const sampleVtt = `WEBVTT
+
+00:00:00.000 --> 00:00:05.240
+<v Alice Smith>Hello everyone, let&#39;s get started.</v>
+
+00:00:05.240 --> 00:00:10.500
+<v Alice Smith>Today we&#39;re discussing the project status.</v>
+
+00:00:10.500 --> 00:00:15.800
+<v Bob Jones>Sounds good. I have some updates.</v>
+
+00:00:15.800 --> 00:00:22.100
+<v Alice Smith>Great, go ahead Bob.</v>
+`;
+
+describe("extractTranscriptUrl", () => {
+  it("should extract AMS transcript URL from recording XML", () => {
+    const url = extractTranscriptUrl(sampleRecordingXml);
+    expect(url).toBe(
+      "https://as-prod.asyncgw.teams.microsoft.com/v1/objects/abc123/views/transcript",
+    );
+  });
+
+  it("should return null when no amsTranscript item exists", () => {
+    const xml =
+      '<URIObject><RecordingContent><item type="someOther" uri="http://example.com"/></RecordingContent></URIObject>';
+    expect(extractTranscriptUrl(xml)).toBeNull();
+  });
+
+  it("should return null for empty content", () => {
+    expect(extractTranscriptUrl("")).toBeNull();
+  });
+});
+
+describe("extractMeetingTitle", () => {
+  it("should extract meeting title from OriginalName element", () => {
+    expect(extractMeetingTitle(sampleRecordingXml)).toBe("Test Meeting Title");
+  });
+
+  it("should return 'Unknown Meeting' when OriginalName is missing", () => {
+    expect(extractMeetingTitle("<URIObject/>")).toBe("Unknown Meeting");
+  });
+});
+
+describe("isSuccessfulRecording", () => {
+  it('should return true when status is "Success"', () => {
+    expect(isSuccessfulRecording(sampleRecordingXml)).toBe(true);
+  });
+
+  it('should return false when status is not "Success"', () => {
+    const startedXml = '<RecordingStatus status="Started"/>';
+    expect(isSuccessfulRecording(startedXml)).toBe(false);
+  });
+
+  it("should return false for empty content", () => {
+    expect(isSuccessfulRecording("")).toBe(false);
+  });
+});
+
+describe("parseVtt", () => {
+  it("should parse VTT content into transcript entries", () => {
+    const entries = parseVtt(sampleVtt);
+
+    expect(entries).toHaveLength(4);
+    expect(entries[0]).toEqual({
+      speaker: "Alice Smith",
+      startTime: "00:00:00.000",
+      endTime: "00:00:05.240",
+      text: "Hello everyone, let's get started.",
+    });
+    expect(entries[2]).toEqual({
+      speaker: "Bob Jones",
+      startTime: "00:00:10.500",
+      endTime: "00:00:15.800",
+      text: "Sounds good. I have some updates.",
+    });
+  });
+
+  it("should decode HTML entities in speaker names and text", () => {
+    const vtt = `WEBVTT
+
+00:00:00.000 --> 00:00:05.000
+<v O&#39;Brien>This &amp; that are &lt;important&gt;.</v>
+`;
+    const entries = parseVtt(vtt);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].speaker).toBe("O'Brien");
+    expect(entries[0].text).toBe("This & that are <important>.");
+  });
+
+  it("should return empty array for empty or header-only VTT", () => {
+    expect(parseVtt("")).toEqual([]);
+    expect(parseVtt("WEBVTT\n\n")).toEqual([]);
+  });
+});
+
+describe("fetchTranscriptVtt", () => {
+  it("should fetch VTT content using skype_token auth header", async () => {
+    mockFetchTextResponse(sampleVtt);
+
+    const result = await fetchTranscriptVtt(
+      testToken,
+      "https://as-prod.asyncgw.teams.microsoft.com/v1/objects/abc123/views/transcript",
+    );
+
+    expect(result).toBe(sampleVtt);
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(fetchCall[1].headers.Authorization).toBe(
+      "skype_token test-token-abc123",
+    );
+  });
+
+  it("should throw ApiAuthError on 401", async () => {
+    mockFetchTextResponse("", 401);
+
+    await expect(
+      fetchTranscriptVtt(testToken, "https://example.com/transcript"),
+    ).rejects.toBeInstanceOf(ApiAuthError);
+  });
+
+  it("should throw Error on non-auth failure", async () => {
+    mockFetchTextResponse("", 500);
+
+    await expect(
+      fetchTranscriptVtt(testToken, "https://example.com/transcript"),
+    ).rejects.toThrow("Failed to fetch transcript: 500");
+  });
+});
+
+describe("fetchTranscript", () => {
+  it("should find recording message, fetch VTT, and parse entries", async () => {
+    // First call: fetchMessagesPage for finding the recording message
+    mockFetchResponse({
+      messages: [
+        {
+          id: "msg-1",
+          messagetype: "Text",
+          content: "Normal message",
+          properties: {},
+        },
+        {
+          id: "msg-2",
+          messagetype: "RichText/Media_CallRecording",
+          content: sampleRecordingXml,
+          properties: {},
+        },
+      ],
+      _metadata: {},
+    });
+
+    // Second call: fetchTranscriptVtt
+    mockFetchTextResponse(sampleVtt);
+
+    const result = await fetchTranscript(testToken, "conv-id");
+
+    expect(result.meetingTitle).toBe("Test Meeting Title");
+    expect(result.rawVtt).toBe(sampleVtt);
+    expect(result.entries).toHaveLength(4);
+    expect(result.entries[0].speaker).toBe("Alice Smith");
+  });
+
+  it("should throw when no recording message is found", async () => {
+    mockFetchResponse({
+      messages: [
+        {
+          id: "msg-1",
+          messagetype: "Text",
+          content: "Just a normal message",
+          properties: {},
+        },
+      ],
+      _metadata: {},
+    });
+
+    await expect(fetchTranscript(testToken, "conv-id")).rejects.toThrow(
+      "No meeting transcript found",
+    );
+  });
+
+  it("should skip recording messages without Success status", async () => {
+    const startedXml =
+      '<URIObject><RecordingStatus status="Started"/><RecordingContent><item type="amsTranscript" uri="https://example.com/t"/></RecordingContent></URIObject>';
+
+    mockFetchResponse({
+      messages: [
+        {
+          id: "msg-1",
+          messagetype: "RichText/Media_CallRecording",
+          content: startedXml,
+          properties: {},
+        },
+      ],
+      _metadata: {},
+    });
+
+    await expect(fetchTranscript(testToken, "conv-id")).rejects.toThrow(
+      "No meeting transcript found",
+    );
+  });
+
+  it("should paginate through messages to find a recording", async () => {
+    // First page: no recording, but has backwardLink
+    mockFetchResponse({
+      messages: [
+        {
+          id: "msg-1",
+          messagetype: "Text",
+          content: "no transcript here",
+          properties: {},
+        },
+      ],
+      _metadata: {
+        backwardLink: "https://apac.ng.msg.teams.microsoft.com/v1/page2",
+      },
+    });
+
+    // Second page: has the recording message
+    mockFetchResponse({
+      messages: [
+        {
+          id: "msg-2",
+          messagetype: "RichText/Media_CallRecording",
+          content: sampleRecordingXml,
+          properties: {},
+        },
+      ],
+      _metadata: {},
+    });
+
+    // Third call: fetch the VTT
+    mockFetchTextResponse(sampleVtt);
+
+    const result = await fetchTranscript(testToken, "conv-id");
+
+    expect(result.meetingTitle).toBe("Test Meeting Title");
+    expect(result.entries).toHaveLength(4);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
   });
 });

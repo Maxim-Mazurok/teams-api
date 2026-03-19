@@ -30,6 +30,8 @@ vi.mock("../../src/api.js", async (importOriginal) => {
     fetchProfiles: vi.fn(),
     postMessage: vi.fn(),
     fetchUserProperties: vi.fn(),
+    searchPeople: vi.fn(),
+    searchChats: vi.fn(),
   };
 });
 vi.mock("../../src/token-store.js");
@@ -189,6 +191,62 @@ describe("findConversation", () => {
 
     expect(result!.topic).toBe("Match This");
   });
+
+  it("should fall back to Substrate chat search when no topic match", async () => {
+    const untitledChat = makeConversation({
+      id: "19:alice-bob@unq.gbl.spaces",
+      topic: "",
+      threadType: "chat",
+    });
+    mockedApi.fetchConversations.mockResolvedValueOnce([untitledChat]);
+
+    mockedApi.searchChats.mockResolvedValue([
+      {
+        name: "",
+        threadId: "19:alice-bob@unq.gbl.spaces",
+        threadType: "Chat",
+        matchingMembers: [
+          { displayName: "Alice Smith", mri: "8:orgid:alice-uuid" },
+        ],
+        chatMembers: [],
+        totalMemberCount: 2,
+      },
+    ]);
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findConversation("Alice");
+
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe("19:alice-bob@unq.gbl.spaces");
+    expect(mockedApi.searchChats).toHaveBeenCalledWith(
+      expect.objectContaining({ substrateToken: "substrate-token" }),
+      "Alice",
+      5,
+    );
+  });
+
+  it("should not call Substrate search when topic match exists", async () => {
+    mockedApi.fetchConversations.mockResolvedValueOnce([
+      makeConversation({ topic: "Alice Design Review" }),
+    ]);
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findConversation("Alice");
+
+    expect(result).not.toBeNull();
+    expect(result!.topic).toBe("Alice Design Review");
+    expect(mockedApi.searchChats).not.toHaveBeenCalled();
+  });
 });
 
 describe("findOneOnOneConversation", () => {
@@ -211,7 +269,85 @@ describe("findOneOnOneConversation", () => {
     expect(result!.memberDisplayName).toContain("Maxim Mazurok");
   });
 
-  it("should find 1:1 chat by scanning message senders", async () => {
+  it("should find 1:1 chat via Substrate search when token is available", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "19:chat1", threadType: "chat", topic: "" }),
+    ]);
+
+    mockedApi.searchPeople.mockResolvedValue([
+      {
+        displayName: "Alice Smith",
+        mri: "8:orgid:alice-uuid",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Dev",
+        objectId: "alice-uuid",
+      },
+    ]);
+
+    mockedApi.searchChats.mockResolvedValue([
+      {
+        name: "",
+        threadId: "19:alice-chat-thread@unq.gbl.spaces",
+        threadType: "Chat",
+        matchingMembers: [
+          { displayName: "Alice Smith", mri: "8:orgid:alice-uuid" },
+        ],
+        chatMembers: [],
+        totalMemberCount: 2,
+      },
+    ]);
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findOneOnOneConversation("Alice");
+
+    expect(result).not.toBeNull();
+    expect(result!.conversationId).toBe("19:alice-chat-thread@unq.gbl.spaces");
+    expect(result!.memberDisplayName).toBe("Alice Smith");
+  });
+
+  it("should fall back to conversation ID matching when chat search returns no 1:1", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({
+        id: "19:my-uuid_alice-uuid@unq.gbl.spaces",
+        threadType: "chat",
+        topic: "",
+      }),
+    ]);
+
+    mockedApi.searchPeople.mockResolvedValue([
+      {
+        displayName: "Alice Smith",
+        mri: "8:orgid:alice-uuid",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Dev",
+        objectId: "alice-uuid",
+      },
+    ]);
+
+    // No chat results from search
+    mockedApi.searchChats.mockResolvedValue([]);
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findOneOnOneConversation("Alice");
+
+    expect(result).not.toBeNull();
+    expect(result!.conversationId).toBe("19:my-uuid_alice-uuid@unq.gbl.spaces");
+    expect(result!.memberDisplayName).toBe("Alice Smith");
+  });
+
+  it("should fall back to message scanning when no substrate token", async () => {
     mockedApi.fetchConversations.mockResolvedValue([
       makeConversation({ id: "19:chat1", threadType: "chat", topic: "" }),
     ]);
@@ -222,67 +358,36 @@ describe("findOneOnOneConversation", () => {
           senderDisplayName: "Alice Smith",
           senderMri: "8:orgid:alice-uuid",
         }),
-        makeMessage({
-          senderDisplayName: "Bob Jones",
-          senderMri: "8:orgid:bob-uuid",
-        }),
       ]),
     );
 
-    // getCurrentUserDisplayName fallback (no 48:notes, no displayname property)
-    mockedApi.fetchUserProperties.mockResolvedValue({});
-
+    // No substrate token — falls back to message scanning
     const client = TeamsClient.fromToken("token");
     const result = await client.findOneOnOneConversation("Alice");
 
     expect(result).not.toBeNull();
     expect(result!.memberDisplayName).toBe("Alice Smith");
+    expect(mockedApi.searchPeople).not.toHaveBeenCalled();
   });
 
-  it("should not match own name in other people's chats", async () => {
-    mockedApi.fetchConversations.mockResolvedValue([
-      makeConversation({ id: "48:notes", threadType: "streamofnotes" }),
-      makeConversation({
-        id: "19:me_varen@unq.gbl.spaces",
-        threadType: "chat",
-        topic: "",
-      }),
-    ]);
+  it("should return null when no match found via search", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([]);
 
-    // First fetchMessagesPage call: for getCurrentUserDisplayName (from 48:notes)
-    mockedApi.fetchMessagesPage
-      .mockResolvedValueOnce(
-        makeMessagesPage([
-          makeMessage({
-            senderDisplayName: "Maxim Mazurok",
-            senderMri: "8:orgid:maxim-uuid",
-          }),
-        ]),
-      )
-      // Second call: scanning the untitled chat with Varen
-      .mockResolvedValueOnce(
-        makeMessagesPage([
-          makeMessage({
-            senderDisplayName: "Maxim Mazurok",
-            senderMri: "8:orgid:maxim-uuid",
-          }),
-          makeMessage({
-            senderDisplayName: "Varen Yogananthan",
-            senderMri: "8:orgid:varen-uuid",
-          }),
-        ]),
-      );
+    mockedApi.searchPeople.mockResolvedValue([]);
+    mockedApi.searchChats.mockResolvedValue([]);
 
-    const client = TeamsClient.fromToken("token");
-    // Searching for "Maxim" should match self-chat, NOT Varen's chat
-    const result = await client.findOneOnOneConversation("Maxim");
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findOneOnOneConversation("Nonexistent Person");
 
-    expect(result).not.toBeNull();
-    expect(result!.conversationId).toBe("48:notes");
-    expect(result!.memberDisplayName).toContain("Maxim Mazurok");
+    expect(result).toBeNull();
   });
 
-  it("should return null when no match found", async () => {
+  it("should return null when no match found via fallback", async () => {
     mockedApi.fetchConversations.mockResolvedValue([
       makeConversation({ id: "19:chat1", threadType: "chat", topic: "" }),
     ]);
@@ -291,13 +396,94 @@ describe("findOneOnOneConversation", () => {
       makeMessagesPage([makeMessage({ senderDisplayName: "Someone Else" })]),
     );
 
-    // getCurrentUserDisplayName fallback
     mockedApi.fetchUserProperties.mockResolvedValue({});
 
     const client = TeamsClient.fromToken("token");
     const result = await client.findOneOnOneConversation("Nonexistent Person");
 
     expect(result).toBeNull();
+  });
+});
+
+describe("findPeople", () => {
+  it("should return people from Substrate search", async () => {
+    const people = [
+      {
+        displayName: "Alice Smith",
+        mri: "8:orgid:alice-uuid",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Dev",
+        objectId: "alice-uuid",
+      },
+    ];
+    mockedApi.searchPeople.mockResolvedValue(people);
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findPeople("Alice");
+
+    expect(result).toEqual(people);
+    expect(mockedApi.searchPeople).toHaveBeenCalledWith(
+      expect.objectContaining({ substrateToken: "substrate-token" }),
+      "Alice",
+      10,
+    );
+  });
+
+  it("should return empty array when no substrate token", async () => {
+    mockedApi.searchPeople.mockResolvedValue([]);
+
+    const client = TeamsClient.fromToken("token");
+    const result = await client.findPeople("Alice");
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe("findChats", () => {
+  it("should return chats from Substrate search", async () => {
+    const chats = [
+      {
+        name: "Design Team",
+        threadId: "19:design@thread.v2",
+        threadType: "Chat",
+        matchingMembers: [
+          { displayName: "Alice Smith", mri: "8:orgid:alice-uuid" },
+        ],
+        chatMembers: [],
+        totalMemberCount: 4,
+      },
+    ];
+    mockedApi.searchChats.mockResolvedValue(chats);
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findChats("Design");
+
+    expect(result).toEqual(chats);
+    expect(mockedApi.searchChats).toHaveBeenCalledWith(
+      expect.objectContaining({ substrateToken: "substrate-token" }),
+      "Design",
+      10,
+    );
+  });
+
+  it("should return empty array when no substrate token", async () => {
+    mockedApi.searchChats.mockResolvedValue([]);
+
+    const client = TeamsClient.fromToken("token");
+    const result = await client.findChats("Design");
+
+    expect(result).toEqual([]);
   });
 });
 

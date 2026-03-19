@@ -132,7 +132,11 @@ async function captureTokensFromPage(
   page: any,
   log: LogFunction,
   interceptTimeout: number,
-): Promise<{ skypeToken: string; bearerToken: string | undefined }> {
+): Promise<{
+  skypeToken: string;
+  bearerToken: string | undefined;
+  substrateToken: string | undefined;
+}> {
   const cdpSession = (await page.context().newCDPSession(page)) as {
     send: (
       method: string,
@@ -146,9 +150,13 @@ async function captureTokensFromPage(
   };
   let skypeToken: string | null = null;
   let bearerToken: string | null = null;
+  let substrateToken: string | null = null;
 
   await cdpSession.send("Fetch.enable", {
-    patterns: [{ urlPattern: "*teams*", requestStage: "Request" }],
+    patterns: [
+      { urlPattern: "*teams*", requestStage: "Request" },
+      { urlPattern: "*substrate.office.com*", requestStage: "Request" },
+    ],
   });
 
   log("Listening for tokens in network requests...");
@@ -174,11 +182,17 @@ async function captureTokensFromPage(
           }
           if (
             name.toLowerCase() === "authorization" &&
-            value.startsWith("Bearer ") &&
-            requestUrl.includes("/api/mt/") &&
-            !bearerToken
+            value.startsWith("Bearer ")
           ) {
-            bearerToken = value.slice("Bearer ".length);
+            if (requestUrl.includes("/api/mt/") && !bearerToken) {
+              bearerToken = value.slice("Bearer ".length);
+            }
+            if (
+              requestUrl.includes("substrate.office.com") &&
+              !substrateToken
+            ) {
+              substrateToken = value.slice("Bearer ".length);
+            }
           }
         }
 
@@ -206,6 +220,23 @@ async function captureTokensFromPage(
 
   await tokenPromise;
 
+  // If we have the skype token but not the substrate token yet,
+  // wait a bit longer for substrate requests to fire
+  if (skypeToken && !substrateToken) {
+    log("Waiting for substrate token...");
+    await new Promise<void>((resolve) => {
+      const extraTimeout = setTimeout(resolve, 5_000);
+      const checkInterval = setInterval(() => {
+        if (substrateToken) {
+          clearTimeout(extraTimeout);
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 200);
+      extraTimeout.unref?.();
+    });
+  }
+
   await cdpSession.send("Fetch.disable");
   await cdpSession.detach();
 
@@ -221,8 +252,15 @@ async function captureTokensFromPage(
   if (bearerToken) {
     log("Bearer token also captured for profile resolution");
   }
+  if (substrateToken) {
+    log("Substrate token also captured for people/chat search");
+  }
 
-  return { skypeToken, bearerToken: bearerToken ?? undefined };
+  return {
+    skypeToken,
+    bearerToken: bearerToken ?? undefined,
+    substrateToken: substrateToken ?? undefined,
+  };
 }
 
 /**
@@ -363,16 +401,14 @@ export async function acquireTokenViaAutoLogin(
 
     // Capture tokens via shared helper
     log("Capturing tokens...");
-    const { skypeToken, bearerToken } = await captureTokensFromPage(
-      page,
-      log,
-      TOKEN_INTERCEPT_TIMEOUT,
-    );
+    const { skypeToken, bearerToken, substrateToken } =
+      await captureTokensFromPage(page, log, TOKEN_INTERCEPT_TIMEOUT);
 
     return {
       skypeToken,
       region: "apac",
       bearerToken,
+      substrateToken,
     };
   } finally {
     await context.close();
@@ -470,16 +506,14 @@ export async function acquireTokenViaInteractiveLogin(
 
     log("Login detected, capturing token...");
 
-    const { skypeToken, bearerToken } = await captureTokensFromPage(
-      page,
-      log,
-      TOKEN_INTERCEPT_TIMEOUT,
-    );
+    const { skypeToken, bearerToken, substrateToken } =
+      await captureTokensFromPage(page, log, TOKEN_INTERCEPT_TIMEOUT);
 
     return {
       skypeToken,
       region,
       bearerToken,
+      substrateToken,
     };
   } finally {
     await context.close();
@@ -522,9 +556,13 @@ export async function acquireTokenViaDebugSession(
     const cdpSession = await teamsPage.createCDPSession();
     let skypeToken: string | null = null;
     let bearerToken: string | null = null;
+    let substrateToken: string | null = null;
 
     await cdpSession.send("Fetch.enable", {
-      patterns: [{ urlPattern: "*teams*", requestStage: "Request" }],
+      patterns: [
+        { urlPattern: "*teams*", requestStage: "Request" },
+        { urlPattern: "*substrate.office.com*", requestStage: "Request" },
+      ],
     });
 
     const tokenPromise = new Promise<void>((resolve) => {
@@ -544,11 +582,17 @@ export async function acquireTokenViaDebugSession(
             }
             if (
               name.toLowerCase() === "authorization" &&
-              value.startsWith("Bearer ") &&
-              requestUrl.includes("/api/mt/") &&
-              !bearerToken
+              value.startsWith("Bearer ")
             ) {
-              bearerToken = value.slice("Bearer ".length);
+              if (requestUrl.includes("/api/mt/") && !bearerToken) {
+                bearerToken = value.slice("Bearer ".length);
+              }
+              if (
+                requestUrl.includes("substrate.office.com") &&
+                !substrateToken
+              ) {
+                substrateToken = value.slice("Bearer ".length);
+              }
             }
           }
 
@@ -576,6 +620,22 @@ export async function acquireTokenViaDebugSession(
 
     await tokenPromise;
 
+    // If we have the skype token but not the substrate token yet,
+    // wait a bit longer for substrate requests to fire
+    if (skypeToken && !substrateToken) {
+      await new Promise<void>((resolve) => {
+        const extraTimeout = setTimeout(resolve, 5_000);
+        const checkInterval = setInterval(() => {
+          if (substrateToken) {
+            clearTimeout(extraTimeout);
+            clearInterval(checkInterval);
+            resolve();
+          }
+        }, 200);
+        extraTimeout.unref?.();
+      });
+    }
+
     await cdpSession.send("Fetch.disable");
     await cdpSession.detach();
 
@@ -589,6 +649,7 @@ export async function acquireTokenViaDebugSession(
       skypeToken,
       region: "apac",
       bearerToken: bearerToken ?? undefined,
+      substrateToken: substrateToken ?? undefined,
     };
   } finally {
     browser.disconnect();

@@ -38,7 +38,10 @@ import type {
   GetMessagesOptions,
   ListConversationsOptions,
   OneOnOneSearchResult,
+  PersonSearchResult,
+  ChatSearchResult,
   MessagesPage,
+  TranscriptResult,
   SYSTEM_STREAM_TYPES,
 } from "./types.js";
 import {
@@ -48,6 +51,9 @@ import {
   fetchProfiles,
   postMessage,
   fetchUserProperties,
+  fetchTranscript,
+  searchPeople,
+  searchChats,
   ApiAuthError,
   ApiRateLimitError,
 } from "./api.js";
@@ -80,6 +86,10 @@ export type {
   Mention,
   Reaction,
   UserProfile,
+  PersonSearchResult,
+  ChatSearchResult,
+  TranscriptEntry,
+  TranscriptResult,
 } from "./types.js";
 export { SYSTEM_STREAM_TYPES } from "./types.js";
 export {
@@ -87,6 +97,14 @@ export {
   ApiAuthError,
   ApiRateLimitError,
   fetchProfiles,
+  searchPeople,
+  searchChats,
+  fetchTranscript,
+  fetchTranscriptVtt,
+  parseVtt,
+  extractTranscriptUrl,
+  extractMeetingTitle,
+  isSuccessfulRecording,
 } from "./api.js";
 export { saveToken, loadToken, clearToken } from "./token-store.js";
 export { actions, formatOutput } from "./actions.js";
@@ -208,8 +226,9 @@ export class TeamsClient {
     skypeToken: string,
     region = "apac",
     bearerToken?: string,
+    substrateToken?: string,
   ): TeamsClient {
-    return new TeamsClient({ skypeToken, region, bearerToken });
+    return new TeamsClient({ skypeToken, region, bearerToken, substrateToken });
   }
 
   /**
@@ -254,40 +273,85 @@ export class TeamsClient {
   /**
    * Find a conversation by topic name (case-insensitive partial match).
    *
-   * Searches conversations with topics. For 1:1 chats (which have no topic),
-   * use `findOneOnOneConversation()` instead.
+   * When a Substrate token is available, also searches via the Substrate
+   * chat search API for matches by name or member. Falls back to local
+   * topic matching when Substrate is unavailable.
    */
   async findConversation(query: string): Promise<Conversation | null> {
-    const conversations = await this.listConversations({ pageSize: 100 });
-    const queryLower = query.toLowerCase();
+    return this.withTokenRefresh(async () => {
+      const conversations = await this.listConversations({ pageSize: 100 });
+      const queryLower = query.toLowerCase();
 
-    return (
-      conversations.find(
+      // Try local topic matching first (fast, no extra API call)
+      const topicMatch = conversations.find(
         (conversation) =>
           conversation.topic &&
           conversation.topic.toLowerCase().includes(queryLower),
-      ) ?? null
-    );
+      );
+      if (topicMatch) return topicMatch;
+
+      // Use Substrate chat search for broader matching (by member names, etc.)
+      if (this.token.substrateToken) {
+        const chatResults = await searchChats(this.token, query, 5);
+        for (const chatResult of chatResults) {
+          const matchingConversation = conversations.find(
+            (conversation) => conversation.id === chatResult.threadId,
+          );
+          if (matchingConversation) return matchingConversation;
+        }
+      }
+
+      return null;
+    });
+  }
+
+  /**
+   * Search for people in the organization directory by name.
+   *
+   * Uses the Substrate search API (requires a Substrate token captured
+   * during authentication). Returns matching people with MRIs, emails,
+   * job titles, and departments.
+   */
+  async findPeople(
+    query: string,
+    maxResults = 10,
+  ): Promise<PersonSearchResult[]> {
+    return this.withTokenRefresh(async () => {
+      return searchPeople(this.token, query, maxResults);
+    });
+  }
+
+  /**
+   * Search for chats by name or member name.
+   *
+   * Uses the Substrate search API (requires a Substrate token captured
+   * during authentication). Returns matching chats with thread IDs,
+   * member lists, and matching member details.
+   */
+  async findChats(query: string, maxResults = 10): Promise<ChatSearchResult[]> {
+    return this.withTokenRefresh(async () => {
+      return searchChats(this.token, query, maxResults);
+    });
   }
 
   /**
    * Find a 1:1 conversation with a specific person.
    *
-   * Searches by scanning recent messages in untitled chats for sender
-   * display names that match the query. Also checks the self-chat
-   * (48:notes) if the query matches the current user's name.
+   * Uses the Substrate people/chat search API to find the person by name
+   * and locate the corresponding 1:1 chat thread. Falls back to scanning
+   * message history when the Substrate token is unavailable.
    *
-   * This is necessary because the Teams members API returns empty display
-   * names for 1:1 chat participants.
+   * Also checks the self-chat (48:notes) if the query matches the
+   * current user's name.
    */
   async findOneOnOneConversation(
     personName: string,
   ): Promise<OneOnOneSearchResult | null> {
     return this.withTokenRefresh(async () => {
-      const conversations = await fetchConversations(this.token, 100);
       const targetLower = personName.toLowerCase();
 
       // Check self-chat first
+      const conversations = await fetchConversations(this.token, 100);
       const selfChat = conversations.find((conversation) =>
         conversation.id.startsWith("48:notes"),
       );
@@ -301,18 +365,54 @@ export class TeamsClient {
         }
       }
 
-      // Determine the current user's MRI so we can exclude our own messages
-      // from sender-name matching. The self-chat ID contains the user's UUID.
-      let currentUserMriSuffix: string | null = null;
-      if (selfChat) {
-        // selfChat.id is like "48:notes" — but 1:1 conv IDs contain the
-        // user's UUID. We can also get it from the bearer token profile.
-        // The most reliable way: use fetchProfiles or extract from sent messages.
+      // Primary: use Substrate search API for people + chat lookup
+      if (this.token.substrateToken) {
+        // Search for the person to confirm they exist and get their MRI
+        const people = await searchPeople(this.token, personName, 5);
+        const matchedPerson = people.find((person) =>
+          person.displayName.toLowerCase().includes(targetLower),
+        );
+
+        if (matchedPerson) {
+          // Search for chats that include this person
+          const chats = await searchChats(this.token, personName, 10);
+
+          // Look for a 1:1 chat (Chat type, exactly 2 members)
+          for (const chat of chats) {
+            if (
+              chat.threadType === "Chat" &&
+              chat.totalMemberCount === 2 &&
+              chat.matchingMembers.some(
+                (member) => member.mri === matchedPerson.mri,
+              )
+            ) {
+              return {
+                conversationId: chat.threadId,
+                memberDisplayName: matchedPerson.displayName,
+              };
+            }
+          }
+
+          // If no 1:1 chat was found in search results, check if any
+          // conversation in our list matches the person's MRI
+          const personUuid = matchedPerson.mri.replace("8:orgid:", "");
+          const matchingConversation = conversations.find(
+            (conversation) =>
+              conversation.id.includes(personUuid) &&
+              conversation.threadType === "chat",
+          );
+          if (matchingConversation) {
+            return {
+              conversationId: matchingConversation.id,
+              memberDisplayName: matchedPerson.displayName,
+            };
+          }
+        }
+
+        return null;
       }
 
-      // Search untitled 1:1 chats by scanning recent message senders.
-      // Skip 48:notes (already handled above) and exclude messages sent
-      // by the current user to avoid matching ourselves in other chats.
+      // Fallback: scan message senders when substrate token is unavailable
       const untitledChats = conversations.filter(
         (conversation) =>
           conversation.threadType === "chat" &&
@@ -329,37 +429,9 @@ export class TeamsClient {
               message.messageType === "Text",
           );
 
-          // On the first chat, learn the current user's MRI from the
-          // self-chat or from the predominant sender across messages.
-          if (!currentUserMriSuffix && textMessages.length > 0) {
-            // In a 1:1 chat, one sender is us and one is them.
-            // We know the current user's name from getCurrentUserDisplayName.
-            const currentName = await this.getCurrentUserDisplayName();
-            if (currentName !== "Unknown User") {
-              const ownMessage = textMessages.find(
-                (message) =>
-                  message.senderDisplayName.toLowerCase() ===
-                  currentName.toLowerCase(),
-              );
-              if (ownMessage) {
-                currentUserMriSuffix = extractMriSuffix(ownMessage.senderMri);
-              }
-            }
-          }
-
           const senderNames = [
             ...new Set(
               textMessages
-                .filter((message) => {
-                  // Exclude messages from the current user
-                  if (currentUserMriSuffix) {
-                    return (
-                      extractMriSuffix(message.senderMri) !==
-                      currentUserMriSuffix
-                    );
-                  }
-                  return true;
-                })
                 .map((message) => message.senderDisplayName)
                 .filter((name) => name.length > 0),
             ),
@@ -543,6 +615,18 @@ export class TeamsClient {
       }
 
       return members;
+    });
+  }
+
+  /**
+   * Get the meeting transcript for a conversation.
+   *
+   * Searches messages for a successful recording, extracts the AMS
+   * transcript URL, fetches the VTT, and parses it into structured entries.
+   */
+  async getTranscript(conversationId: string): Promise<TranscriptResult> {
+    return this.withTokenRefresh(async () => {
+      return fetchTranscript(this.token, conversationId);
     });
   }
 

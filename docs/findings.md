@@ -208,6 +208,7 @@ Transcript metadata is embedded in two message types in the Chat Service API:
 #### `RichText/Media_CallTranscript` message
 
 Content is JSON with fields:
+
 - `scopeId` / `callId` — the call identifier
 - `storageId` — `<userId>@<tenantId>` identifying the OneDrive storage
 - `isExportedToOdsp` — whether the transcript has been exported to SharePoint
@@ -215,6 +216,7 @@ Content is JSON with fields:
 #### `RichText/Media_CallRecording` message (status="Success")
 
 Content is XML (`<URIObject>`) containing `<RecordingContent>` with `<item>` elements:
+
 - `type="amsTranscript"` → AMS URL: `https://as-prod.asyncgw.teams.microsoft.com/v1/objects/<id>/views/transcript`
 - `type="onedriveForBusinessTranscript"` → SharePoint URL with `driveId`, `driveItemId`, and transcript `id`
 - `type="onedriveForBusinessVideo"` → SharePoint sharing URL with `driveId` and `driveItemId`
@@ -233,10 +235,10 @@ Use **Path 1 (AMS)** since it works with the existing skype token — no new tok
 
 ### Additional API surfaces observed
 
-| Host                                              | Auth                                   | Purpose                                             |
-| ------------------------------------------------- | -------------------------------------- | --------------------------------------------------- |
-| `as-prod.asyncgw.teams.microsoft.com`             | `Authorization: skype_token <token>`   | AMS: transcript VTT, video, roster events           |
-| `substrate.office.com`                             | Bearer token (substrate audience)      | WorkingSetFiles API, search, signals                |
-| `<tenant>-my.sharepoint.com`                       | Bearer token (SharePoint audience)     | Drive items, transcript metadata, stream content    |
-| `graph.microsoft.com`                              | Bearer token (Graph audience)          | Drive items, shares resolution, user license details |
-| `australiaeast1-mediap.svc.ms`                     | URL-embedded auth params               | Video manifest/streaming                            |
+| Host                                  | Auth                                 | Purpose                                              |
+| ------------------------------------- | ------------------------------------ | ---------------------------------------------------- |
+| `as-prod.asyncgw.teams.microsoft.com` | `Authorization: skype_token <token>` | AMS: transcript VTT, video, roster events            |
+| `substrate.office.com`                | Bearer token (substrate audience)    | WorkingSetFiles API, search, signals                 |
+| `<tenant>-my.sharepoint.com`          | Bearer token (SharePoint audience)   | Drive items, transcript metadata, stream content     |
+| `graph.microsoft.com`                 | Bearer token (Graph audience)        | Drive items, shares resolution, user license details |
+| `australiaeast1-mediap.svc.ms`        | URL-embedded auth params             | Video manifest/streaming                             |
