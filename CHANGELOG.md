@@ -1,3 +1,10 @@
+## [0.3.1](https://github.com/Maxim-Mazurok/teams-api/compare/v0.3.0...v0.3.1) (2026-03-19)
+
+
+### Bug Fixes
+
+* use teams-api-mcp binary in MCP configs instead of CLI binary ([4fd52ea](https://github.com/Maxim-Mazurok/teams-api/commit/4fd52eaf11aa2a5fb72c2675e70ee5a7c6d986f9))
+
 # [0.3.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.7...v0.3.0) (2026-03-19)
 
 
