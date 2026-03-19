@@ -4,9 +4,9 @@ AI-native Microsoft Teams integration — read conversations, send messages, and
 
 Designed for autonomous AI agents that need to interact with Teams: read messages, reply to people, monitor conversations, and participate in team workflows.
 
-[<img src="https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white" alt="Install in VS Code">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522teams%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522teams-api%2540latest%2522%255D%252C%2522env%2522%253A%257B%2522TEAMS_LOGIN%2522%253A%2522true%2522%257D%257D)
-[<img src="https://img.shields.io/badge/VS_Code_Insiders-Install_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white" alt="Install in VS Code Insiders">](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522teams%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522teams-api%2540latest%2522%255D%252C%2522env%2522%253A%257B%2522TEAMS_LOGIN%2522%253A%2522true%2522%257D%257D)
-[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=teams&config=%7B%22name%22%3A%22teams%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22teams-api%40latest%22%5D%2C%22env%22%3A%7B%22TEAMS_LOGIN%22%3A%22true%22%7D%7D)
+[<img src="https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white" alt="Install in VS Code">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522teams%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522-p%2522%252C%2522teams-api%2540latest%2522%252C%2522teams-api-mcp%2522%255D%252C%2522env%2522%253A%257B%2522TEAMS_LOGIN%2522%253A%2522true%2522%257D%257D)
+[<img src="https://img.shields.io/badge/VS_Code_Insiders-Install_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white" alt="Install in VS Code Insiders">](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522teams%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522-p%2522%252C%2522teams-api%2540latest%2522%252C%2522teams-api-mcp%2522%255D%252C%2522env%2522%253A%257B%2522TEAMS_LOGIN%2522%253A%2522true%2522%257D%257D)
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=teams&config=%7B%22name%22%3A%22teams%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22-p%22%2C%22teams-api%40latest%22%2C%22teams-api-mcp%22%5D%2C%22env%22%3A%7B%22TEAMS_LOGIN%22%3A%22true%22%7D%7D)
 [![npm version](https://img.shields.io/npm/v/teams-api?style=flat-square)](https://www.npmjs.com/package/teams-api)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-teams--api-green?style=flat-square)](https://registry.modelcontextprotocol.io)
 
@@ -36,10 +36,10 @@ Click the badge at the top of this README, or press `Cmd+Shift+X` / `Ctrl+Shift+
 
 ```bash
 # VS Code
-code --add-mcp '{"name":"teams","command":"npx","args":["-y","teams-api@latest"],"env":{"TEAMS_LOGIN":"true"}}'
+code --add-mcp '{"name":"teams","command":"npx","args":["-y","-p","teams-api@latest","teams-api-mcp"],"env":{"TEAMS_LOGIN":"true"}}'
 
 # VS Code Insiders
-code-insiders --add-mcp '{"name":"teams","command":"npx","args":["-y","teams-api@latest"],"env":{"TEAMS_LOGIN":"true"}}'
+code-insiders --add-mcp '{"name":"teams","command":"npx","args":["-y","-p","teams-api@latest","teams-api-mcp"],"env":{"TEAMS_LOGIN":"true"}}'
 ```
 
 **Option 3 — Manual config:**
@@ -51,7 +51,7 @@ Add to your VS Code MCP config (`.vscode/mcp.json` or User Settings):
   "mcpServers": {
     "teams": {
       "command": "npx",
-      "args": ["-y", "teams-api@latest"],
+      "args": ["-y", "-p", "teams-api@latest", "teams-api-mcp"],
       "env": {
         "TEAMS_LOGIN": "true"
       }
@@ -72,7 +72,7 @@ Click the **Install in Cursor** badge at the top, or add to `~/.cursor/mcp.json`
   "mcpServers": {
     "teams": {
       "command": "npx",
-      "args": ["-y", "teams-api@latest"],
+      "args": ["-y", "-p", "teams-api@latest", "teams-api-mcp"],
       "env": {
         "TEAMS_LOGIN": "true"
       }
@@ -93,7 +93,7 @@ Add to `claude_desktop_config.json` ([how to find it](https://modelcontextprotoc
   "mcpServers": {
     "teams": {
       "command": "npx",
-      "args": ["-y", "teams-api@latest"],
+      "args": ["-y", "-p", "teams-api@latest", "teams-api-mcp"],
       "env": {
         "TEAMS_LOGIN": "true"
       }
@@ -108,7 +108,7 @@ Add to `claude_desktop_config.json` ([how to find it](https://modelcontextprotoc
 <summary><strong>Claude Code</strong></summary>
 
 ```bash
-claude mcp add teams -- npx -y teams-api@latest
+claude mcp add teams -- npx -y -p teams-api@latest teams-api-mcp
 ```
 
 Then set the environment variable `TEAMS_LOGIN=true` in your shell before starting Claude Code. The server will ask for your email interactively on first use.
@@ -125,7 +125,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
   "mcpServers": {
     "teams": {
       "command": "npx",
-      "args": ["-y", "teams-api@latest"],
+      "args": ["-y", "-p", "teams-api@latest", "teams-api-mcp"],
       "env": {
         "TEAMS_LOGIN": "true"
       }
@@ -333,7 +333,7 @@ Use this only if you already have tokens from another flow or need to avoid brow
   "mcpServers": {
     "teams": {
       "command": "npx",
-      "args": ["-y", "teams-api@latest"],
+      "args": ["-y", "-p", "teams-api@latest", "teams-api-mcp"],
       "env": {
         "TEAMS_TOKEN": "<paste-skype-token-here>",
         "TEAMS_BEARER_TOKEN": "<optional-api-spaces-skype-bearer-token>",
