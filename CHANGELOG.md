@@ -1,3 +1,10 @@
+## [0.2.4](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.3...v0.2.4) (2026-03-19)
+
+
+### Bug Fixes
+
+* use correct case for GitHub username in MCP Registry name ([d3eec10](https://github.com/Maxim-Mazurok/teams-api/commit/d3eec10f0db1b204dfa3388f6bca7a18aed351d4))
+
 ## [0.2.3](https://github.com/Maxim-Mazurok/teams-api/compare/v0.2.2...v0.2.3) (2026-03-19)
 
 
