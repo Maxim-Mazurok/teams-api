@@ -1,3 +1,8 @@
+---
+name: teams-api
+description: Interact with Microsoft Teams — read messages, send replies, list conversations, search people, and look up team members. Use when an AI agent needs to participate in Teams workflows.
+---
+
 # teams-api MCP Skill
 
 Use this skill when you need to interact with Microsoft Teams — reading messages, sending replies, listing conversations, or looking up team members.
