@@ -35,6 +35,7 @@ import type {
   AutoLoginOptions,
   InteractiveLoginOptions,
   ManualTokenOptions,
+  SmartLoginOptions,
   Conversation,
   Message,
   MessageFormat,
@@ -67,6 +68,7 @@ import {
   acquireTokenViaInteractiveLogin,
   acquireTokenViaDebugSession,
 } from "./auth.js";
+import { acquireTokenViaSmartLogin } from "./smart-login.js";
 import { DEFAULT_TEAMS_REGION, resolveTeamsRegion } from "./region.js";
 import { saveToken, loadToken, clearToken } from "./token-store.js";
 
@@ -75,11 +77,13 @@ export {
   acquireTokenViaInteractiveLogin,
   acquireTokenViaDebugSession,
 } from "./auth.js";
+export { acquireTokenViaSmartLogin } from "./smart-login.js";
 export type {
   TeamsToken,
   AutoLoginOptions,
   InteractiveLoginOptions,
   ManualTokenOptions,
+  SmartLoginOptions,
   Conversation,
   Message,
   MessageFormat,
@@ -145,6 +149,7 @@ function extractMriSuffix(senderMri: string): string {
 export class TeamsClient {
   private token: TeamsToken;
   private autoLoginOptions: AutoLoginOptions | null = null;
+  private smartLoginOptions: SmartLoginOptions | null = null;
   private cachedDisplayName: string | null = null;
 
   private constructor(token: TeamsToken) {
@@ -191,6 +196,56 @@ export class TeamsClient {
 
     const client = new TeamsClient(token);
     client.autoLoginOptions = options;
+    return client;
+  }
+
+  /**
+   * Smart login — the zero-config default entry point.
+   *
+   * This is the recommended entry point for new users. It:
+   *   1. If email provided, checks the credential store for a cached token
+   *   2. Acquires a fresh token via smart login (auto-login on macOS if
+   *      prerequisites met, interactive login otherwise)
+   *   3. Caches the token if email is available
+   *   4. Automatically re-acquires the token if a 401 occurs mid-session
+   *
+   * No environment variables or platform-specific flags are needed.
+   */
+  static async connect(options?: SmartLoginOptions): Promise<TeamsClient> {
+    const log = options?.verbose ? console.error.bind(console) : () => {};
+
+    // Check credential store for cached token (requires email)
+    if (options?.email) {
+      const cachedToken = loadToken(options.email);
+      if (cachedToken) {
+        const region = resolveTeamsRegion(options.region, cachedToken.region);
+        const token =
+          region === cachedToken.region
+            ? cachedToken
+            : { ...cachedToken, region };
+
+        log("Using cached token from credential store");
+        if (token !== cachedToken) {
+          log(`Overriding cached region with explicit value: ${region}`);
+          saveToken(options.email, token);
+        }
+
+        const client = new TeamsClient(token);
+        client.smartLoginOptions = options;
+        return client;
+      }
+    }
+
+    log("No cached token found, acquiring via smart login...");
+    const token = await acquireTokenViaSmartLogin(options);
+
+    if (options?.email) {
+      saveToken(options.email, token);
+      log("Token saved to credential store");
+    }
+
+    const client = new TeamsClient(token);
+    client.smartLoginOptions = options ?? {};
     return client;
   }
 
@@ -250,9 +305,9 @@ export class TeamsClient {
   }
 
   /**
-   * Clear a cached token from the macOS Keychain.
+   * Clear a cached token from the credential store.
    *
-   * Use this to force a fresh login on the next `create()` call.
+   * Use this to force a fresh login on the next `create()` or `connect()` call.
    */
   static clearCachedToken(email: string): void {
     clearToken(email);
@@ -713,13 +768,29 @@ export class TeamsClient {
   }
 
   /**
-   * Re-acquire the token via auto-login and update the cached version.
+   * Re-acquire the token and update the cached version.
    *
    * Called automatically by `withTokenRefresh` on 401 errors.
+   * Supports both auto-login (create()) and smart login (connect()) paths.
    */
   private async refreshToken(): Promise<void> {
+    if (this.smartLoginOptions) {
+      if (this.smartLoginOptions.email) {
+        clearToken(this.smartLoginOptions.email);
+      }
+      const freshToken = await acquireTokenViaSmartLogin(
+        this.smartLoginOptions,
+      );
+      if (this.smartLoginOptions.email) {
+        saveToken(this.smartLoginOptions.email, freshToken);
+      }
+      this.token = freshToken;
+      this.cachedDisplayName = null;
+      return;
+    }
+
     if (!this.autoLoginOptions) {
-      throw new Error("Cannot refresh token: no auto-login options configured");
+      throw new Error("Cannot refresh token: no login options configured");
     }
 
     clearToken(this.autoLoginOptions.email);
@@ -740,7 +811,10 @@ export class TeamsClient {
     try {
       return await operation();
     } catch (error) {
-      if (error instanceof ApiAuthError && this.autoLoginOptions) {
+      if (
+        error instanceof ApiAuthError &&
+        (this.autoLoginOptions || this.smartLoginOptions)
+      ) {
         await this.refreshToken();
         return await operation();
       }

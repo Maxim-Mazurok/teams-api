@@ -38,7 +38,13 @@
         },
         {
           "name": "TEAMS_LOGIN",
-          "description": "Set to \"true\" to use interactive browser login (all platforms)",
+          "description": "Set to \"true\" to force interactive browser login (all platforms)",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "TEAMS_DEBUG",
+          "description": "Set to \"true\" to use Chrome debug session",
           "isRequired": false,
           "isSecret": false
         },

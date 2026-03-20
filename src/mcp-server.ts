@@ -12,10 +12,14 @@
  *     TEAMS_BEARER_TOKEN    — Optional middle-tier bearer token for profile resolution
  *     TEAMS_SUBSTRATE_TOKEN — Optional Substrate bearer token for people/chat search
  *     TEAMS_REGION          — API region (required with TEAMS_TOKEN, optional otherwise)
- *     TEAMS_EMAIL           — Corporate email (optional; the server prompts the AI agent if needed)
+ *     TEAMS_EMAIL           — Corporate email (optional; enables token caching and auto-login on macOS)
  *     TEAMS_AUTO            — Set to "true" to use auto-login (macOS + FIDO2)
  *     TEAMS_LOGIN           — Set to "true" to use interactive browser login (all platforms)
+ *     TEAMS_DEBUG           — Set to "true" to use Chrome debug session (requires Chrome with --remote-debugging-port)
  *     TEAMS_DEBUG_PORT      — Chrome debug port (default: 9222)
+ *
+ * Default (no env vars): Smart login — tries auto-login on macOS if Chrome + email
+ * are available, falls back to interactive browser login on all platforms.
  *
  * Usage in VS Code settings (mcp config):
  *   {
@@ -23,9 +27,7 @@
  *       "teams": {
  *         "command": "npx",
  *         "args": ["-y", "teams-api"],
- *         "env": {
- *           "TEAMS_LOGIN": "true"
- *         }
+ *         "env": {}
  *       }
  *     }
  *   }
@@ -62,6 +64,7 @@ async function getClient(toolEmail?: string): Promise<TeamsClient> {
   const email = process.env.TEAMS_EMAIL || toolEmail;
   const envAuto = process.env.TEAMS_AUTO === "true";
   const envLogin = process.env.TEAMS_LOGIN === "true";
+  const envDebug = process.env.TEAMS_DEBUG === "true";
   const envDebugPort = process.env.TEAMS_DEBUG_PORT
     ? Number(process.env.TEAMS_DEBUG_PORT)
     : 9222;
@@ -92,10 +95,17 @@ async function getClient(toolEmail?: string): Promise<TeamsClient> {
       email,
       verbose: false,
     });
-  } else {
+  } else if (envDebug) {
     clientInstance = await TeamsClient.fromDebugSession({
       debugPort: envDebugPort,
       region: envRegion,
+    });
+  } else {
+    // Default: smart login (zero-config)
+    clientInstance = await TeamsClient.connect({
+      email,
+      region: envRegion,
+      verbose: false,
     });
   }
 

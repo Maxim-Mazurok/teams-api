@@ -176,34 +176,34 @@ Manual token usage, debug-session auth, and programmatic Node.js usage are cover
 
 ## Platform support
 
-| Feature                | macOS          | Windows / Linux |
-| ---------------------- | -------------- | --------------- |
-| **Interactive login**  | Full support   | Full support    |
-| **Auto-login (FIDO2)** | Full support   | Not supported   |
-| **Debug session**      | Full support   | Full support    |
-| **Direct token**       | Full support   | Full support    |
-| **Token caching**      | macOS Keychain | Not available   |
-| **CLI & MCP server**   | Full support   | Full support    |
-| **Programmatic API**   | Full support   | Full support    |
+| Feature                | macOS          | Windows              | Linux                                   |
+| ---------------------- | -------------- | -------------------- | --------------------------------------- |
+| **Smart login**        | Full support   | Full support         | Full support                            |
+| **Interactive login**  | Full support   | Full support         | Full support                            |
+| **Auto-login (FIDO2)** | Full support   | Not supported        | Not supported                           |
+| **Debug session**      | Full support   | Full support         | Full support                            |
+| **Direct token**       | Full support   | Full support         | Full support                            |
+| **Token caching**      | macOS Keychain | DPAPI-encrypted file | `secret-tool` (libsecret) or plain file |
+| **CLI & MCP server**   | Full support   | Full support         | Full support                            |
+| **Programmatic API**   | Full support   | Full support         | Full support                            |
 
 ## Authentication
 
 Most users do not need to manage tokens manually.
 
-If you use interactive login, auto-login, or a Chrome debug session, `teams-api` captures the full token bundle automatically from Teams web traffic. That includes the base `skypeToken` plus the extra bearer tokens used for profile resolution and reliable people/chat/channel search.
+**Smart login (default)**: With no configuration, `teams-api` uses smart login — it automatically picks the best strategy for your platform. On macOS with Chrome and a FIDO2 passkey, it tries auto-login first; on all platforms, it falls back to interactive browser login. Tokens are cached in the platform credential store (Keychain on macOS, DPAPI on Windows, secret-tool/file on Linux) and reused for up to 23 hours.
 
-Those flows also detect the Teams chat region automatically from the intercepted request URLs, so most users do not need to set `--region` or `TEAMS_REGION`.
-
-On macOS, prefer auto-login when you have a platform authenticator / FIDO2 passkey set up. On other platforms, use interactive login.
+All login flows capture the full token bundle automatically from Teams web traffic. That includes the base `skypeToken` plus the extra bearer tokens used for profile resolution and reliable people/chat/channel search. Region is auto-detected from the intercepted request URLs.
 
 Direct token usage is the advanced/manual path.
 
-| Method                | Description                                                                  | Automation       | Platform |
-| --------------------- | ---------------------------------------------------------------------------- | ---------------- | -------- |
-| **Auto-login**        | Playwright launches system Chrome and captures the full token bundle         | Fully unattended | macOS    |
-| **Interactive login** | Opens a browser window and captures skype, middle-tier, and Substrate tokens | One-time manual  | All      |
-| **Debug session**     | Connects to a running Chrome instance and captures the full token bundle     | Semi-manual      | All      |
-| **Direct token**      | Provide a previously captured token or token bundle explicitly               | Manual           | All      |
+| Method                | Description                                                                          | Automation       | Platform |
+| --------------------- | ------------------------------------------------------------------------------------ | ---------------- | -------- |
+| **Smart login**       | Auto-detects the best strategy; tries auto-login on macOS, falls back to interactive | Automatic        | All      |
+| **Auto-login**        | Playwright launches system Chrome and captures the full token bundle                 | Fully unattended | macOS    |
+| **Interactive login** | Opens a browser window and captures skype, middle-tier, and Substrate tokens         | One-time manual  | All      |
+| **Debug session**     | Connects to a running Chrome instance and captures the full token bundle             | Semi-manual      | All      |
+| **Direct token**      | Provide a previously captured token or token bundle explicitly                       | Manual           | All      |
 
 ### Auto-login (macOS only)
 
@@ -224,7 +224,7 @@ teams-api auth --login --email you@example.com
 ```
 
 > [!NOTE]
-> Interactive login uses Playwright's bundled Chromium. No system Chrome installation is required.
+> Interactive login prefers an installed Microsoft Edge / Google Chrome when available. If neither is available, `teams-api` installs Playwright Chromium automatically on first use. That first login may take a minute while the browser runtime downloads.
 
 ### Advanced / manual methods
 
@@ -276,18 +276,20 @@ The examples below use `teams-api` for readability. If you are not installing gl
 
 ### Auth flags (available on all commands)
 
-| Flag                        | Description                                                                      |
-| --------------------------- | -------------------------------------------------------------------------------- |
-| `--login`                   | Interactive browser login (all platforms)                                        |
-| `--auto`                    | Auto-acquire token via FIDO2 passkey (macOS)                                     |
-| `--email <email>`           | Corporate email (required with `--auto`, optional otherwise)                     |
-| `--token <token>`           | Use an existing skype token (advanced/manual)                                    |
-| `--bearer-token <token>`    | Optional middle-tier bearer token (advanced/manual)                              |
-| `--substrate-token <token>` | Optional Substrate bearer token (advanced/manual)                                |
-| `--debug-port <port>`       | Chrome debug port (default: 9222)                                                |
-| `--region <region>`         | API region override. Auto-detected for login/debug auth; required with `--token` |
-| `--format <format>`         | Output format: json, text, md, toon                                              |
-| `--output <file>`           | Export output to file (default format: md)                                       |
+| Flag                        | Description                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------- |
+| _(none)_                    | **Default**: Smart login — auto-login on macOS if possible, interactive otherwise |
+| `--login`                   | Force interactive browser login (all platforms)                                   |
+| `--auto`                    | Force auto-acquire token via FIDO2 passkey (macOS)                                |
+| `--debug`                   | Connect to a running Chrome debug session                                         |
+| `--email <email>`           | Corporate email (required with `--auto`, optional otherwise)                      |
+| `--token <token>`           | Use an existing skype token (advanced/manual)                                     |
+| `--bearer-token <token>`    | Optional middle-tier bearer token (advanced/manual)                               |
+| `--substrate-token <token>` | Optional Substrate bearer token (advanced/manual)                                 |
+| `--debug-port <port>`       | Chrome debug port for `--debug` (default: 9222)                                   |
+| `--region <region>`         | API region override. Auto-detected for login/debug auth; required with `--token`  |
+| `--format <format>`         | Output format: json, text, md, toon                                               |
+| `--output <file>`           | Export output to file (default format: md)                                        |
 
 ### Examples
 
@@ -365,16 +367,17 @@ Use this only if you already have tokens from another flow or need to avoid brow
 
 ### Environment variables
 
-| Variable                | Description                                                           |
-| ----------------------- | --------------------------------------------------------------------- |
-| `TEAMS_TOKEN`           | Pre-existing skype token                                              |
-| `TEAMS_BEARER_TOKEN`    | Optional middle-tier bearer token                                     |
-| `TEAMS_SUBSTRATE_TOKEN` | Optional Substrate bearer token                                       |
-| `TEAMS_REGION`          | API region override. Required with `TEAMS_TOKEN`; optional otherwise  |
-| `TEAMS_EMAIL`           | Corporate email. Optional — the server prompts the AI agent if needed |
-| `TEAMS_AUTO`            | Set to `true` to enable auto-login (macOS + FIDO2)                    |
-| `TEAMS_LOGIN`           | Set to `true` to enable interactive browser login                     |
-| `TEAMS_DEBUG_PORT`      | Chrome debug port (default: 9222)                                     |
+| Variable                | Description                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `TEAMS_TOKEN`           | Pre-existing skype token                                                       |
+| `TEAMS_BEARER_TOKEN`    | Optional middle-tier bearer token                                              |
+| `TEAMS_SUBSTRATE_TOKEN` | Optional Substrate bearer token                                                |
+| `TEAMS_REGION`          | API region override. Required with `TEAMS_TOKEN`; optional otherwise           |
+| `TEAMS_EMAIL`           | Corporate email. Optional — enables token caching and auto-login on macOS      |
+| `TEAMS_AUTO`            | Set to `true` to force auto-login (macOS + FIDO2)                              |
+| `TEAMS_LOGIN`           | Set to `true` to force interactive browser login                               |
+| `TEAMS_DEBUG`           | Set to `true` to use Chrome debug session (requires `--remote-debugging-port`) |
+| `TEAMS_DEBUG_PORT`      | Chrome debug port (default: 9222)                                              |
 
 ### Available tools
 
@@ -410,7 +413,7 @@ The Teams Chat Service URL varies by region. Login-based and debug-session auth 
 - Token lifetime is ~24 hours. After expiry, you must re-acquire.
 - The Teams Chat Service REST API is undocumented and may change without notice.
 - Auto-login requires macOS, system Chrome, a platform authenticator, and a FIDO2 passkey. On other platforms, use interactive login (`--login`) instead.
-- Token caching (macOS Keychain) is only available on macOS. On other platforms, pass the token directly or re-run interactive login each time.
+- Token caching uses the platform credential store: macOS Keychain, Windows DPAPI, or Linux `secret-tool`/file. On Linux without `secret-tool`, tokens are stored in a plain file at `~/.config/teams-api/` with `0o600` permissions.
 - The members API returns empty display names for 1:1 chat participants. Use `findOneOnOneConversation()` to resolve names from message history.
 - Reaction actor identities come from the `emotions` field in message payloads. Parsing handles both JSON-string and array formats.
 
@@ -429,15 +432,19 @@ Example:
 ```typescript
 import { TeamsClient } from "teams-api";
 
-// Interactive login — opens a browser, you log in manually (all platforms)
-const client = await TeamsClient.fromInteractiveLogin();
+// Smart login (recommended) — auto-detects the best strategy for your platform
+const client = await TeamsClient.connect();
 
-// Or auto-login via platform authenticator (macOS + FIDO2 passkey)
-const autoClient = await TeamsClient.fromAutoLogin({
+// With email — enables token caching and auto-login on macOS
+const cachedClient = await TeamsClient.connect({
   email: "you@example.com",
 });
 
-// Advanced/manual: create a client from previously captured tokens
+// Or explicit strategies:
+const interactiveClient = await TeamsClient.fromInteractiveLogin();
+const autoClient = await TeamsClient.fromAutoLogin({
+  email: "you@example.com",
+});
 const manualClient = TeamsClient.fromToken("skype-token-here", "emea");
 
 const conversations = await client.listConversations();

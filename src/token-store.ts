@@ -1,17 +1,15 @@
 /**
- * Secure token persistence using the macOS Keychain.
+ * Secure token persistence using the platform credential store.
  *
- * Stores Teams tokens in the system Keychain via the `security` CLI tool.
+ * Stores Teams tokens via the cross-platform credential store:
+ * macOS Keychain, Windows DPAPI, or Linux secret-tool/file.
  * Tokens are base64-encoded JSON with an acquisition timestamp.
  * Expired tokens (older than TOKEN_LIFETIME) are automatically cleared.
- *
- * Uses `execFileSync` (not `execSync`) to avoid shell injection risks.
  */
 
-import { execFileSync } from "node:child_process";
 import type { TeamsToken } from "./types.js";
+import { createCredentialStore } from "./credential-store.js";
 
-const KEYCHAIN_SERVICE = "teams-api";
 const TOKEN_LIFETIME = 23 * 60 * 60 * 1_000; // 23 hours (tokens last ~24h, 1h safety margin)
 
 interface StoredToken {
@@ -21,6 +19,8 @@ interface StoredToken {
   substrateToken?: string;
   acquiredAt: number;
 }
+
+const store = createCredentialStore();
 
 export function saveToken(email: string, token: TeamsToken): void {
   const storedToken: StoredToken = {
@@ -32,27 +32,12 @@ export function saveToken(email: string, token: TeamsToken): void {
   };
   const encoded = Buffer.from(JSON.stringify(storedToken)).toString("base64");
 
-  execFileSync("security", [
-    "add-generic-password",
-    "-a",
-    email,
-    "-s",
-    KEYCHAIN_SERVICE,
-    "-w",
-    encoded,
-    "-U",
-  ]);
+  store.save(email, encoded);
 }
 
 export function loadToken(email: string): TeamsToken | null {
-  let encoded: string;
-  try {
-    encoded = execFileSync(
-      "security",
-      ["find-generic-password", "-a", email, "-s", KEYCHAIN_SERVICE, "-w"],
-      { encoding: "utf-8" },
-    ).trim();
-  } catch {
+  const encoded = store.load(email);
+  if (!encoded) {
     return null;
   }
 
@@ -80,15 +65,5 @@ export function loadToken(email: string): TeamsToken | null {
 }
 
 export function clearToken(email: string): void {
-  try {
-    execFileSync("security", [
-      "delete-generic-password",
-      "-a",
-      email,
-      "-s",
-      KEYCHAIN_SERVICE,
-    ]);
-  } catch {
-    // Token may not exist in keychain, that's fine
-  }
+  store.clear(email);
 }
