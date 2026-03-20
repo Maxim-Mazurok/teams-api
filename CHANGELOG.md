@@ -1,3 +1,5 @@
+## [0.3.2](https://github.com/Maxim-Mazurok/teams-api/compare/v0.3.1...v0.3.2) (2026-03-20)
+
 ## [0.3.1](https://github.com/Maxim-Mazurok/teams-api/compare/v0.3.0...v0.3.1) (2026-03-19)
 
 
