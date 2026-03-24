@@ -17,6 +17,7 @@ import type {
   Reaction,
   Mention,
   SentMessage,
+  EditedMessage,
   UserProfile,
   PersonSearchResult,
   ChatSearchResult,
@@ -387,6 +388,74 @@ export async function postMessage(
   return {
     messageId: data.id ?? clientMessageId,
     arrivalTime: data.OriginalArrivalTime,
+  };
+}
+
+/**
+ * Edit an existing message in a conversation.
+ *
+ * The `format` parameter controls how `content` is interpreted:
+ * - `"text"` — plain text, sent as-is
+ * - `"markdown"` (default) — converted from Markdown to HTML
+ * - `"html"` — raw HTML, sent as-is
+ */
+export async function editMessage(
+  token: TeamsToken,
+  conversationId: string,
+  messageId: string,
+  content: string,
+  senderDisplayName: string,
+  format: MessageFormat = "markdown",
+): Promise<EditedMessage> {
+  const url = `${chatServiceBase(token.region)}/users/ME/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`;
+
+  const { resolvedContent, messagetype, contenttype } = resolveMessageContent(
+    content,
+    format,
+  );
+
+  const body = {
+    content: resolvedContent,
+    messagetype,
+    contenttype,
+    skypeeditedid: messageId,
+    imdisplayname: senderDisplayName,
+  };
+
+  const response = await fetchWithRetry(url, {
+    method: "PUT",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
+    const errorText = await response.text();
+    throw new Error(
+      `Failed to edit message: ${response.status} ${response.statusText} — ${errorText}`,
+    );
+  }
+
+  const responseText = await response.text();
+  let editTime: string;
+
+  if (responseText) {
+    const data = JSON.parse(responseText) as { edittime?: string };
+    editTime = data.edittime ?? new Date().toISOString();
+  } else {
+    editTime = new Date().toISOString();
+  }
+
+  return {
+    messageId,
+    editTime,
   };
 }
 

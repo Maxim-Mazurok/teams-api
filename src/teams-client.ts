@@ -40,6 +40,7 @@ import type {
   MessageFormat,
   Member,
   SentMessage,
+  EditedMessage,
   GetMessagesOptions,
   ListConversationsOptions,
   OneOnOneSearchResult,
@@ -55,6 +56,7 @@ import {
   fetchMembers,
   fetchProfiles,
   postMessage,
+  editMessage,
   fetchUserProperties,
   fetchTranscript,
   searchPeople,
@@ -85,6 +87,7 @@ export type {
   MessageFormat,
   Member,
   SentMessage,
+  EditedMessage,
   GetMessagesOptions,
   ListConversationsOptions,
   OneOnOneSearchResult,
@@ -723,6 +726,33 @@ export class TeamsClient {
       return postMessage(
         this.token,
         conversationId,
+        content,
+        displayName,
+        format,
+      );
+    });
+  }
+
+  /**
+   * Edit an existing message in a conversation.
+   *
+   * The `format` parameter controls how `content` is interpreted:
+   * - `"text"` — plain text, sent as-is
+   * - `"markdown"` (default) — converted from Markdown to HTML
+   * - `"html"` — raw HTML, sent as-is
+   */
+  async editMessage(
+    conversationId: string,
+    messageId: string,
+    content: string,
+    format: MessageFormat = "markdown",
+  ): Promise<EditedMessage> {
+    return this.withTokenRefresh(async () => {
+      const displayName = await this.getCurrentUserDisplayName();
+      return editMessage(
+        this.token,
+        conversationId,
+        messageId,
         content,
         displayName,
         format,

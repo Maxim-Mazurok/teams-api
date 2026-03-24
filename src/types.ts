@@ -164,6 +164,14 @@ export interface SentMessage {
   arrivalTime: number;
 }
 
+/** Result of editing a message. */
+export interface EditedMessage {
+  /** The ID of the edited message. */
+  messageId: string;
+  /** ISO timestamp when the edit was applied. */
+  editTime: string;
+}
+
 /** A page of messages with pagination metadata. */
 export interface MessagesPage {
   /** Messages in this page. */

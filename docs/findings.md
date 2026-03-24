@@ -71,6 +71,25 @@ Returns `{ OriginalArrivalTime: <timestamp>, id: <messageId> }`.
 
 The `imdisplayname` field is required — it determines how the sender name appears in the chat. If omitted, the message sender shows as blank.
 
+**Edit message:**
+
+```
+PUT /users/ME/conversations/{conversationId}/messages/{messageId}
+Content-Type: application/json
+
+{
+  "content": "<p>updated text</p>",
+  "messagetype": "RichText/Html",
+  "contenttype": "text",
+  "skypeeditedid": "<messageId>",
+  "imdisplayname": "Sender Display Name"
+}
+```
+
+Returns `{ edittime: "<ISO timestamp>" }`.
+
+The `skypeeditedid` field must match the message ID in the URL. Only the message author can edit a message.
+
 **Get members:**
 
 ```

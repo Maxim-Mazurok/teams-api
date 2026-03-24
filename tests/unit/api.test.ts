@@ -12,6 +12,7 @@ import {
   fetchMembers,
   fetchProfiles,
   postMessage,
+  editMessage,
   fetchUserProperties,
   parseRawMessage,
   ApiAuthError,
@@ -455,6 +456,131 @@ describe("postMessage", () => {
     await expect(
       postMessage(testToken, "conv-id", "Hello!", "User"),
     ).rejects.toBeInstanceOf(ApiAuthError);
+  });
+});
+
+describe("editMessage", () => {
+  it("should send PUT request with skypeeditedid and return edit time", async () => {
+    mockFetchResponse({ edittime: "2026-03-24T10:00:00.000Z" });
+
+    const result = await editMessage(
+      testToken,
+      "conv-id",
+      "msg-123",
+      "**Updated!**",
+      "Test User",
+    );
+
+    expect(result.messageId).toBe("msg-123");
+    expect(result.editTime).toBe("2026-03-24T10:00:00.000Z");
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(fetchCall[0]).toContain(
+      "/users/ME/conversations/conv-id/messages/msg-123",
+    );
+    expect(fetchCall[1].method).toBe("PUT");
+
+    const sentBody = JSON.parse(fetchCall[1].body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(sentBody.content).toContain("<strong>Updated!</strong>");
+    expect(sentBody.messagetype).toBe("RichText/Html");
+    expect(sentBody.skypeeditedid).toBe("msg-123");
+    expect(sentBody.imdisplayname).toBe("Test User");
+  });
+
+  it("should send plain text when format is text", async () => {
+    mockFetchResponse({ edittime: "2026-03-24T10:00:00.000Z" });
+
+    await editMessage(
+      testToken,
+      "conv-id",
+      "msg-456",
+      "plain update",
+      "Test User",
+      "text",
+    );
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    const sentBody = JSON.parse(fetchCall[1].body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(sentBody.content).toBe("plain update");
+    expect(sentBody.messagetype).toBe("Text");
+  });
+
+  it("should pass through raw HTML when format is html", async () => {
+    mockFetchResponse({ edittime: "2026-03-24T10:00:00.000Z" });
+
+    const htmlContent = "<b>Bold edit</b>";
+    await editMessage(
+      testToken,
+      "conv-id",
+      "msg-789",
+      htmlContent,
+      "Test User",
+      "html",
+    );
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    const sentBody = JSON.parse(fetchCall[1].body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(sentBody.content).toBe(htmlContent);
+    expect(sentBody.messagetype).toBe("RichText/Html");
+  });
+
+  it("should throw on failure with error body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+      text: () => Promise.resolve("Access denied"),
+    });
+
+    await expect(
+      editMessage(testToken, "conv-id", "msg-123", "Hello!", "User"),
+    ).rejects.toThrow("Failed to edit message: 403 Forbidden — Access denied");
+  });
+
+  it("should throw ApiAuthError on 401", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      text: () => Promise.resolve("Token expired"),
+    });
+
+    await expect(
+      editMessage(testToken, "conv-id", "msg-123", "Hello!", "User"),
+    ).rejects.toBeInstanceOf(ApiAuthError);
+  });
+
+  it("should handle empty response body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      text: () => Promise.resolve(""),
+      headers: new Headers(),
+    });
+
+    const result = await editMessage(
+      testToken,
+      "conv-id",
+      "msg-empty",
+      "Updated!",
+      "Test User",
+    );
+
+    expect(result.messageId).toBe("msg-empty");
+    expect(result.editTime).toBeTruthy();
   });
 });
 

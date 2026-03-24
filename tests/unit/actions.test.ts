@@ -19,6 +19,7 @@ import type {
   Member,
   OneOnOneSearchResult,
   SentMessage,
+  EditedMessage,
 } from "../../src/types.js";
 
 // ── Mock client factory ──────────────────────────────────────────────
@@ -35,6 +36,7 @@ function createMockClient(
     getMessages: vi.fn(),
     getMessagesPage: vi.fn(),
     sendMessage: vi.fn(),
+    editMessage: vi.fn(),
     getMembers: vi.fn(),
     getCurrentUserDisplayName: vi.fn(),
     getToken: vi.fn(() => ({ skypeToken: "test-token", region: "apac" })),
@@ -96,8 +98,8 @@ beforeEach(() => {
 // ── Registry tests ───────────────────────────────────────────────────
 
 describe("action registry", () => {
-  it("should contain all 10 actions", () => {
-    expect(actions).toHaveLength(10);
+  it("should contain all 11 actions", () => {
+    expect(actions).toHaveLength(11);
   });
 
   it("should have unique names", () => {
@@ -131,6 +133,7 @@ describe("action registry", () => {
     expect(names).toContain("find-chats");
     expect(names).toContain("get-messages");
     expect(names).toContain("send-message");
+    expect(names).toContain("edit-message");
     expect(names).toContain("get-members");
     expect(names).toContain("whoami");
     expect(names).toContain("get-transcript");
@@ -876,6 +879,163 @@ describe("send-message", () => {
     expect(output).toContain('Message sent to "Design Review"');
     expect(output).toContain("Message ID: msg-123");
     expect(output).toContain("Arrival time: 1773000000000");
+  });
+});
+
+// ── edit-message ─────────────────────────────────────────────────────
+
+describe("edit-message", () => {
+  const action = getAction("edit-message");
+
+  it("should resolve conversation and edit message", async () => {
+    const conversation = makeConversation({
+      id: "19:chat@thread.v2",
+      topic: "Design Review",
+    });
+    const editedMessage: EditedMessage = {
+      messageId: "msg-123",
+      editTime: "2026-03-24T10:00:00.000Z",
+    };
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(conversation),
+      editMessage: vi.fn().mockResolvedValue(editedMessage),
+    });
+
+    const result = (await action.execute(client, {
+      chat: "Design Review",
+      messageId: "msg-123",
+      content: "Updated content",
+    })) as EditedMessage & { conversation: string };
+
+    expect(client.editMessage).toHaveBeenCalledWith(
+      "19:chat@thread.v2",
+      "msg-123",
+      "Updated content",
+      "markdown",
+    );
+    expect(result.messageId).toBe("msg-123");
+    expect(result.conversation).toBe("Design Review");
+  });
+
+  it("should pass explicit messageFormat to editMessage", async () => {
+    const editedMessage: EditedMessage = {
+      messageId: "msg-text",
+      editTime: "2026-03-24T10:00:00.000Z",
+    };
+    const client = createMockClient({
+      editMessage: vi.fn().mockResolvedValue(editedMessage),
+    });
+
+    await action.execute(client, {
+      conversationId: "19:direct@thread.v2",
+      messageId: "msg-text",
+      content: "plain text update",
+      messageFormat: "text",
+    });
+
+    expect(client.editMessage).toHaveBeenCalledWith(
+      "19:direct@thread.v2",
+      "msg-text",
+      "plain text update",
+      "text",
+    );
+  });
+
+  it("should pass html messageFormat to editMessage", async () => {
+    const editedMessage: EditedMessage = {
+      messageId: "msg-html",
+      editTime: "2026-03-24T10:00:00.000Z",
+    };
+    const client = createMockClient({
+      editMessage: vi.fn().mockResolvedValue(editedMessage),
+    });
+
+    await action.execute(client, {
+      conversationId: "19:direct@thread.v2",
+      messageId: "msg-html",
+      content: "<b>Bold edit</b>",
+      messageFormat: "html",
+    });
+
+    expect(client.editMessage).toHaveBeenCalledWith(
+      "19:direct@thread.v2",
+      "msg-html",
+      "<b>Bold edit</b>",
+      "html",
+    );
+  });
+
+  it("should resolve 1:1 conversation via --to", async () => {
+    const searchResult: OneOnOneSearchResult = {
+      conversationId: "19:one-on-one@unq.gbl.spaces",
+      memberDisplayName: "Luke Prior",
+    };
+    const editedMessage: EditedMessage = {
+      messageId: "msg-456",
+      editTime: "2026-03-24T10:00:00.000Z",
+    };
+    const client = createMockClient({
+      findOneOnOneConversation: vi.fn().mockResolvedValue(searchResult),
+      editMessage: vi.fn().mockResolvedValue(editedMessage),
+    });
+
+    const result = (await action.execute(client, {
+      to: "Luke",
+      messageId: "msg-456",
+      content: "Updated!",
+    })) as EditedMessage & { conversation: string };
+
+    expect(result.conversation).toBe("Luke Prior");
+  });
+
+  it("should error when no conversation identifier provided", async () => {
+    const client = createMockClient();
+
+    await expect(
+      action.execute(client, { messageId: "msg-1", content: "Hello" }),
+    ).rejects.toThrow("One of --conversation-id, --chat, or --to is required.");
+  });
+
+  it("should format result correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      editTime: "2026-03-24T10:00:00.000Z",
+      conversation: "Design Review",
+    };
+
+    const output = action.formatResult(result);
+
+    expect(output).toContain('Message edited in "Design Review"');
+    expect(output).toContain("Message ID: msg-123");
+    expect(output).toContain("Edit time: 2026-03-24T10:00:00.000Z");
+  });
+
+  it("should format markdown correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      editTime: "2026-03-24T10:00:00.000Z",
+      conversation: "Design Review",
+    };
+
+    const output = formatOutput(action, result, "md");
+
+    expect(output).toContain("## Message Edited");
+    expect(output).toContain("**In:** Design Review");
+    expect(output).toContain("**Message ID:** msg-123");
+  });
+
+  it("should format toon correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      editTime: "2026-03-24T10:00:00.000Z",
+      conversation: "Design Review",
+    };
+
+    const output = formatOutput(action, result, "toon");
+
+    expect(output).toContain("Message Edited!");
+    expect(output).toContain("Design Review");
+    expect(output).toContain("msg-123");
   });
 });
 

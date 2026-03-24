@@ -22,6 +22,7 @@ import type {
   ChatSearchResult,
   TranscriptResult,
   TranscriptEntry,
+  EditedMessage,
 } from "./types.js";
 
 // ── Parameter & Action types ─────────────────────────────────────────
@@ -609,6 +610,97 @@ const sendMessage: ActionDefinition = {
   },
 };
 
+const editMessageAction: ActionDefinition = {
+  name: "edit-message",
+  title: "Edit Message",
+  description:
+    "Edit an existing message in a conversation. " +
+    "Identify the conversation by topic name (--chat), " +
+    "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
+    "At least one identifier is required. " +
+    "The message to edit is identified by --message-id. " +
+    "Content is interpreted as Markdown by default and converted to rich HTML.",
+  parameters: [
+    ...conversationParameters,
+    {
+      name: "messageId",
+      type: "string",
+      description: "ID of the message to edit",
+      required: true,
+    },
+    {
+      name: "content",
+      type: "string",
+      description: "New message content",
+      required: true,
+    },
+    {
+      name: "messageFormat",
+      type: "string",
+      description:
+        'Content format: "markdown" (default, converted to HTML), "html" (raw HTML), or "text" (plain text)',
+      required: false,
+      default: "markdown",
+    },
+  ],
+  execute: async (client, parameters) => {
+    const { conversationId, label } = await resolveConversationId(
+      client,
+      parameters,
+    );
+    const messageId = parameters.messageId as string;
+    const content = parameters.content as string;
+    const messageFormat =
+      (parameters.messageFormat as MessageFormat | undefined) ?? "markdown";
+    const result = await client.editMessage(
+      conversationId,
+      messageId,
+      content,
+      messageFormat,
+    );
+    return { ...result, conversation: label };
+  },
+  formatResult: (result) => {
+    const { messageId, editTime, conversation } = result as {
+      messageId: string;
+      editTime: string;
+      conversation: string;
+    };
+    return [
+      `Message edited in "${conversation}"`,
+      `  Message ID: ${messageId}`,
+      `  Edit time: ${editTime}`,
+    ].join("\n");
+  },
+  formatMarkdown: (result) => {
+    const { messageId, editTime, conversation } = result as {
+      messageId: string;
+      editTime: string;
+      conversation: string;
+    };
+    return [
+      "## Message Edited",
+      "",
+      `- **In:** ${conversation}`,
+      `- **Message ID:** ${messageId}`,
+      `- **Edit time:** ${editTime}`,
+    ].join("\n");
+  },
+  formatToon: (result) => {
+    const { messageId, editTime, conversation } = result as {
+      messageId: string;
+      editTime: string;
+      conversation: string;
+    };
+    return [
+      toonHeader("✏️", "Message Edited!"),
+      `  💬 In: "${conversation}"`,
+      `  🆔 ${messageId}`,
+      `  ⏰ ${editTime}`,
+    ].join("\n");
+  },
+};
+
 const getMembers: ActionDefinition = {
   name: "get-members",
   title: "Get Conversation Members",
@@ -1024,6 +1116,7 @@ export const actions: ActionDefinition[] = [
   findChatsAction,
   getMessages,
   sendMessage,
+  editMessageAction,
   getMembers,
   whoami,
   getTranscript,
