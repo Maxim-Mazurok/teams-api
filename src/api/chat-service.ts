@@ -20,6 +20,7 @@ import type {
   DeletedMessage,
 } from "../types.js";
 import { fetchWithRetry, ApiAuthError } from "./common.js";
+import { parseInlineImages, parseFileAttachments } from "./attachments.js";
 import MarkdownIt from "markdown-it";
 
 const markdownRenderer = new MarkdownIt({ html: true, breaks: true });
@@ -210,6 +211,8 @@ export async function postMessage(
   content: string,
   senderDisplayName: string,
   format: MessageFormat = "markdown",
+  amsReferences: string[] = [],
+  filesJson?: string,
 ): Promise<SentMessage> {
   const url = `${chatServiceBase(token.region)}/users/ME/conversations/${encodeURIComponent(conversationId)}/messages`;
 
@@ -219,7 +222,7 @@ export async function postMessage(
     format,
   );
 
-  const body = {
+  const body: Record<string, unknown> = {
     content: resolvedContent,
     messagetype,
     contenttype,
@@ -228,8 +231,13 @@ export async function postMessage(
     properties: {
       importance: "",
       subject: null,
+      ...(filesJson ? { files: filesJson } : {}),
     },
   };
+
+  if (amsReferences.length > 0) {
+    body.amsreferences = amsReferences;
+  }
 
   const response = await fetchWithRetry(url, {
     method: "POST",
@@ -426,6 +434,8 @@ export function parseRawMessage(raw: Record<string, unknown>): Message {
     followers,
     mentions,
     quotedMessageId,
+    images: parseInlineImages(content),
+    files: parseFileAttachments(properties.files),
   };
 }
 

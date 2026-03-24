@@ -221,7 +221,7 @@ The simplest approach. The AMS transcript URL is embedded in the chat messages a
 
 ### Path 2: SharePoint API — needs separate SharePoint token
 
-Used by the Teams web client for the Recap/Transcript UI. Requires a token for the `wisetechglobal-my.sharepoint.com` audience, which is acquired via MSAL in the browser.
+Used by the Teams web client for the Recap/Transcript UI. Requires a token for the `{tenant}-my.sharepoint.com` audience, which is acquired via MSAL in the browser.
 
 **Step 1**: Get transcript metadata from drive item:
 
@@ -282,3 +282,70 @@ Use **Path 1 (AMS)** since it works with the existing skype token — no new tok
 | `<tenant>-my.sharepoint.com`          | Bearer token (SharePoint audience)   | Drive items, transcript metadata, stream content     |
 | `graph.microsoft.com`                 | Bearer token (Graph audience)        | Drive items, shares resolution, user license details |
 | `australiaeast1-mediap.svc.ms`        | URL-embedded auth params             | Video manifest/streaming                             |
+
+## SharePoint file upload for Teams messages
+
+Files shared in Teams conversations are uploaded to the sender's OneDrive for Business and referenced in the message via a `properties.files` JSON string.
+
+### Upload flow
+
+1. **PUT file content** to SharePoint:
+   ```
+   PUT https://{tenant}-my.sharepoint.com/personal/{user_email_underscored}/_api/v2.0/drive/root:/Microsoft%20Teams%20Chat%20Files/{fileName}:/content?@name.conflictBehavior=rename&$select=*,sharepointIds,webDavUrl
+   Authorization: Bearer {sharePointToken}
+   Content-Type: application/octet-stream
+
+   <file bytes>
+   ```
+
+   - `{tenant}-my.sharepoint.com` — personal OneDrive site host (extracted from the SharePoint JWT `aud` claim)
+   - `{user_email_underscored}` — user email with `.` and `@` replaced by `_` (e.g. `alice_smith_contoso_com`)
+   - `@name.conflictBehavior=rename` — auto-renames on filename collision (appends `(1)`, etc.)
+   - Returns **201** with item metadata including `sharepointIds.listItemUniqueId`, `sharepointIds.siteId`, `webDavUrl`, `webUrl`
+
+2. **Send message** with `properties.files` JSON:
+   ```
+   POST /users/ME/conversations/{conversationId}/messages
+   ```
+   The message body includes `properties.files` as a JSON string containing an array of file descriptors.
+
+### `properties.files` schema
+
+Each entry in the array:
+
+```json
+{
+  "@type": "http://schema.skype.com/File",
+  "version": 2,
+  "id": "{listItemUniqueId}",
+  "itemid": "{listItemUniqueId}",
+  "fileName": "report.pdf",
+  "fileType": "pdf",
+  "title": "report.pdf",
+  "type": "pdf",
+  "state": "active",
+  "objectUrl": "https://{host}/personal/{user}/Documents/Microsoft%20Teams%20Chat%20Files/report.pdf",
+  "baseUrl": "https://{host}/personal/{user}/",
+  "permissionScope": "users",
+  "sharepointIds": {
+    "listItemUniqueId": "{listItemUniqueId}",
+    "siteId": "{siteId}"
+  },
+  "fileInfo": {
+    "itemId": null,
+    "fileUrl": "https://{host}/personal/{user}/Documents/Microsoft%20Teams%20Chat%20Files/report.pdf",
+    "siteUrl": "https://{host}/personal/{user}/",
+    "serverRelativeUrl": "/personal/{user}/Documents/Microsoft Teams Chat Files/report.pdf",
+    "shareUrl": null,
+    "shareId": null
+  },
+  "fileChicletState": {
+    "serviceName": "p2p",
+    "state": "active"
+  }
+}
+```
+
+### Authentication
+
+Uses the SharePoint Bearer token (audience: `*.sharepoint.com`), captured from the MSAL localStorage cache during authentication. This is the same token used for downloading file attachments.

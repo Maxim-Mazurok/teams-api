@@ -31,6 +31,9 @@ export async function captureTokensFromPage(
   region: string | undefined;
   bearerToken: string | undefined;
   substrateToken: string | undefined;
+  amsToken: string | undefined;
+  sharePointToken: string | undefined;
+  sharePointHost: string | undefined;
 }> {
   const cdpSession = (await page.context().newCDPSession(page)) as {
     send: (
@@ -158,10 +161,82 @@ export async function captureTokensFromPage(
     log("Substrate token also captured for people/chat search");
   }
 
+  // Read the AMS (IC3) token from the browser's MSAL cache in localStorage.
+  // This token has audience https://ic3.teams.office.com and is used for image uploads
+  // to the Async Media Service. It's acquired by MSAL during login but may not appear
+  // in network requests during a page reload (AMS requests only happen with images).
+  let amsToken: string | undefined;
+  let sharePointToken: string | undefined;
+  let sharePointHost: string | undefined;
+  try {
+    const msalTokens = await page.evaluate(() => {
+      let foundAmsToken: string | null = null;
+      let foundSharePointToken: string | null = null;
+      let foundSharePointHost: string | null = null;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.includes("accesstoken")) {
+          try {
+            const value = JSON.parse(localStorage.getItem(key) ?? "");
+            if (
+              value.target &&
+              value.target.includes("ic3.teams.office.com") &&
+              value.secret
+            ) {
+              foundAmsToken = value.secret as string;
+            }
+            if (
+              value.target &&
+              value.target.includes("sharepoint.com") &&
+              value.secret
+            ) {
+              foundSharePointToken = value.secret as string;
+              // Extract the SharePoint host from the MSAL target field.
+              // The target looks like "https://contoso-my.sharepoint.com/.default"
+              // or "contoso-my.sharepoint.com/AllSites.Write AllSites.Read".
+              // We also check the environment/realm fields from the MSAL cache key.
+              const targetString = value.target as string;
+              const hostMatch = targetString.match(
+                /([a-z0-9-]+\.sharepoint\.com)/i,
+              );
+              if (hostMatch) {
+                foundSharePointHost = hostMatch[1];
+              }
+            }
+          } catch {
+            // Skip malformed entries
+          }
+        }
+      }
+      return {
+        amsToken: foundAmsToken,
+        sharePointToken: foundSharePointToken,
+        sharePointHost: foundSharePointHost,
+      };
+    });
+    amsToken = msalTokens?.amsToken ?? undefined;
+    sharePointToken = msalTokens?.sharePointToken ?? undefined;
+    sharePointHost = msalTokens?.sharePointHost ?? undefined;
+    if (amsToken) {
+      log("AMS token captured from MSAL cache for image upload");
+    }
+    if (sharePointToken) {
+      log("SharePoint token captured from MSAL cache for file download");
+      if (sharePointHost) {
+        log(`SharePoint host: ${sharePointHost}`);
+      }
+    }
+  } catch {
+    // page.evaluate may fail if the page context is unavailable
+  }
+
   return {
     skypeToken,
     region: region ?? undefined,
     bearerToken: bearerToken ?? undefined,
     substrateToken: substrateToken ?? undefined,
+    amsToken: amsToken ?? undefined,
+    sharePointToken: sharePointToken ?? undefined,
+    sharePointHost: sharePointHost ?? undefined,
   };
 }

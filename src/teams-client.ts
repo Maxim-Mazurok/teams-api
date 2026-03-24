@@ -49,6 +49,9 @@ import type {
   ChatSearchResult,
   MessagesPage,
   TranscriptResult,
+  ImageAttachment,
+  FileAttachment,
+  MessageContentPart,
 } from "./types.js";
 import { SYSTEM_STREAM_TYPES } from "./types.js";
 import { isTextMessageType } from "./constants.js";
@@ -65,6 +68,15 @@ import { ApiAuthError, ApiRateLimitError } from "./api/common.js";
 import { fetchProfiles } from "./api/middle-tier.js";
 import { searchPeople, searchChats } from "./api/substrate.js";
 import { fetchTranscript } from "./api/transcripts.js";
+import {
+  fetchAmsImage,
+  fetchSharePointFile,
+  uploadAmsImage,
+  uploadSharePointFile,
+  buildAmsImageTag,
+  buildFilesPropertyJson,
+  type SharePointUploadResult,
+} from "./api/attachments.js";
 import { acquireTokenViaAutoLogin } from "./auth/auto-login.js";
 import { acquireTokenViaInteractiveLogin } from "./auth/interactive.js";
 import { acquireTokenViaDebugSession } from "./auth/debug-session.js";
@@ -98,6 +110,9 @@ export type {
   ChatSearchResult,
   TranscriptEntry,
   TranscriptResult,
+  ImageAttachment,
+  FileAttachment,
+  MessageContentPart,
 } from "./types.js";
 export { SYSTEM_STREAM_TYPES } from "./types.js";
 export { isTextMessageType } from "./constants.js";
@@ -113,6 +128,16 @@ export {
   extractMeetingTitle,
   isSuccessfulRecording,
 } from "./api/transcripts.js";
+export {
+  fetchAmsImage,
+  uploadAmsImage,
+  buildAmsImageTag,
+  parseInlineImages,
+  parseFileAttachments,
+  uploadSharePointFile,
+  buildFilesPropertyJson,
+} from "./api/attachments.js";
+export type { SharePointUploadResult } from "./api/attachments.js";
 export { saveToken, loadToken, clearToken } from "./token-store.js";
 export { actions } from "./actions/definitions.js";
 export { formatOutput } from "./actions/formatters.js";
@@ -140,6 +165,7 @@ export class TeamsClient {
   private token: TeamsToken;
   private autoLoginOptions: AutoLoginOptions | null = null;
   private cachedDisplayName: string | null = null;
+  private userEmail: string | null = null;
 
   private constructor(token: TeamsToken) {
     this.token = token;
@@ -164,9 +190,9 @@ export class TeamsClient {
       // Re-authenticate if the cached token is missing substrate or bearer
       // tokens — these are required for people/chat search and profile
       // resolution. Tokens captured before these were added will be stale.
-      if (!cachedToken.substrateToken || !cachedToken.bearerToken) {
+      if (!cachedToken.substrateToken || !cachedToken.bearerToken || !cachedToken.amsToken || !cachedToken.sharePointHost) {
         log(
-          "Cached token is missing substrate or bearer token, re-authenticating...",
+          "Cached token is missing substrate, bearer, AMS token, or SharePoint host, re-authenticating...",
         );
         clearToken(options.email);
         const freshToken = await acquireTokenViaAutoLogin(options);
@@ -175,6 +201,7 @@ export class TeamsClient {
 
         const client = new TeamsClient(freshToken);
         client.autoLoginOptions = options;
+        client.userEmail = options.email;
         return client;
       }
 
@@ -192,6 +219,7 @@ export class TeamsClient {
 
       const client = new TeamsClient(token);
       client.autoLoginOptions = options;
+      client.userEmail = options.email;
       return client;
     }
 
@@ -202,6 +230,7 @@ export class TeamsClient {
 
     const client = new TeamsClient(token);
     client.autoLoginOptions = options;
+    client.userEmail = options.email;
     return client;
   }
 
@@ -214,7 +243,9 @@ export class TeamsClient {
    */
   static async fromAutoLogin(options: AutoLoginOptions): Promise<TeamsClient> {
     const token = await acquireTokenViaAutoLogin(options);
-    return new TeamsClient(token);
+    const client = new TeamsClient(token);
+    client.userEmail = options.email;
+    return client;
   }
 
   /**
@@ -256,8 +287,11 @@ export class TeamsClient {
     region = DEFAULT_TEAMS_REGION,
     bearerToken?: string,
     substrateToken?: string,
+    amsToken?: string,
+    sharePointToken?: string,
+    sharePointHost?: string,
   ): TeamsClient {
-    return new TeamsClient({ skypeToken, region, bearerToken, substrateToken });
+    return new TeamsClient({ skypeToken, region, bearerToken, substrateToken, amsToken, sharePointToken, sharePointHost });
   }
 
   /**
@@ -272,6 +306,17 @@ export class TeamsClient {
   /** Get the underlying token (for persistence or debugging). */
   getToken(): TeamsToken {
     return { ...this.token };
+  }
+
+  /**
+   * Set the user's email address (needed for SharePoint file uploads).
+   *
+   * Automatically set when using `create()` or `fromAutoLogin()`.
+   * Call this manually when using `fromToken()`, `fromDebugSession()`,
+   * or `fromInteractiveLogin()` if file upload is needed.
+   */
+  setEmail(email: string): void {
+    this.userEmail = email;
   }
 
   /**
@@ -735,6 +780,7 @@ export class TeamsClient {
     conversationId: string,
     content: string,
     format: MessageFormat = "markdown",
+    amsReferences: string[] = [],
   ): Promise<SentMessage> {
     return this.withTokenRefresh(async () => {
       const displayName = await this.getCurrentUserDisplayName();
@@ -744,6 +790,7 @@ export class TeamsClient {
         content,
         displayName,
         format,
+        amsReferences,
       );
     });
   }
@@ -782,6 +829,171 @@ export class TeamsClient {
   ): Promise<DeletedMessage> {
     return this.withTokenRefresh(async () => {
       return deleteMessage(this.token, conversationId, messageId);
+    });
+  }
+
+  /**
+   * Download an image attachment from the AMS (Async Media Service).
+   *
+   * @param amsObjectId - The AMS object ID from an ImageAttachment
+   * @param fullSize - If true, download the full-size image; otherwise compressed (default: false)
+   * @returns Binary image data with content type and size
+   */
+  async downloadImage(
+    amsObjectId: string,
+    fullSize = false,
+  ): Promise<{ data: Buffer; contentType: string; size: number }> {
+    return this.withTokenRefresh(async () => {
+      const view = fullSize ? "imgpsh_fullsize_anim" : "imgo";
+      return fetchAmsImage(this.token, amsObjectId, view);
+    });
+  }
+
+  /**
+   * Download a file attachment from SharePoint.
+   *
+   * @param fileUrl - The direct SharePoint file URL from a FileAttachment
+   * @param itemId - The SharePoint item ID (unique GUID) from a FileAttachment
+   * @returns Binary file data with content type, size, and file name
+   */
+  async downloadFile(
+    fileUrl: string,
+    itemId: string,
+  ): Promise<{ data: Buffer; contentType: string; size: number; fileName: string }> {
+    return this.withTokenRefresh(async () => {
+      return fetchSharePointFile(this.token, fileUrl, itemId);
+    });
+  }
+
+  /**
+   * Send a message with inline images.
+   *
+   * Uploads each image to AMS, sets permissions for the conversation,
+   * and constructs the message HTML with embedded `<img>` tags.
+   *
+   * Content sections and images are interleaved in order. Use `contentParts`
+   * to specify the sequence of text and image content.
+   *
+   * @example
+   *   await client.sendMessageWithImages(conversationId, [
+   *     { type: "text", text: "Check out this screenshot:" },
+   *     { type: "image", data: imageBuffer, fileName: "screenshot.png", contentType: "image/png" },
+   *     { type: "text", text: "And another one:" },
+   *     { type: "image", data: image2Buffer, fileName: "screenshot2.png", contentType: "image/png" },
+   *   ]);
+   */
+  async sendMessageWithImages(
+    conversationId: string,
+    contentParts: MessageContentPart[],
+  ): Promise<SentMessage> {
+    return this.withTokenRefresh(async () => {
+      const amsReferences: string[] = [];
+      const htmlParts: string[] = [];
+
+      for (const part of contentParts) {
+        if (part.type === "text") {
+          htmlParts.push(`<p>${part.text}</p>`);
+        } else if (part.type === "image") {
+          const { amsObjectId } = await uploadAmsImage(
+            this.token,
+            part.data,
+            part.fileName,
+            conversationId,
+          );
+          amsReferences.push(amsObjectId);
+          htmlParts.push(
+            buildAmsImageTag(amsObjectId, part.width, part.height),
+          );
+        }
+      }
+
+      const content = `<div>${htmlParts.join("")}</div>`;
+      const displayName = await this.getCurrentUserDisplayName();
+      return postMessage(
+        this.token,
+        conversationId,
+        content,
+        displayName,
+        "html",
+        amsReferences,
+      );
+    });
+  }
+
+  /**
+   * Send a message with file attachments (uploaded to SharePoint).
+   *
+   * Uploads each file to the sender's OneDrive "Microsoft Teams Chat Files"
+   * folder, then sends a message referencing the uploaded files via
+   * `properties.files` JSON.
+   *
+   * Content sections, images, and files are handled together. Images are
+   * uploaded to AMS (inline), files to SharePoint (as attachments).
+   *
+   * Requires a SharePoint token (captured during authentication) and the
+   * user's email (set via `setEmail()` or automatically during `create()`).
+   *
+   * @example
+   *   await client.sendMessageWithFiles(conversationId, [
+   *     { type: "text", text: "Here's the document:" },
+   *     { type: "file", data: fileBuffer, fileName: "report.md" },
+   *   ]);
+   */
+  async sendMessageWithFiles(
+    conversationId: string,
+    contentParts: MessageContentPart[],
+  ): Promise<SentMessage> {
+    return this.withTokenRefresh(async () => {
+      if (!this.userEmail) {
+        throw new Error(
+          "User email is required for file upload but is not set. " +
+            "Call setEmail() on the client or use TeamsClient.create() which sets it automatically.",
+        );
+      }
+
+      const amsReferences: string[] = [];
+      const htmlParts: string[] = [];
+      const uploadResults: SharePointUploadResult[] = [];
+
+      for (const part of contentParts) {
+        if (part.type === "text") {
+          htmlParts.push(`<p>${part.text}</p>`);
+        } else if (part.type === "image") {
+          const { amsObjectId } = await uploadAmsImage(
+            this.token,
+            part.data,
+            part.fileName,
+            conversationId,
+          );
+          amsReferences.push(amsObjectId);
+          htmlParts.push(
+            buildAmsImageTag(amsObjectId, part.width, part.height),
+          );
+        } else if (part.type === "file") {
+          const result = await uploadSharePointFile(
+            this.token,
+            part.data,
+            part.fileName,
+            this.userEmail,
+          );
+          uploadResults.push(result);
+        }
+      }
+
+      const content = htmlParts.length > 0
+        ? `<div>${htmlParts.join("")}</div>`
+        : "";
+      const filesJson = buildFilesPropertyJson(uploadResults);
+      const displayName = await this.getCurrentUserDisplayName();
+      return postMessage(
+        this.token,
+        conversationId,
+        content,
+        displayName,
+        "html",
+        amsReferences,
+        filesJson,
+      );
     });
   }
 

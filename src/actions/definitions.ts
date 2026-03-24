@@ -20,6 +20,7 @@ import {
 } from "./message-actions.js";
 import { findPeopleAction, findChatsAction } from "./search-actions.js";
 import { getMembers, whoami, getTranscript } from "./utility-actions.js";
+import { downloadFileAction } from "./file-actions.js";
 
 // ── Registry ─────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ const actionRegistry = new Map<string, ActionDefinition>([
   ["get-members", getMembers],
   ["whoami", whoami],
   ["get-transcript", getTranscript],
+  ["download-file", downloadFileAction],
 ]);
 
 /** All registered actions, derived from the registry map. */

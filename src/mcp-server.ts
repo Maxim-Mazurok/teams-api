@@ -78,6 +78,9 @@ async function getClient(toolEmail?: string): Promise<TeamsClient> {
       envBearerToken,
       envSubstrateToken,
     );
+    if (email) {
+      clientInstance.setEmail(email);
+    }
   } else if (envAuto) {
     if (!email) {
       throw new NeedsEmailError();
@@ -94,6 +97,9 @@ async function getClient(toolEmail?: string): Promise<TeamsClient> {
       email,
       verbose: false,
     });
+    if (email) {
+      clientInstance.setEmail(email);
+    }
   } else {
     clientInstance = await TeamsClient.fromDebugSession({
       debugPort: envDebugPort,
@@ -115,6 +121,9 @@ function parameterToZod(parameter: ActionParameter): z.ZodTypeAny {
       break;
     case "boolean":
       schema = z.boolean();
+      break;
+    case "string[]":
+      schema = z.array(z.string());
       break;
   }
   schema = schema.describe(parameter.description);

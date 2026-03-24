@@ -20,6 +20,22 @@ export interface TeamsToken {
    * Used for people/chat/channel search. Optional — only available when captured during auth.
    */
   substrateToken?: string;
+  /**
+   * OAuth2 Bearer token for the AMS (Async Media Service) (ic3.teams.office.com audience).
+   * Used for image upload. Optional — only available when captured during auth.
+   */
+  amsToken?: string;
+  /**
+   * OAuth2 Bearer token for SharePoint (*.sharepoint.com audience).
+   * Used for downloading file attachments. Optional — only available when captured during auth.
+   */
+  sharePointToken?: string;
+  /**
+   * The SharePoint host for the user's OneDrive for Business.
+   * Example: `contoso-my.sharepoint.com`.
+   * Used for file upload. Captured from the MSAL token cache during auth.
+   */
+  sharePointHost?: string;
 }
 
 /** Options for automatic token acquisition via FIDO2 passkey. */
@@ -111,6 +127,51 @@ export interface Message {
   mentions: Mention[];
   /** ID of the quoted/replied-to message, or null. */
   quotedMessageId: string | null;
+  /** Inline images embedded in the message content (from AMS). */
+  images: ImageAttachment[];
+  /** File attachments (SharePoint-hosted documents, videos, etc.). */
+  files: FileAttachment[];
+}
+
+/**
+ * An inline image embedded in a message via the Async Media Service (AMS).
+ *
+ * Images are stored as `<img>` tags in the message HTML content. The AMS object
+ * can be fetched with `Authorization: skype_token <token>`. Multiple image views
+ * are available at different resolutions.
+ */
+export interface ImageAttachment {
+  /** AMS object ID (e.g. "0-eaua-d2-877b82634f4e978692f2243d445a6650"). */
+  amsObjectId: string;
+  /** URL to the compressed/optimized image view. */
+  url: string;
+  /** Full-size image URL (imgpsh_fullsize_anim view). */
+  fullSizeUrl: string;
+  /** Image width in pixels, or null if not specified. */
+  width: number | null;
+  /** Image height in pixels, or null if not specified. */
+  height: number | null;
+  /** Position of this image in the content HTML (character offset of the `<img>` tag). */
+  contentPosition: number;
+}
+
+/**
+ * A file attachment hosted on SharePoint.
+ *
+ * File attachments include documents, videos, and other non-image files shared
+ * through Teams. These are stored on SharePoint and referenced in `properties.files`.
+ */
+export interface FileAttachment {
+  /** SharePoint item ID. */
+  itemId: string;
+  /** Original file name (e.g. "report.pdf"). */
+  fileName: string;
+  /** File extension without dot (e.g. "pdf", "docx", "mov"). */
+  fileType: string;
+  /** Direct SharePoint file URL. */
+  fileUrl: string;
+  /** Shareable link URL (accessible to conversation members). */
+  shareUrl: string;
 }
 
 /** A reaction (emotion) on a message. */
@@ -171,6 +232,23 @@ export interface UserProfile {
 
 /** Format for sending messages. */
 export type MessageFormat = "text" | "markdown" | "html";
+
+/** A part of a message body when sending messages with inline images or file attachments. */
+export type MessageContentPart =
+  | { type: "text"; text: string }
+  | {
+      type: "image";
+      data: Buffer;
+      fileName: string;
+      contentType: string;
+      width?: number;
+      height?: number;
+    }
+  | {
+      type: "file";
+      data: Buffer;
+      fileName: string;
+    };
 
 /** Result of sending a message. */
 export interface SentMessage {

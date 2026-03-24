@@ -11,6 +11,7 @@ import { TeamsClient } from "../../src/teams-client.js";
 import * as chatService from "../../src/api/chat-service.js";
 import * as middleTier from "../../src/api/middle-tier.js";
 import * as substrate from "../../src/api/substrate.js";
+import * as attachments from "../../src/api/attachments.js";
 import { ApiAuthError } from "../../src/api/common.js";
 import * as tokenStore from "../../src/token-store.js";
 import * as autoLogin from "../../src/auth/auto-login.js";
@@ -53,12 +54,23 @@ vi.mock("../../src/api/substrate.js", async (importOriginal) => {
 });
 vi.mock("../../src/token-store.js");
 vi.mock("../../src/auth/auto-login.js");
+vi.mock("../../src/api/attachments.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/api/attachments.js")>();
+  return {
+    ...actual,
+    uploadSharePointFile: vi.fn(),
+    buildFilesPropertyJson: vi.fn(),
+    uploadAmsImage: vi.fn(),
+  };
+});
 
 const mockedApi = {
   ...vi.mocked(chatService),
   ...vi.mocked(middleTier),
   ...vi.mocked(substrate),
 };
+const mockedAttachments = vi.mocked(attachments);
 const mockedTokenStore = vi.mocked(tokenStore);
 const mockedAuth = {
   ...vi.mocked(autoLogin),
@@ -92,6 +104,8 @@ function makeMessage(overrides: Partial<Message> = {}): Message {
     followers: [],
     mentions: [],
     quotedMessageId: null,
+    images: [],
+    files: [],
     ...overrides,
   };
 }
@@ -298,15 +312,15 @@ describe("findOneOnOneConversation", () => {
 
     // getCurrentUserDisplayName calls fetchConversations + fetchMessagesPage
     mockedApi.fetchMessagesPage.mockResolvedValue(
-      makeMessagesPage([makeMessage({ senderDisplayName: "Maxim Mazurok" })]),
+      makeMessagesPage([makeMessage({ senderDisplayName: "Alice Smith" })]),
     );
 
     const client = TeamsClient.fromToken("token");
-    const result = await client.findOneOnOneConversation("Maxim");
+    const result = await client.findOneOnOneConversation("Alice");
 
     expect(result).not.toBeNull();
     expect(result!.conversationId).toBe("48:notes");
-    expect(result!.memberDisplayName).toContain("Maxim Mazurok");
+    expect(result!.memberDisplayName).toContain("Alice Smith");
   });
 
   it("should find 1:1 chat via Substrate search when token is available", async () => {
@@ -848,6 +862,7 @@ describe("sendMessage", () => {
       "Hello!",
       "Test User",
       "markdown",
+      [],
     );
   });
 
@@ -872,6 +887,7 @@ describe("sendMessage", () => {
       "<b>Bold</b>",
       "Test User",
       "html",
+      [],
     );
   });
 });
@@ -1241,13 +1257,13 @@ describe("getCurrentUserDisplayName", () => {
       makeConversation({ id: "48:notes" }),
     ]);
     mockedApi.fetchMessagesPage.mockResolvedValue(
-      makeMessagesPage([makeMessage({ senderDisplayName: "Maxim Mazurok" })]),
+      makeMessagesPage([makeMessage({ senderDisplayName: "Alice Smith" })]),
     );
 
     const client = TeamsClient.fromToken("token");
     const name = await client.getCurrentUserDisplayName();
 
-    expect(name).toBe("Maxim Mazurok");
+    expect(name).toBe("Alice Smith");
   });
 
   it("should cache the result", async () => {
@@ -1281,13 +1297,13 @@ describe("getCurrentUserDisplayName", () => {
   it("should fallback to userDetails JSON in user properties", async () => {
     mockedApi.fetchConversations.mockResolvedValue([]);
     mockedApi.fetchUserProperties.mockResolvedValue({
-      userDetails: JSON.stringify({ name: "Maxim Mazurok" }),
+      userDetails: JSON.stringify({ name: "Alice Smith" }),
     });
 
     const client = TeamsClient.fromToken("token");
     const name = await client.getCurrentUserDisplayName();
 
-    expect(name).toBe("Maxim Mazurok");
+    expect(name).toBe("Alice Smith");
   });
 
   it("should prefer displayname over userDetails", async () => {
@@ -1321,6 +1337,8 @@ describe("TeamsClient.create", () => {
       region: "apac",
       substrateToken: "substrate-token",
       bearerToken: "bearer-token",
+      amsToken: "ams-token",
+      sharePointHost: "company-my.sharepoint.com",
     };
     mockedTokenStore.loadToken.mockReturnValue(cachedToken);
 
@@ -1339,6 +1357,8 @@ describe("TeamsClient.create", () => {
       region: "apac",
       substrateToken: "substrate-token",
       bearerToken: "bearer-token",
+      amsToken: "ams-token",
+      sharePointHost: "company-my.sharepoint.com",
     };
     mockedTokenStore.loadToken.mockReturnValue(cachedToken);
 
@@ -1384,6 +1404,7 @@ describe("TeamsClient.create", () => {
       region: "apac",
       substrateToken: "substrate-token",
       bearerToken: "bearer-token",
+      amsToken: "ams-token",
     };
     mockedTokenStore.loadToken.mockReturnValue(incompleteToken);
     mockedAuth.acquireTokenViaAutoLogin.mockResolvedValue(freshToken);
@@ -1416,6 +1437,7 @@ describe("TeamsClient.create", () => {
       region: "apac",
       substrateToken: "substrate-token",
       bearerToken: "bearer-token",
+      amsToken: "ams-token",
     };
     mockedTokenStore.loadToken.mockReturnValue(incompleteToken);
     mockedAuth.acquireTokenViaAutoLogin.mockResolvedValue(freshToken);
@@ -1449,6 +1471,7 @@ describe("withTokenRefresh (automatic 401 retry)", () => {
       region: "apac",
       substrateToken: "substrate-token",
       bearerToken: "bearer-token",
+      amsToken: "ams-token",
     };
     const refreshedToken = { skypeToken: "new-token", region: "apac" };
     mockedTokenStore.loadToken.mockReturnValue(initialToken);
@@ -1486,6 +1509,8 @@ describe("withTokenRefresh (automatic 401 retry)", () => {
       region: "apac",
       substrateToken: "substrate-token",
       bearerToken: "bearer-token",
+      amsToken: "ams-token",
+      sharePointHost: "company-my.sharepoint.com",
     });
 
     const client = await TeamsClient.create({
@@ -1540,6 +1565,129 @@ describe("withTokenRefresh (automatic 401 retry)", () => {
 
     await expect(client.listConversations()).rejects.toThrow(
       "Authentication failed: 401",
+    );
+  });
+});
+
+describe("sendMessageWithFiles", () => {
+  it("should throw when email is not set", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes" }),
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
+    );
+
+    const client = TeamsClient.fromToken("token");
+    // Do NOT call setEmail
+
+    await expect(
+      client.sendMessageWithFiles("conv-id", [
+        { type: "file", data: Buffer.from("hello"), fileName: "test.md" },
+      ]),
+    ).rejects.toThrow("User email is required for file upload");
+  });
+
+  it("should upload files to SharePoint and send message with properties.files", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes" }),
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
+    );
+
+    const uploadResult: attachments.SharePointUploadResult = {
+      itemId: "sp-item-123",
+      siteId: "site-456",
+      fileName: "report.md",
+      fileType: "md",
+      fileUrl: "https://sp.com/report.md",
+      webDavUrl: "https://sp.com/dav/report.md",
+      siteBaseUrl: "https://company-my.sharepoint.com",
+      personalPath: "/personal/user_company_com",
+    };
+    mockedAttachments.uploadSharePointFile.mockResolvedValue(uploadResult);
+    mockedAttachments.buildFilesPropertyJson.mockReturnValue('[{"@type":"http://schema.skype.com/File"}]');
+
+    const expectedResult: SentMessage = {
+      messageId: "1773000000000",
+      arrivalTime: 1773000000000,
+    };
+    mockedApi.postMessage.mockResolvedValue(expectedResult);
+
+    const client = TeamsClient.fromToken("token");
+    client.setEmail("user@company.com");
+
+    const result = await client.sendMessageWithFiles("conv-id", [
+      { type: "text", text: "Here is the file:" },
+      { type: "file", data: Buffer.from("# Report"), fileName: "report.md" },
+    ]);
+
+    expect(result).toEqual(expectedResult);
+
+    // Verify SharePoint upload was called
+    expect(mockedAttachments.uploadSharePointFile).toHaveBeenCalledWith(
+      expect.objectContaining({ skypeToken: "token" }),
+      Buffer.from("# Report"),
+      "report.md",
+      "user@company.com",
+    );
+
+    // Verify buildFilesPropertyJson was called with upload results
+    expect(mockedAttachments.buildFilesPropertyJson).toHaveBeenCalledWith([uploadResult]);
+
+    // Verify postMessage was called with files JSON
+    expect(mockedApi.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ skypeToken: "token" }),
+      "conv-id",
+      "<div><p>Here is the file:</p></div>",
+      "Test User",
+      "html",
+      [],
+      '[{"@type":"http://schema.skype.com/File"}]',
+    );
+  });
+
+  it("should handle file-only messages with no text content", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes" }),
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
+    );
+
+    mockedAttachments.uploadSharePointFile.mockResolvedValue({
+      itemId: "item-1",
+      siteId: "site-1",
+      fileName: "data.csv",
+      fileType: "csv",
+      fileUrl: "https://sp.com/data.csv",
+      webDavUrl: "https://sp.com/dav/data.csv",
+      siteBaseUrl: "https://sp.com",
+      personalPath: "/personal/user",
+    });
+    mockedAttachments.buildFilesPropertyJson.mockReturnValue("[]");
+    mockedApi.postMessage.mockResolvedValue({
+      messageId: "msg-1",
+      arrivalTime: 1773000000000,
+    });
+
+    const client = TeamsClient.fromToken("token");
+    client.setEmail("user@company.com");
+
+    await client.sendMessageWithFiles("conv-id", [
+      { type: "file", data: Buffer.from("a,b,c"), fileName: "data.csv" },
+    ]);
+
+    // No text content: should send empty string
+    expect(mockedApi.postMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      "conv-id",
+      "",
+      "Test User",
+      "html",
+      [],
+      expect.any(String),
     );
   });
 });

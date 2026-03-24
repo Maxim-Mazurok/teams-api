@@ -19,6 +19,9 @@ interface StoredToken {
   region: string;
   bearerToken?: string;
   substrateToken?: string;
+  amsToken?: string;
+  sharePointToken?: string;
+  sharePointHost?: string;
   acquiredAt: number;
 }
 
@@ -28,6 +31,9 @@ export function saveToken(email: string, token: TeamsToken): void {
     region: token.region,
     bearerToken: token.bearerToken,
     substrateToken: token.substrateToken,
+    amsToken: token.amsToken,
+    sharePointToken: token.sharePointToken,
+    sharePointHost: token.sharePointHost,
     acquiredAt: Date.now(),
   };
   const encoded = Buffer.from(JSON.stringify(storedToken)).toString("base64");
@@ -76,6 +82,9 @@ export function loadToken(email: string): TeamsToken | null {
     region: storedToken.region,
     bearerToken: storedToken.bearerToken,
     substrateToken: storedToken.substrateToken,
+    amsToken: storedToken.amsToken,
+    sharePointToken: storedToken.sharePointToken,
+    sharePointHost: storedToken.sharePointHost,
   };
 }
 

@@ -31,6 +31,8 @@ function makeMessage(overrides: Partial<Message> & { id: string }): Message {
     followers: [],
     mentions: [],
     quotedMessageId: null,
+    images: [],
+    files: [],
     ...overrides,
   };
 }

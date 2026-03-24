@@ -14,7 +14,7 @@ export interface ActionParameter {
   /** Parameter name in camelCase (CLI flags auto-converted to kebab-case). */
   name: string;
   /** Parameter type. Determines CLI flag syntax and MCP Zod schema. */
-  type: "string" | "number" | "boolean";
+  type: "string" | "number" | "boolean" | "string[]";
   /** Description for CLI help, MCP tool description, and documentation. */
   description: string;
   /** Whether the parameter must be provided. */

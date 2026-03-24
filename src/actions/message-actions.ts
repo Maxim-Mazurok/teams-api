@@ -4,7 +4,9 @@
  * Actions: get-messages, send-message, edit-message, delete-message.
  */
 
-import type { Message, MessageFormat } from "../types.js";
+import { readFileSync } from "node:fs";
+import { basename, extname } from "node:path";
+import type { Message, MessageFormat, MessageContentPart } from "../types.js";
 import { isTextMessageType } from "../constants.js";
 import {
   type ActionDefinition,
@@ -16,6 +18,106 @@ import {
   conversationParameters,
   resolveConversationId,
 } from "./conversation-resolution.js";
+
+/** Map file extension to MIME content type. */
+function contentTypeFromExtension(filePath: string): string {
+  const extension = extname(filePath).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+  };
+  return mimeTypes[extension] ?? "image/png";
+}
+
+/**
+ * Build MessageContentPart[] from content text, image file paths, and file paths.
+ *
+ * If the content contains `[image]` placeholders, images are interleaved
+ * at those positions. Otherwise, the text comes first followed by all images.
+ * File attachments are always appended at the end.
+ */
+function buildContentParts(
+  content: string,
+  imagePaths: string[],
+  filePaths: string[] = [],
+): MessageContentPart[] {
+  const parts: MessageContentPart[] = [];
+
+  if (content.includes("[image]") && imagePaths.length > 0) {
+    const textSegments = content.split("[image]");
+    let imageIndex = 0;
+    for (let i = 0; i < textSegments.length; i++) {
+      const segment = textSegments[i].trim();
+      if (segment) {
+        parts.push({ type: "text", text: segment });
+      }
+      if (i < textSegments.length - 1 && imageIndex < imagePaths.length) {
+        const filePath = imagePaths[imageIndex];
+        parts.push({
+          type: "image",
+          data: readFileSync(filePath),
+          fileName: basename(filePath),
+          contentType: contentTypeFromExtension(filePath),
+        });
+        imageIndex++;
+      }
+    }
+    // Append remaining images not mapped to placeholders
+    for (; imageIndex < imagePaths.length; imageIndex++) {
+      const filePath = imagePaths[imageIndex];
+      parts.push({
+        type: "image",
+        data: readFileSync(filePath),
+        fileName: basename(filePath),
+        contentType: contentTypeFromExtension(filePath),
+      });
+    }
+  } else {
+    if (content) {
+      parts.push({ type: "text", text: content });
+    }
+    for (const filePath of imagePaths) {
+      parts.push({
+        type: "image",
+        data: readFileSync(filePath),
+        fileName: basename(filePath),
+        contentType: contentTypeFromExtension(filePath),
+      });
+    }
+  }
+
+  // Append file attachments
+  for (const filePath of filePaths) {
+    parts.push({
+      type: "file",
+      data: readFileSync(filePath),
+      fileName: basename(filePath),
+    });
+  }
+
+  return parts;
+}
+
+/** Build a concise attachment summary string for a message. */
+function formatAttachmentSummary(message: Message): string {
+  const parts: string[] = [];
+  if (message.images.length > 0) {
+    parts.push(
+      message.images.length === 1
+        ? "1 image"
+        : `${message.images.length} images`,
+    );
+  }
+  if (message.files.length > 0) {
+    const fileNames = message.files.map((file) => file.fileName);
+    parts.push(fileNames.join(", "));
+  }
+  return parts.length > 0 ? `[📎 ${parts.join("; ")}]` : "";
+}
 
 export const getMessages: ActionDefinition = {
   name: "get-messages",
@@ -103,6 +205,10 @@ export const getMessages: ActionDefinition = {
       if (message.followers.length > 0) {
         lines.push(`    [${message.followers.length} follower(s)]`);
       }
+      const attachmentSummary = formatAttachmentSummary(message);
+      if (attachmentSummary) {
+        lines.push(`    ${attachmentSummary}`);
+      }
     }
     return lines.join("\n");
   },
@@ -133,6 +239,10 @@ export const getMessages: ActionDefinition = {
 
       if (message.followers.length > 0) {
         lines.push(`*${message.followers.length} follower(s)*`, "");
+      }
+      const attachmentSummary = formatAttachmentSummary(message);
+      if (attachmentSummary) {
+        lines.push(attachmentSummary, "");
       }
     }
     return lines.join("\n");
@@ -166,6 +276,10 @@ export const getMessages: ActionDefinition = {
       if (message.followers.length > 0) {
         lines.push(`      👥 ${message.followers.length} follower(s)`);
       }
+      const attachmentSummary = formatAttachmentSummary(message);
+      if (attachmentSummary) {
+        lines.push(`      ${attachmentSummary}`);
+      }
     }
     return lines.join("\n");
   },
@@ -179,20 +293,42 @@ export const sendMessage: ActionDefinition = {
     "Identify the conversation by topic name (--chat), " +
     "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
     "At least one identifier is required. " +
-    "Content is interpreted as Markdown by default and converted to rich HTML.",
+    "Content is interpreted as Markdown by default and converted to rich HTML. " +
+    "To send images, provide file paths via --image. " +
+    "To send file attachments (documents, videos, etc.), provide file paths via --file. " +
+    "Use [image] placeholders in --content to interleave text and images " +
+    "(e.g. --content 'Before [image] after [image] done' --image a.png --image b.png). " +
+    "Without placeholders, text appears first followed by all images.",
   parameters: [
     ...conversationParameters,
     {
       name: "content",
       type: "string",
-      description: "Message content to send",
-      required: true,
+      description:
+        "Message content to send. " +
+        "Use [image] placeholders to position images within the text.",
+      required: false,
+    },
+    {
+      name: "image",
+      type: "string[]",
+      description: "Image file path(s) to attach inline (repeatable)",
+      required: false,
+    },
+    {
+      name: "file",
+      type: "string[]",
+      description:
+        "File path(s) to attach as SharePoint-hosted file attachments (repeatable). " +
+        "Supports any file type (documents, videos, archives, etc.).",
+      required: false,
     },
     {
       name: "messageFormat",
       type: "string",
       description:
-        'Content format: "markdown" (default, converted to HTML), "html" (raw HTML), or "text" (plain text)',
+        'Content format: "markdown" (default, converted to HTML), "html" (raw HTML), or "text" (plain text). ' +
+        "Ignored when images or files are provided (always uses HTML).",
       required: false,
       default: "markdown",
     },
@@ -202,7 +338,34 @@ export const sendMessage: ActionDefinition = {
       client,
       parameters,
     );
-    const content = parameters.content as string;
+    const content = (parameters.content as string | undefined) ?? "";
+    const imagePaths = (parameters.image as string[] | undefined) ?? [];
+    const filePaths = (parameters.file as string[] | undefined) ?? [];
+
+    if (!content && imagePaths.length === 0 && filePaths.length === 0) {
+      throw new Error(
+        "At least one of --content, --image, or --file must be provided",
+      );
+    }
+
+    if (filePaths.length > 0) {
+      const contentParts = buildContentParts(content, imagePaths, filePaths);
+      const result = await client.sendMessageWithFiles(
+        conversationId,
+        contentParts,
+      );
+      return { ...result, conversation: label };
+    }
+
+    if (imagePaths.length > 0) {
+      const contentParts = buildContentParts(content, imagePaths);
+      const result = await client.sendMessageWithImages(
+        conversationId,
+        contentParts,
+      );
+      return { ...result, conversation: label };
+    }
+
     const messageFormat =
       (parameters.messageFormat as MessageFormat | undefined) ?? "markdown";
     const result = await client.sendMessage(

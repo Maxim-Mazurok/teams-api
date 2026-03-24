@@ -152,3 +152,13 @@ Delete the temp script when done.
 
 - `api/chat-service.ts` throws on all non-OK responses (hard failures)
 - `api/middle-tier.ts` and `api/substrate.ts` return empty arrays `[]` on non-401 4xx errors — this is intentional graceful degradation for optional enrichment features (profile resolution, search). The caller always has a fallback path.
+
+## No company-specific references
+
+Keep the repo code and documentation free of real company names, tenant names, and personal names from the user's organization.
+
+- In **code comments and examples**, use generic placeholders: `contoso`, `alice_smith_contoso_com`, `{tenant}`, etc.
+- In **test fixtures**, use generic names (e.g. "Alice Smith", "Bob Johnson") — never real employee names.
+- In **docs** (`docs/`, `README.md`, `CONTRIBUTING.md`), use `{tenant}` or `contoso` for tenant-specific URLs (e.g. `{tenant}-my.sharepoint.com`).
+- **Authorship metadata** in `package.json`, `server.json`, and git history is fine — those are project ownership references, not example data.
+- When reverse-engineering APIs, sanitize any captured URLs or tokens before documenting them in `docs/findings.md`.

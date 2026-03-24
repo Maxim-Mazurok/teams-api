@@ -41,11 +41,14 @@ function createMockClient(
     getMessages: vi.fn(),
     getMessagesPage: vi.fn(),
     sendMessage: vi.fn(),
+    sendMessageWithImages: vi.fn(),
+    sendMessageWithFiles: vi.fn(),
     editMessage: vi.fn(),
     deleteMessage: vi.fn(),
     getMembers: vi.fn(),
     getCurrentUserDisplayName: vi.fn(),
     getToken: vi.fn(() => ({ skypeToken: "test-token", region: "apac" })),
+    setEmail: vi.fn(),
     ...overrides,
   } as unknown as TeamsClient;
 }
@@ -78,6 +81,8 @@ function makeMessage(overrides: Partial<Message> = {}): Message {
     followers: [],
     mentions: [],
     quotedMessageId: null,
+    images: [],
+    files: [],
     ...overrides,
   };
 }
@@ -105,8 +110,8 @@ beforeEach(() => {
 // ── Registry tests ───────────────────────────────────────────────────
 
 describe("action registry", () => {
-  it("should contain all 12 actions", () => {
-    expect(actions).toHaveLength(12);
+  it("should contain all 13 actions", () => {
+    expect(actions).toHaveLength(13);
   });
 
   it("should have unique names", () => {
@@ -126,7 +131,7 @@ describe("action registry", () => {
       for (const parameter of action.parameters) {
         expect(parameter.description.length).toBeGreaterThan(5);
         expect(parameter.name.length).toBeGreaterThan(0);
-        expect(["string", "number", "boolean"]).toContain(parameter.type);
+        expect(["string", "number", "boolean", "string[]"]).toContain(parameter.type);
       }
     }
   });
@@ -1239,7 +1244,7 @@ describe("whoami", () => {
 
   it("should return display name and region", async () => {
     const client = createMockClient({
-      getCurrentUserDisplayName: vi.fn().mockResolvedValue("Maxim Mazurok"),
+      getCurrentUserDisplayName: vi.fn().mockResolvedValue("Alice Smith"),
       getToken: vi.fn(() => ({
         skypeToken: "test-token",
         region: "apac",
@@ -1251,16 +1256,16 @@ describe("whoami", () => {
       region: string;
     };
 
-    expect(result.displayName).toBe("Maxim Mazurok");
+    expect(result.displayName).toBe("Alice Smith");
     expect(result.region).toBe("apac");
   });
 
   it("should format correctly", () => {
-    const result = { displayName: "Maxim Mazurok", region: "apac" };
+    const result = { displayName: "Alice Smith", region: "apac" };
 
     const output = action.formatResult(result);
 
-    expect(output).toBe("Maxim Mazurok (region: apac)");
+    expect(output).toBe("Alice Smith (region: apac)");
   });
 });
 
@@ -1312,7 +1317,7 @@ describe("conversation resolution (shared across actions)", () => {
 describe("formatOutput", () => {
   const action = getAction("whoami");
 
-  const sampleResult = { displayName: "Maxim Mazurok", region: "apac" };
+  const sampleResult = { displayName: "Alice Smith", region: "apac" };
 
   it("should return JSON for json format", () => {
     const output = formatOutput(action, sampleResult, "json");
@@ -1321,19 +1326,19 @@ describe("formatOutput", () => {
 
   it("should return text for text format", () => {
     const output = formatOutput(action, sampleResult, "text");
-    expect(output).toBe("Maxim Mazurok (region: apac)");
+    expect(output).toBe("Alice Smith (region: apac)");
   });
 
   it("should return markdown for md format", () => {
     const output = formatOutput(action, sampleResult, "md");
-    expect(output).toContain("## Maxim Mazurok");
+    expect(output).toContain("## Alice Smith");
     expect(output).toContain("**Region:** apac");
   });
 
   it("should return toon for toon format", () => {
     const output = formatOutput(action, sampleResult, "toon");
     expect(output).toContain("🙋");
-    expect(output).toContain("Maxim Mazurok");
+    expect(output).toContain("Alice Smith");
     expect(output).toContain("📍 region: apac");
   });
 
@@ -1622,11 +1627,11 @@ describe("whoami formatMarkdown", () => {
   const action = getAction("whoami");
 
   it("should format as markdown", () => {
-    const result = { displayName: "Maxim Mazurok", region: "apac" };
+    const result = { displayName: "Alice Smith", region: "apac" };
 
     const output = action.formatMarkdown(result);
 
-    expect(output).toContain("## Maxim Mazurok");
+    expect(output).toContain("## Alice Smith");
     expect(output).toContain("**Region:** apac");
   });
 });
@@ -1635,11 +1640,11 @@ describe("whoami formatToon", () => {
   const action = getAction("whoami");
 
   it("should format with emojis", () => {
-    const result = { displayName: "Maxim Mazurok", region: "apac" };
+    const result = { displayName: "Alice Smith", region: "apac" };
 
     const output = action.formatToon(result);
 
-    expect(output).toContain("🙋 Maxim Mazurok");
+    expect(output).toContain("🙋 Alice Smith");
     expect(output).toContain("📍 region: apac");
   });
 });
@@ -1965,6 +1970,7 @@ describe("action registry (parametrized)", () => {
     "get-members",
     "whoami",
     "get-transcript",
+    "download-file",
   ];
 
   it("should contain exactly the expected actions", () => {
@@ -1996,7 +2002,7 @@ describe("action registry (parametrized)", () => {
     it("should have well-formed parameter definitions", () => {
       for (const parameter of action.parameters) {
         expect(parameter.name.length).toBeGreaterThan(0);
-        expect(["string", "number", "boolean"]).toContain(parameter.type);
+        expect(["string", "number", "boolean", "string[]"]).toContain(parameter.type);
         expect(parameter.description.length).toBeGreaterThan(0);
         expect(typeof parameter.required).toBe("boolean");
       }

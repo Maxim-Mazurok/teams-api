@@ -83,12 +83,16 @@ async function createClient(flags: AuthFlags): Promise<TeamsClient> {
       console.error("Error: --region is required when using --token");
       process.exit(1);
     }
-    return TeamsClient.fromToken(
+    const client = TeamsClient.fromToken(
       flags.token,
       flags.region,
       flags.bearerToken,
       flags.substrateToken,
     );
+    if (flags.email) {
+      client.setEmail(flags.email);
+    }
+    return client;
   }
 
   if (flags.auto) {
@@ -111,7 +115,11 @@ async function createClient(flags: AuthFlags): Promise<TeamsClient> {
       email: flags.email,
       verbose: true,
     };
-    return TeamsClient.fromInteractiveLogin(interactiveLoginOptions);
+    const client = await TeamsClient.fromInteractiveLogin(interactiveLoginOptions);
+    if (flags.email) {
+      client.setEmail(flags.email);
+    }
+    return client;
   }
 
   const manualOptions: ManualTokenOptions = {
@@ -128,7 +136,7 @@ function camelToKebab(name: string): string {
 }
 
 function coerceParameter(
-  value: string | boolean | undefined,
+  value: string | string[] | boolean | undefined,
   type: ActionParameter["type"],
 ): unknown {
   if (value === undefined) return undefined;
@@ -142,6 +150,8 @@ function coerceParameter(
     }
     case "boolean":
       return value === true || value === "true";
+    case "string[]":
+      return Array.isArray(value) ? value : [value];
     default:
       return value;
   }
@@ -157,7 +167,12 @@ for (const action of actions) {
   for (const parameter of action.parameters) {
     const flag = camelToKebab(parameter.name);
 
-    if (parameter.type === "boolean") {
+    if (parameter.type === "string[]") {
+      command.option(
+        `--${flag} <value...>`,
+        parameter.description,
+      );
+    } else if (parameter.type === "boolean") {
       if (parameter.default === true) {
         // Default-true boolean: define --no-* to allow opting out.
         // Commander auto-sets the value to true when --no-* is absent.
@@ -188,7 +203,7 @@ for (const action of actions) {
     const actionParameters: Record<string, unknown> = {};
     for (const parameter of action.parameters) {
       actionParameters[parameter.name] = coerceParameter(
-        flags[parameter.name] as string | boolean | undefined,
+        flags[parameter.name] as string | string[] | boolean | undefined,
         parameter.type,
       );
     }

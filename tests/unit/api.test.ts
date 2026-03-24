@@ -461,6 +461,47 @@ describe("postMessage", () => {
       postMessage(testToken, "conv-id", "Hello!", "User"),
     ).rejects.toBeInstanceOf(ApiAuthError);
   });
+
+  it("should include files in properties when filesJson is provided", async () => {
+    mockFetchResponse({ OriginalArrivalTime: 1773000000000 });
+
+    const filesJson = JSON.stringify([
+      { "@type": "http://schema.skype.com/File", fileName: "report.pdf" },
+    ]);
+    await postMessage(
+      testToken,
+      "conv-id",
+      "Here is the file",
+      "Test User",
+      "html",
+      [],
+      filesJson,
+    );
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    const sentBody = JSON.parse(fetchCall[1].body as string) as Record<
+      string,
+      unknown
+    >;
+    const properties = sentBody.properties as Record<string, unknown>;
+    expect(properties.files).toBe(filesJson);
+  });
+
+  it("should not include files property when filesJson is omitted", async () => {
+    mockFetchResponse({ OriginalArrivalTime: 1773000000000 });
+
+    await postMessage(testToken, "conv-id", "Hello!", "Test User");
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    const sentBody = JSON.parse(fetchCall[1].body as string) as Record<
+      string,
+      unknown
+    >;
+    const properties = sentBody.properties as Record<string, unknown>;
+    expect(properties.files).toBeUndefined();
+  });
 });
 
 describe("editMessage", () => {
