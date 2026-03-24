@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.4.0...v0.5.0) (2026-03-24)
+
+
+### Features
+
+* add delete message functionality to API and client ([c46457a](https://github.com/Maxim-Mazurok/teams-api/commit/c46457ab256ed03395479386593dab8f8df55046))
+
 # [0.4.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.3.3...v0.4.0) (2026-03-24)
 
 
