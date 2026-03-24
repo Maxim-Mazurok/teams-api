@@ -1,3 +1,10 @@
+# [0.10.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.9.0...v0.10.0) (2026-03-24)
+
+
+### Features
+
+* add scheduling functionality for messages and enhance file download actions ([2aa2ad2](https://github.com/Maxim-Mazurok/teams-api/commit/2aa2ad28868525d86fec3a200f2ba5b986c81209))
+
 # [0.9.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.8.0...v0.9.0) (2026-03-24)
 
 
