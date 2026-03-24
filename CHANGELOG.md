@@ -1,3 +1,10 @@
+## [0.5.2](https://github.com/Maxim-Mazurok/teams-api/compare/v0.5.1...v0.5.2) (2026-03-24)
+
+
+### Bug Fixes
+
+* update messageId handling to use OriginalArrivalTime for consistency ([3d1681e](https://github.com/Maxim-Mazurok/teams-api/commit/3d1681ed053406fed354e3afa9cf34b1a91d1c63))
+
 ## [0.5.1](https://github.com/Maxim-Mazurok/teams-api/compare/v0.5.0...v0.5.1) (2026-03-24)
 
 
