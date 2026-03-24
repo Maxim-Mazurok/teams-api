@@ -1,67 +1,26 @@
 # AI Agent Instructions
 
-Instructions for AI agents working on this codebase. For human-readable architecture, setup, and development guidance, see [CONTRIBUTING.md](../CONTRIBUTING.md).
+For architecture, setup, testing, and code conventions, see [CONTRIBUTING.md](../CONTRIBUTING.md).
+For user-facing docs (installation, CLI, MCP setup), see [README.md](../README.md).
 
 ## Documentation boundaries
 
-- **README.md** is for **end users** — installation via npm, CLI usage with the `teams-api` binary, MCP server config via the `teams-api` npm package, programmatic API quick start. No dev setup, testing, or source-based commands.
-- **CONTRIBUTING.md** is for **contributors/developers** — cloning the repo, running from source (`npx -y tsx src/cli.ts`), architecture, testing, code style, implementation notes, MCP from-source config.
-- When adding new content, put it in the right file based on the audience. User-facing features go in README; dev tooling, internals, and build instructions go in CONTRIBUTING.
-- CLI examples in README use the installed binary name (`teams-api`), not `npx tsx src/cli.ts`. Source-based commands belong only in CONTRIBUTING.
-
-## Project context
-
-- **What**: AI-native Microsoft Teams integration — CLI, MCP server, and programmatic TypeScript API
-- **API source**: All Teams REST endpoints were reverse-engineered from the Teams web client (no public docs exist)
-- **Single source of truth**: `src/actions/definitions.ts` defines all actions consumed by the CLI, MCP server, and tests. `src/server-instructions.ts` contains the MCP server instructions and CLI guide content.
-- **Entry point**: `TeamsClient` in `src/teams-client.ts` — the only public-facing class
-
-## Code conventions
-
-- TypeScript strict mode, Prettier for formatting
-- Named exports only (no default exports)
-- ESM syntax in `.ts` files, `"type": "commonjs"` in `package.json`
-- Stateless API layer (`src/api/`) — all functions accept a token and return data
-- `TeamsClient` delegates to `api/` for HTTP and `auth/` for token acquisition
-
-## Commit messages
-
-- Use Conventional Commits.
-- Prefer `feat`, `fix`, `docs`, `chore`, `ci`, `refactor`, `test`, `style`, `build`, `perf`, and `revert`.
-- Use `feat` for minor releases, `fix` and the other maintenance types for patch releases, and `BREAKING CHANGE:` only for major releases.
-- Keep commit subjects in the form `<type>: <summary>`.
-
-## Releases and changelog
-
-- Releases are automated with `semantic-release` on pushes to `main`.
-- `CHANGELOG.md` is generated from commit history by the release workflow; do not maintain it manually for normal feature, fix, docs, or refactor changes.
-- When making changes that should appear in release notes, focus on using the correct Conventional Commit type so versioning and changelog generation stay accurate.
-- Only edit `CHANGELOG.md` directly when explicitly asked to repair release metadata or change the release tooling itself.
-
-## Build and test
-
-```bash
-npm install             # setup
-npm test                # unit tests (mocked fetch, no network)
-npm run type-check      # TypeScript checking
-npm run lint            # Prettier check
-npm run format          # auto-format
-```
-
-Integration tests need `TEAMS_TOKEN` + `TEAMS_REGION`. E2E tests need `TEAMS_EMAIL` (macOS + FIDO2 passkey).
+- **README.md** — end users: install via npm, CLI usage, MCP config, API quick start
+- **CONTRIBUTING.md** — developers: repo setup, architecture, testing, code style, releases
+- Put content in the right file based on audience
 
 ## Dual-token authentication
 
-Teams uses **two independent tokens** captured during a single CDP Fetch interception flow in `src/auth.ts`:
+Teams uses **two independent tokens** captured during a single CDP Fetch interception flow in `src/auth/token-capture.ts`:
 
 | Token        | Header                               | Audience                                             | Used for                                                                 |
 | ------------ | ------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------ |
 | Skype token  | `Authentication: skypetoken=<token>` | Chat Service (`{region}.ng.msg.teams.microsoft.com`) | Messages, threads, members, conversations                                |
 | Bearer token | `Authorization: Bearer <token>`      | `api.spaces.skype.com` (MSAL)                        | Middle-tier APIs on `teams.cloud.microsoft` (profiles, presence, search) |
 
-These tokens **cannot** be derived from each other. Both are captured in all three auth strategies (auto-login, interactive, debug session) and persisted together in the macOS Keychain via `src/token-store.ts`.
+These tokens **cannot** be derived from each other. Both are captured in all three auth strategies and persisted together in the macOS Keychain via `src/token-store.ts`.
 
-If you discover a new endpoint that requires a different token or audience, you must update the CDP Fetch interception in `src/auth.ts` to also capture it.
+If you discover a new endpoint that requires a different token or audience, update the CDP Fetch interception in `src/auth/token-capture.ts`.
 
 ## Known API surfaces
 
@@ -175,7 +134,7 @@ Delete the temp script when done.
 
 #### 7. Implement
 
-1. Add the API function to `src/api.ts` (stateless, token as parameter)
+1. Add the API function to the appropriate `src/api/*.ts` module (stateless, token as parameter)
 2. Wire it into the relevant `TeamsClient` method in `src/teams-client.ts`
 3. Add unit tests with mocked `fetch` in `tests/unit/`
 4. Document the endpoint in `docs/findings.md`
@@ -188,3 +147,8 @@ Delete the temp script when done.
 - **MSAL token audiences**: Teams acquires tokens for multiple audiences (`api.spaces.skype.com`, `chatsvcagg.teams.microsoft.com`, etc.). The `authsvc/v1.0/authz` endpoint exchanges the Bearer token for a skype token — they're chained but neither reconstructs the other.
 - **MRI prefixes**: People use `8:orgid:{uuid}`, bots use `28:{uuid}`.
 - **Request body format varies**: Some endpoints accept raw JSON arrays (e.g. `fetchShortProfile`), others expect wrapped objects. Always check the actual body in network captures.
+
+## Error handling patterns
+
+- `api/chat-service.ts` throws on all non-OK responses (hard failures)
+- `api/middle-tier.ts` and `api/substrate.ts` return empty arrays `[]` on non-401 4xx errors — this is intentional graceful degradation for optional enrichment features (profile resolution, search). The caller always has a fallback path.

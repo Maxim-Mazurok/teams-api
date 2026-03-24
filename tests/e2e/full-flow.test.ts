@@ -67,4 +67,85 @@ describe.skipIf(!shouldRun)("Full E2E flow", { timeout: 120_000 }, () => {
     expect(ourMessage).toBeDefined();
     console.log("[e2e] Test 2 passed");
   });
+
+  it("should send, edit, and delete a message lifecycle", async () => {
+    if (!email) throw new Error("TEAMS_EMAIL is required");
+
+    console.log("[e2e] Starting auto-login for lifecycle test...");
+    const client = await TeamsClient.fromAutoLogin({ email, verbose: true });
+    const displayName = await client.getCurrentUserDisplayName();
+
+    const selfChat = await client.findOneOnOneConversation(displayName);
+    expect(selfChat).not.toBeNull();
+
+    // Send
+    const uniqueContent = `E2E lifecycle test ${Date.now()}`;
+    const sentResult = await client.sendMessage(
+      selfChat!.conversationId,
+      uniqueContent,
+    );
+    expect(typeof sentResult.messageId).toBe("string");
+    console.log(`[e2e] Sent message: ${sentResult.messageId}`);
+
+    // Edit
+    const editedContent = `${uniqueContent} — edited`;
+    const editResult = await client.editMessage(
+      selfChat!.conversationId,
+      sentResult.messageId,
+      editedContent,
+    );
+    expect(typeof editResult.editTime).toBe("string");
+    console.log(`[e2e] Edited message at ${editResult.editTime}`);
+
+    // Delete (cleanup)
+    const deleteResult = await client.deleteMessage(
+      selfChat!.conversationId,
+      sentResult.messageId,
+    );
+    expect(typeof deleteResult.messageId).toBe("string");
+    console.log("[e2e] Deleted message, lifecycle test passed");
+  });
+
+  it("should find people and chats via search", async () => {
+    if (!email) throw new Error("TEAMS_EMAIL is required");
+
+    console.log("[e2e] Starting auto-login for search test...");
+    const client = await TeamsClient.fromAutoLogin({ email, verbose: true });
+    const displayName = await client.getCurrentUserDisplayName();
+
+    // Search for the current user — guaranteed to exist
+    const people = await client.findPeople(displayName, 5);
+    console.log(
+      `[e2e] Found ${people.length} people matching "${displayName}"`,
+    );
+    expect(people.length).toBeGreaterThan(0);
+    expect(typeof people[0].displayName).toBe("string");
+    expect(typeof people[0].email).toBe("string");
+
+    // Search for chats — use a broad query
+    const chats = await client.findChats(displayName, 5);
+    console.log(`[e2e] Found ${chats.length} chats`);
+    expect(Array.isArray(chats)).toBe(true);
+    console.log("[e2e] Search test passed");
+  });
+
+  it("should get members of a conversation", async () => {
+    if (!email) throw new Error("TEAMS_EMAIL is required");
+
+    console.log("[e2e] Starting auto-login for members test...");
+    const client = await TeamsClient.fromAutoLogin({ email, verbose: true });
+
+    const conversations = await client.listConversations({ pageSize: 5 });
+    expect(conversations.length).toBeGreaterThan(0);
+
+    const members = await client.getMembers(conversations[0].id);
+    console.log(`[e2e] Got ${members.length} members from first conversation`);
+    expect(members.length).toBeGreaterThan(0);
+
+    for (const member of members) {
+      expect(typeof member.id).toBe("string");
+      expect(typeof member.memberType).toBe("string");
+    }
+    console.log("[e2e] Members test passed");
+  });
 });

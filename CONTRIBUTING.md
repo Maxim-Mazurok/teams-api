@@ -37,35 +37,61 @@ npx -y tsx src/cli.ts list-conversations --login --region emea
 ## Architecture
 
 ```
-src/types.ts          All public interfaces and types
-src/api.ts            Low-level REST calls to Teams Chat Service
-src/auth.ts           Token acquisition (Playwright auto-login + CDP debug session)
-src/teams-client.ts   Public API class (TeamsClient) — the main entry point
-src/cli.ts            Commander-based CLI
-src/mcp-server.ts     MCP server with stdio transport
+src/
+  types.ts              All public interfaces and types
+  constants.ts          Message type constants and type guards
+  html-utils.ts         HTML entity decoding utilities
+  region.ts             Region resolution and validation
+  teams-client.ts       Public API class (TeamsClient) — the main entry point
+  token-store.ts        macOS Keychain token persistence
+  cli.ts                Commander-based CLI (driven by actions/definitions)
+  mcp-server.ts         MCP server with stdio transport
+  server-instructions.ts  MCP server instructions and CLI guide content
+  api/
+    common.ts           Shared HTTP utilities and headers
+    chat-service.ts     Chat Service REST calls (conversations, messages, members)
+    middle-tier.ts      Middle-tier profile and presence lookups
+    substrate.ts        Substrate search API (people, chats)
+    transcripts.ts      VTT transcript fetching and parsing
+  auth/
+    auto-login.ts       Auto-login via system Chrome + FIDO2 passkey
+    debug-session.ts    CDP debug session token capture
+    interactive.ts      Interactive browser login flow
+    page-diagnostics.ts   Page state analysis and error detection
+    token-capture.ts      CDP Fetch interception for token extraction
+  actions/
+    definitions.ts      Action registry — imports and assembles all actions
+    conversation-actions.ts  List, find, and 1:1 conversation actions
+    message-actions.ts       Get, send, edit, delete message actions
+    search-actions.ts        People and chat search actions
+    utility-actions.ts       Whoami, get-members, get-transcript actions
+    formatters.ts       Output formatting utilities and type definitions
+    conversation-resolution.ts  Conversation ID resolution logic
 ```
 
 ### Data flow
 
 ```
 TeamsClient (public API)
-  ├── auth.ts       — acquires a TeamsToken via one of two strategies
-  └── api.ts        — stateless HTTP calls using TeamsToken
-        └── Teams Chat Service REST API
-              https://{region}.ng.msg.teams.microsoft.com/v1
+  ├── auth/*          — acquires a TeamsToken via one of three strategies
+  └── api/*           — stateless HTTP calls using TeamsToken
+        ├── chat-service.ts  — conversations, messages, members
+        ├── middle-tier.ts   — profiles, presence
+        ├── substrate.ts     — people/chat search
+        └── transcripts.ts   — meeting transcript VTT
 ```
 
-`TeamsClient` is the only public-facing class. It accepts a `TeamsToken` (from any auth strategy) and delegates to the stateless `api.ts` functions. The CLI and MCP server both consume `TeamsClient`.
+TeamsClient is the only public-facing class. It accepts a TeamsToken (from any auth strategy) and delegates to the stateless `api/*` functions. The CLI and MCP server both consume TeamsClient via the unified action definitions in `actions/definitions.ts`.
 
 ### Authentication strategies
 
-1. **Interactive login** (`acquireTokenViaInteractiveLogin`): Opens a visible Chromium browser window (Playwright's bundled browser) and navigates to Teams. The user completes the login manually using any method their organization supports (password, MFA, passkey, etc.). Once Teams loads, the skype token is captured via CDP Fetch interception during a page reload. Works on all platforms without requiring system Chrome or FIDO2 passkeys.
+1. **Interactive login** (`acquireTokenViaInteractiveLogin` in `src/auth/interactive.ts`): Opens a visible Chromium browser window (Playwright's bundled browser) and navigates to Teams. The user completes the login manually using any method their organization supports (password, MFA, passkey, etc.). Once Teams loads, the skype token is captured via CDP Fetch interception during a page reload. Works on all platforms without requiring system Chrome or FIDO2 passkeys.
 
-2. **Auto-login** (`acquireTokenViaAutoLogin`): Launches system Chrome via Playwright persistent context, navigates to the Teams web app, fills the email on the Microsoft Entra ID login page, waits for FIDO2 passkey authentication to complete, then intercepts the `x-skypetoken` header via CDP Fetch interception during a page reload. macOS only.
+2. **Auto-login** (`acquireTokenViaAutoLogin` in `src/auth/auto-login.ts`): Launches system Chrome via Playwright persistent context, navigates to the Teams web app, fills the email on the Microsoft Entra ID login page, waits for FIDO2 passkey authentication to complete, then intercepts the `x-skypetoken` header via CDP Fetch interception during a page reload. macOS only.
 
-3. **Debug session** (`acquireTokenViaDebugSession`): Connects to a running Chrome instance via puppeteer-core CDP, finds the Teams tab, enables Fetch interception, triggers a page reload, and captures the `x-skypetoken` header.
+3. **Debug session** (`acquireTokenViaDebugSession` in `src/auth/debug-session.ts`): Connects to a running Chrome instance via puppeteer-core CDP, finds the Teams tab, enables Fetch interception, triggers a page reload, and captures the `x-skypetoken` header.
 
-All three strategies use the same CDP Fetch interception pattern to extract the token from live network requests.
+All three strategies use the same CDP Fetch interception pattern in `src/auth/token-capture.ts` to extract the token from live network requests.
 
 ### Token lifecycle
 
@@ -163,8 +189,8 @@ The Teams members API returns empty `friendlyName` / `displayName` for 1:1 chat 
 
 ### Reactions parsing
 
-The `properties.emotions` field in message payloads has inconsistent formatting — sometimes it's a JSON string, sometimes a raw array. The `parseReactions` helper in `api.ts` handles both formats and fails gracefully on malformed data.
+The `properties.emotions` field in message payloads has inconsistent formatting — sometimes it's a JSON string, sometimes a raw array. The `parseReactions` helper in `api/chat-service.ts` handles both formats and fails gracefully on malformed data.
 
 ### System stream filtering
 
-Teams returns several system streams alongside real conversations (annotations, notifications, mentions, threads, notes). `listConversations` filters these out by default. The full list of filtered types is in the `SYSTEM_STREAMS` constant in `teams-client.ts`.
+Teams returns several system streams alongside real conversations (annotations, notifications, mentions, threads, notes). `listConversations` filters these out by default. The full list of filtered types is in the `SYSTEM_STREAM_TYPES` constant in `types.ts`.
