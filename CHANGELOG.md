@@ -1,3 +1,10 @@
+## [0.5.1](https://github.com/Maxim-Mazurok/teams-api/compare/v0.5.0...v0.5.1) (2026-03-24)
+
+
+### Bug Fixes
+
+* throw ApiAuthError for missing bearer token in fetchProfiles and fallback scenarios ([11692dd](https://github.com/Maxim-Mazurok/teams-api/commit/11692dd7ebe69513795cbf5520eefab37df4040e))
+
 # [0.5.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.4.0...v0.5.0) (2026-03-24)
 
 
