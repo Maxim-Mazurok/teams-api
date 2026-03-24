@@ -1,3 +1,10 @@
+## [0.10.2](https://github.com/Maxim-Mazurok/teams-api/compare/v0.10.1...v0.10.2) (2026-03-24)
+
+
+### Bug Fixes
+
+* simplify conversation identity resolution ([71ca82e](https://github.com/Maxim-Mazurok/teams-api/commit/71ca82eacb5ff721e11b8738940a49dea413b942))
+
 ## [0.10.1](https://github.com/Maxim-Mazurok/teams-api/compare/v0.10.0...v0.10.1) (2026-03-24)
 
 # [0.10.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.9.0...v0.10.0) (2026-03-24)
