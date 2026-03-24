@@ -6,7 +6,12 @@
 
 import { readFileSync } from "node:fs";
 import { basename, extname } from "node:path";
-import type { Message, MessageFormat, MessageContentPart, ScheduledMessage } from "../types.js";
+import type {
+  Message,
+  MessageFormat,
+  MessageContentPart,
+  ScheduledMessage,
+} from "../types.js";
 import { isTextMessageType } from "../constants.js";
 import {
   type ActionDefinition,
@@ -358,10 +363,7 @@ export const sendMessage: ActionDefinition = {
       );
     }
 
-    if (
-      scheduleAtRaw &&
-      (imagePaths.length > 0 || filePaths.length > 0)
-    ) {
+    if (scheduleAtRaw && (imagePaths.length > 0 || filePaths.length > 0)) {
       throw new Error(
         "Scheduled messages cannot include --image or --file attachments",
       );
@@ -375,9 +377,7 @@ export const sendMessage: ActionDefinition = {
         );
       }
       if (scheduleAt.getTime() <= Date.now()) {
-        throw new Error(
-          "Scheduled time must be in the future",
-        );
+        throw new Error("Scheduled time must be in the future");
       }
       const messageFormat =
         (parameters.messageFormat as MessageFormat | undefined) ?? "markdown";

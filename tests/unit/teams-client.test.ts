@@ -912,7 +912,11 @@ describe("scheduleMessage", () => {
 
     const client = TeamsClient.fromToken("token");
     const scheduleAt = new Date("2025-07-20T14:30:00.000Z");
-    const result = await client.scheduleMessage("conv-id", "Hello later!", scheduleAt);
+    const result = await client.scheduleMessage(
+      "conv-id",
+      "Hello later!",
+      scheduleAt,
+    );
 
     expect(result).toEqual(expectedResult);
     expect(mockedApi.postScheduledMessage).toHaveBeenCalledWith(

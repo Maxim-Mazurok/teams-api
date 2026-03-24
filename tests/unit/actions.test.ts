@@ -936,7 +936,9 @@ describe("send-message", () => {
   });
 
   it("should schedule message when scheduleAt is provided", async () => {
-    const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
+    const futureDate = new Date(
+      Date.now() + 24 * 60 * 60 * 1_000,
+    ).toISOString();
     const conversation = makeConversation({
       id: "19:chat@thread.v2",
       topic: "Design Review",

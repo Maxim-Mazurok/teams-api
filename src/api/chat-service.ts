@@ -395,7 +395,10 @@ export async function postScheduledMessage(
   const url = `${chatServiceBase(token.region)}/users/ME/drafts`;
 
   const clientMessageId = String(Date.now());
-  const { resolvedContent, messagetype } = resolveMessageContent(content, format);
+  const { resolvedContent, messagetype } = resolveMessageContent(
+    content,
+    format,
+  );
   const now = new Date().toISOString();
 
   const body = {

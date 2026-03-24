@@ -704,15 +704,11 @@ describe("postScheduledMessage", () => {
     const callBody = JSON.parse(
       (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
     );
-    expect(callBody.draftDetails.sendAt).toBe(
-      String(scheduleAt.getTime()),
-    );
+    expect(callBody.draftDetails.sendAt).toBe(String(scheduleAt.getTime()));
     expect(callBody.innerThreadId).toBe("19:conv-id@thread.v2");
     expect(callBody.message.content).toContain("Scheduled hello");
     expect(callBody.message.imdisplayname).toBe("Alice Smith");
-    expect(callBody.message.draftDetails.sendAt).toBe(
-      scheduleAt.toISOString(),
-    );
+    expect(callBody.message.draftDetails.sendAt).toBe(scheduleAt.toISOString());
     expect(callBody.message.threadtype).toBe("streamofdrafts");
 
     expect(result.messageId).toBe("1753021800000");
