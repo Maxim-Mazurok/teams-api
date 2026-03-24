@@ -13,7 +13,7 @@ Instructions for AI agents working on this codebase. For human-readable architec
 
 - **What**: AI-native Microsoft Teams integration — CLI, MCP server, and programmatic TypeScript API
 - **API source**: All Teams REST endpoints were reverse-engineered from the Teams web client (no public docs exist)
-- **Single source of truth**: `src/actions.ts` defines all actions consumed by the CLI, MCP server, and tests
+- **Single source of truth**: `src/actions/definitions.ts` defines all actions consumed by the CLI, MCP server, and tests. `src/server-instructions.ts` contains the MCP server instructions and CLI guide content.
 - **Entry point**: `TeamsClient` in `src/teams-client.ts` — the only public-facing class
 
 ## Code conventions
@@ -21,8 +21,8 @@ Instructions for AI agents working on this codebase. For human-readable architec
 - TypeScript strict mode, Prettier for formatting
 - Named exports only (no default exports)
 - ESM syntax in `.ts` files, `"type": "commonjs"` in `package.json`
-- Stateless API layer (`src/api.ts`) — all functions accept a token and return data
-- `TeamsClient` delegates to `api.ts` for HTTP and `auth.ts` for token acquisition
+- Stateless API layer (`src/api/`) — all functions accept a token and return data
+- `TeamsClient` delegates to `api/` for HTTP and `auth/` for token acquisition
 
 ## Commit messages
 

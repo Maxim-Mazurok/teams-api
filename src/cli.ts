@@ -6,8 +6,8 @@
  * All commands, parameters, descriptions, and execution logic come
  * from `src/actions.ts` — the single source of truth.
  *
- * Special commands (auth, logout) are defined here directly since
- * they handle authentication rather than Teams data operations.
+ * Special commands (auth, logout, guide) are defined here directly since
+ * they handle authentication or documentation rather than Teams data operations.
  */
 
 import { writeFileSync } from "node:fs";
@@ -17,6 +17,7 @@ import { TeamsClient } from "./teams-client.js";
 import { actions } from "./actions/definitions.js";
 import { formatOutput } from "./actions/formatters.js";
 import type { ActionParameter, OutputFormat } from "./actions/formatters.js";
+import { serverInstructions } from "./server-instructions.js";
 import type {
   AutoLoginOptions,
   InteractiveLoginOptions,
@@ -264,6 +265,17 @@ program
   .action((flags: { email: string }) => {
     TeamsClient.clearCachedToken(flags.email);
     console.log(`Cached token for ${flags.email} cleared.`);
+  });
+
+// ── guide command (special — prints usage guidance) ───────────────────
+
+program
+  .command("guide")
+  .description(
+    "Print workflow guidance, tips, and important notes for using the Teams API tools",
+  )
+  .action(() => {
+    console.log(serverInstructions);
   });
 
 program.parseAsync().catch((error: Error) => {

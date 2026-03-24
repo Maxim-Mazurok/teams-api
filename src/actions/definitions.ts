@@ -113,7 +113,8 @@ const findConversation: ActionDefinition = {
   description:
     "Find a conversation by topic name (case-insensitive partial match). " +
     "When Substrate search is available, also matches by member names. " +
-    "For 1:1 chats (which have no topic), use find-one-on-one instead.",
+    "For 1:1 chats (which have no topic), use find-one-on-one instead. " +
+    "Use the returned conversation ID for subsequent operations like get-messages or send-message.",
   parameters: [
     {
       name: "query",
@@ -213,7 +214,8 @@ const getMessages: ActionDefinition = {
     "Get messages from a conversation. " +
     "Identify the conversation by topic name (--chat), " +
     "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
-    "At least one identifier is required.",
+    "At least one identifier is required. " +
+    "Messages include reactions, mentions, followers (thread subscribers), and quoted message references.",
   parameters: [
     ...conversationParameters,
     {
@@ -602,7 +604,8 @@ const getMembers: ActionDefinition = {
     "Identify the conversation by topic name (--chat), " +
     "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
     "At least one identifier is required. " +
-    "Display names are resolved via the Teams profile API when available, with message history as fallback.",
+    "Display names are resolved via the Teams profile API when available, with message history as fallback. " +
+    "Note: 1:1 chat members may have empty display names if profile resolution is unavailable.",
   parameters: [...conversationParameters],
   execute: async (client, parameters) => {
     const { conversationId } = await resolveConversationId(client, parameters);

@@ -25,19 +25,6 @@ Designed for autonomous AI agents that need to interact with Teams: read message
 
 The quickest way to get started is to click one of the install badges above, or follow the instructions for your editor below.
 
-#### Install as an agent skill
-
-The [SKILL.md](SKILL.md) teaches AI agents _how_ to use the MCP tools (when to call which tool, typical workflows, parameter guidance). Install it with the [`skills` CLI](https://github.com/vercel-labs/skills):
-
-```bash
-npx -y skills add Maxim-Mazurok/teams-api
-```
-
-This copies the skill into your agent's skills directory (Claude Code, Cursor, GitHub Copilot, Codex, and [many more](https://www.npmjs.com/package/skills#supported-agents)).
-
-> [!NOTE]
-> The skill is optional — the MCP tools work without it. The skill just gives agents extra context about when and how to use each tool.
-
 #### Editor-specific instructions
 
 <details>
@@ -393,7 +380,7 @@ All MCP tools accept an optional `format` parameter (`json`, `text`, `md`, or `t
 | `teams_get_transcript`     | Get a meeting transcript from a recorded conversation |
 | `teams_whoami`             | Get the authenticated user's display name             |
 
-See [SKILL.md](SKILL.md) for detailed tool descriptions and typical agent workflows.
+Workflow guidance, tips, and important notes are served automatically via the MCP server's `instructions` field — no separate skill file needed. For the same content on the CLI, run `teams-api guide`.
 
 ## API regions
 

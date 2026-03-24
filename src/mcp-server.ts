@@ -38,6 +38,7 @@ import { TeamsClient } from "./teams-client.js";
 import { actions } from "./actions/definitions.js";
 import { formatOutput } from "./actions/formatters.js";
 import type { ActionParameter, OutputFormat } from "./actions/formatters.js";
+import { serverInstructions } from "./server-instructions.js";
 
 let clientInstance: TeamsClient | null = null;
 
@@ -123,10 +124,15 @@ function parameterToZod(parameter: ActionParameter): z.ZodTypeAny {
   return schema;
 }
 
-const server = new McpServer({
-  name: "teams-api",
-  version: "0.1.0",
-});
+const server = new McpServer(
+  {
+    name: "teams-api",
+    version: "0.1.0",
+  },
+  {
+    instructions: serverInstructions,
+  },
+);
 
 // ── Register all actions as MCP tools ─────────────────────────────────
 
