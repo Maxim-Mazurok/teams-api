@@ -486,11 +486,52 @@ describe("get-messages", () => {
   it("should error when chat name not found", async () => {
     const client = createMockClient({
       findConversation: vi.fn().mockResolvedValue(null),
+      findOneOnOneConversation: vi.fn().mockResolvedValue(null),
     });
 
     await expect(
       action.execute(client, { chat: "Nonexistent" }),
     ).rejects.toThrow('No conversation matching "Nonexistent" found.');
+  });
+
+  it("should fall back to 1:1 resolution when chat topic not found", async () => {
+    const searchResult: OneOnOneSearchResult = {
+      conversationId: "19:one-on-one@unq.gbl.spaces",
+      memberDisplayName: "Witold Drozdzowski",
+    };
+    const messages = [makeMessage()];
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(null),
+      findOneOnOneConversation: vi.fn().mockResolvedValue(searchResult),
+      getMessages: vi.fn().mockResolvedValue(messages),
+    });
+
+    await action.execute(client, { chat: "Witold" });
+
+    expect(client.findConversation).toHaveBeenCalledWith("Witold");
+    expect(client.findOneOnOneConversation).toHaveBeenCalledWith("Witold");
+    expect(client.getMessages).toHaveBeenCalledWith(
+      "19:one-on-one@unq.gbl.spaces",
+      expect.objectContaining({ maxPages: 100 }),
+    );
+  });
+
+  it("should use chat value directly when it looks like a conversation ID", async () => {
+    const conversationId =
+      "19:1f04fe0e-a51a-4b6e-bfb4-749201b73344_478aef7c-7ac6-41cb-8ba9-46acd0b4a8f3@unq.gbl.spaces";
+    const messages = [makeMessage()];
+    const client = createMockClient({
+      getMessages: vi.fn().mockResolvedValue(messages),
+    });
+
+    await action.execute(client, { chat: conversationId });
+
+    expect(client.findConversation).not.toHaveBeenCalled();
+    expect(client.findOneOnOneConversation).not.toHaveBeenCalled();
+    expect(client.getMessages).toHaveBeenCalledWith(
+      conversationId,
+      expect.objectContaining({ maxPages: 100 }),
+    );
   });
 
   it("should error when person name not found", async () => {

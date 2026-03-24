@@ -163,11 +163,26 @@ async function resolveConversationId(
   }
 
   if (chat) {
-    const conversation = await client.findConversation(chat);
-    if (!conversation) {
-      throw new Error(`No conversation matching "${chat}" found.`);
+    // If the value looks like a raw conversation ID, use it directly
+    if (chat.startsWith("19:") && chat.includes("@")) {
+      return { conversationId: chat, label: chat };
     }
-    return { conversationId: conversation.id, label: conversation.topic };
+
+    const conversation = await client.findConversation(chat);
+    if (conversation) {
+      return { conversationId: conversation.id, label: conversation.topic };
+    }
+
+    // Fall back to 1:1 resolution (covers person names passed to --chat)
+    const oneOnOne = await client.findOneOnOneConversation(chat);
+    if (oneOnOne) {
+      return {
+        conversationId: oneOnOne.conversationId,
+        label: oneOnOne.memberDisplayName,
+      };
+    }
+
+    throw new Error(`No conversation matching "${chat}" found.`);
   }
 
   if (to) {
@@ -189,7 +204,8 @@ const conversationParameters: ActionParameter[] = [
   {
     name: "chat",
     type: "string",
-    description: "Find conversation by topic name (partial match)",
+    description:
+      "Find conversation by topic name (partial match), person name (1:1 fallback), or direct thread ID",
     required: false,
   },
   {
