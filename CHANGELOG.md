@@ -1,3 +1,10 @@
+# [0.7.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.6.0...v0.7.0) (2026-03-24)
+
+
+### Features
+
+* replace SKILL.md with MCP server instructions field ([ebd0871](https://github.com/Maxim-Mazurok/teams-api/commit/ebd0871c54f8dce4030980bd28446342e547df87))
+
 # [0.6.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.5.2...v0.6.0) (2026-03-24)
 
 
