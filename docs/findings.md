@@ -90,6 +90,14 @@ Returns `{ edittime: "<ISO timestamp>" }`.
 
 The `skypeeditedid` field must match the message ID in the URL. Only the message author can edit a message.
 
+**Delete message:**
+
+```
+DELETE /users/ME/conversations/{conversationId}/messages/{messageId}
+```
+
+Returns empty body on success. Only the message author can delete a message. The message is soft-deleted (marked with `deletetime` in the message metadata) rather than physically removed.
+
 **Get members:**
 
 ```

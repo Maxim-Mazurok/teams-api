@@ -18,6 +18,7 @@ import type {
   Mention,
   SentMessage,
   EditedMessage,
+  DeletedMessage,
   UserProfile,
   PersonSearchResult,
   ChatSearchResult,
@@ -457,6 +458,38 @@ export async function editMessage(
     messageId,
     editTime,
   };
+}
+
+/**
+ * Delete a message from a conversation.
+ *
+ * Sends a DELETE to the Chat Service; handles empty response body.
+ */
+export async function deleteMessage(
+  token: TeamsToken,
+  conversationId: string,
+  messageId: string,
+): Promise<DeletedMessage> {
+  const url = `${chatServiceBase(token.region)}/users/ME/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`;
+
+  const response = await fetchWithRetry(url, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
+    const errorText = await response.text();
+    throw new Error(
+      `Failed to delete message: ${response.status} ${response.statusText} — ${errorText}`,
+    );
+  }
+
+  return { messageId };
 }
 
 /**

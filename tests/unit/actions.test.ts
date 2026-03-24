@@ -20,6 +20,7 @@ import type {
   OneOnOneSearchResult,
   SentMessage,
   EditedMessage,
+  DeletedMessage,
 } from "../../src/types.js";
 
 // ── Mock client factory ──────────────────────────────────────────────
@@ -37,6 +38,7 @@ function createMockClient(
     getMessagesPage: vi.fn(),
     sendMessage: vi.fn(),
     editMessage: vi.fn(),
+    deleteMessage: vi.fn(),
     getMembers: vi.fn(),
     getCurrentUserDisplayName: vi.fn(),
     getToken: vi.fn(() => ({ skypeToken: "test-token", region: "apac" })),
@@ -98,8 +100,8 @@ beforeEach(() => {
 // ── Registry tests ───────────────────────────────────────────────────
 
 describe("action registry", () => {
-  it("should contain all 11 actions", () => {
-    expect(actions).toHaveLength(11);
+  it("should contain all 12 actions", () => {
+    expect(actions).toHaveLength(12);
   });
 
   it("should have unique names", () => {
@@ -134,6 +136,7 @@ describe("action registry", () => {
     expect(names).toContain("get-messages");
     expect(names).toContain("send-message");
     expect(names).toContain("edit-message");
+    expect(names).toContain("delete-message");
     expect(names).toContain("get-members");
     expect(names).toContain("whoami");
     expect(names).toContain("get-transcript");
@@ -1034,6 +1037,101 @@ describe("edit-message", () => {
     const output = formatOutput(action, result, "toon");
 
     expect(output).toContain("Message Edited!");
+    expect(output).toContain("Design Review");
+    expect(output).toContain("msg-123");
+  });
+});
+
+// ── delete-message ───────────────────────────────────────────────────
+
+describe("delete-message", () => {
+  const action = getAction("delete-message");
+
+  it("should resolve conversation and delete message", async () => {
+    const conversation = makeConversation({
+      id: "19:chat@thread.v2",
+      topic: "Design Review",
+    });
+    const deletedMessage: DeletedMessage = { messageId: "msg-123" };
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(conversation),
+      deleteMessage: vi.fn().mockResolvedValue(deletedMessage),
+    });
+
+    const result = (await action.execute(client, {
+      chat: "Design Review",
+      messageId: "msg-123",
+    })) as DeletedMessage & { conversation: string };
+
+    expect(client.deleteMessage).toHaveBeenCalledWith(
+      "19:chat@thread.v2",
+      "msg-123",
+    );
+    expect(result.messageId).toBe("msg-123");
+    expect(result.conversation).toBe("Design Review");
+  });
+
+  it("should resolve 1:1 conversation via --to", async () => {
+    const searchResult: OneOnOneSearchResult = {
+      conversationId: "19:one-on-one@unq.gbl.spaces",
+      memberDisplayName: "Luke Prior",
+    };
+    const deletedMessage: DeletedMessage = { messageId: "msg-456" };
+    const client = createMockClient({
+      findOneOnOneConversation: vi.fn().mockResolvedValue(searchResult),
+      deleteMessage: vi.fn().mockResolvedValue(deletedMessage),
+    });
+
+    const result = (await action.execute(client, {
+      to: "Luke",
+      messageId: "msg-456",
+    })) as DeletedMessage & { conversation: string };
+
+    expect(result.conversation).toBe("Luke Prior");
+  });
+
+  it("should error when no conversation identifier provided", async () => {
+    const client = createMockClient();
+
+    await expect(
+      action.execute(client, { messageId: "msg-1" }),
+    ).rejects.toThrow("One of --conversation-id, --chat, or --to is required.");
+  });
+
+  it("should format result correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      conversation: "Design Review",
+    };
+
+    const output = action.formatResult(result);
+
+    expect(output).toContain('Message deleted from "Design Review"');
+    expect(output).toContain("Message ID: msg-123");
+  });
+
+  it("should format markdown correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      conversation: "Design Review",
+    };
+
+    const output = formatOutput(action, result, "md");
+
+    expect(output).toContain("## Message Deleted");
+    expect(output).toContain("**From:** Design Review");
+    expect(output).toContain("**Message ID:** msg-123");
+  });
+
+  it("should format toon correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      conversation: "Design Review",
+    };
+
+    const output = formatOutput(action, result, "toon");
+
+    expect(output).toContain("Message Deleted!");
     expect(output).toContain("Design Review");
     expect(output).toContain("msg-123");
   });

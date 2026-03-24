@@ -172,6 +172,12 @@ export interface EditedMessage {
   editTime: string;
 }
 
+/** Result of deleting a message. */
+export interface DeletedMessage {
+  /** The ID of the deleted message. */
+  messageId: string;
+}
+
 /** A page of messages with pagination metadata. */
 export interface MessagesPage {
   /** Messages in this page. */

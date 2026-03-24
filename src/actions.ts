@@ -23,6 +23,7 @@ import type {
   TranscriptResult,
   TranscriptEntry,
   EditedMessage,
+  DeletedMessage,
 } from "./types.js";
 
 // ── Parameter & Action types ─────────────────────────────────────────
@@ -701,6 +702,68 @@ const editMessageAction: ActionDefinition = {
   },
 };
 
+const deleteMessageAction: ActionDefinition = {
+  name: "delete-message",
+  title: "Delete Message",
+  description:
+    "Delete a message from a conversation. " +
+    "Identify the conversation by topic name (--chat), " +
+    "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
+    "At least one identifier is required. " +
+    "The message to delete is identified by --message-id.",
+  parameters: [
+    ...conversationParameters,
+    {
+      name: "messageId",
+      type: "string",
+      description: "ID of the message to delete",
+      required: true,
+    },
+  ],
+  execute: async (client, parameters) => {
+    const { conversationId, label } = await resolveConversationId(
+      client,
+      parameters,
+    );
+    const messageId = parameters.messageId as string;
+    const result = await client.deleteMessage(conversationId, messageId);
+    return { ...result, conversation: label };
+  },
+  formatResult: (result) => {
+    const { messageId, conversation } = result as {
+      messageId: string;
+      conversation: string;
+    };
+    return [
+      `Message deleted from "${conversation}"`,
+      `  Message ID: ${messageId}`,
+    ].join("\n");
+  },
+  formatMarkdown: (result) => {
+    const { messageId, conversation } = result as {
+      messageId: string;
+      conversation: string;
+    };
+    return [
+      "## Message Deleted",
+      "",
+      `- **From:** ${conversation}`,
+      `- **Message ID:** ${messageId}`,
+    ].join("\n");
+  },
+  formatToon: (result) => {
+    const { messageId, conversation } = result as {
+      messageId: string;
+      conversation: string;
+    };
+    return [
+      toonHeader("🗑️", "Message Deleted!"),
+      `  💬 From: "${conversation}"`,
+      `  🆔 ${messageId}`,
+    ].join("\n");
+  },
+};
+
 const getMembers: ActionDefinition = {
   name: "get-members",
   title: "Get Conversation Members",
@@ -1117,6 +1180,7 @@ export const actions: ActionDefinition[] = [
   getMessages,
   sendMessage,
   editMessageAction,
+  deleteMessageAction,
   getMembers,
   whoami,
   getTranscript,

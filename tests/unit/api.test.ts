@@ -13,6 +13,7 @@ import {
   fetchProfiles,
   postMessage,
   editMessage,
+  deleteMessage,
   fetchUserProperties,
   parseRawMessage,
   ApiAuthError,
@@ -581,6 +582,56 @@ describe("editMessage", () => {
 
     expect(result.messageId).toBe("msg-empty");
     expect(result.editTime).toBeTruthy();
+  });
+});
+
+describe("deleteMessage", () => {
+  it("should send DELETE request to correct URL", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      text: () => Promise.resolve(""),
+      headers: new Headers(),
+    });
+
+    const result = await deleteMessage(testToken, "conv-id", "msg-123");
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "/users/ME/conversations/conv-id/messages/msg-123",
+      ),
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    expect(result.messageId).toBe("msg-123");
+  });
+
+  it("should throw on failure with error body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+      text: () => Promise.resolve("Access denied"),
+    });
+
+    await expect(
+      deleteMessage(testToken, "conv-id", "msg-123"),
+    ).rejects.toThrow(
+      "Failed to delete message: 403 Forbidden — Access denied",
+    );
+  });
+
+  it("should throw ApiAuthError on 401", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      text: () => Promise.resolve("Token expired"),
+    });
+
+    await expect(
+      deleteMessage(testToken, "conv-id", "msg-123"),
+    ).rejects.toBeInstanceOf(ApiAuthError);
   });
 });
 

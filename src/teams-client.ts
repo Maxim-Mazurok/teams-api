@@ -41,6 +41,7 @@ import type {
   Member,
   SentMessage,
   EditedMessage,
+  DeletedMessage,
   GetMessagesOptions,
   ListConversationsOptions,
   OneOnOneSearchResult,
@@ -57,6 +58,7 @@ import {
   fetchProfiles,
   postMessage,
   editMessage,
+  deleteMessage,
   fetchUserProperties,
   fetchTranscript,
   searchPeople,
@@ -88,6 +90,7 @@ export type {
   Member,
   SentMessage,
   EditedMessage,
+  DeletedMessage,
   GetMessagesOptions,
   ListConversationsOptions,
   OneOnOneSearchResult,
@@ -757,6 +760,16 @@ export class TeamsClient {
         displayName,
         format,
       );
+    });
+  }
+
+  /** Delete a message from a conversation. */
+  async deleteMessage(
+    conversationId: string,
+    messageId: string,
+  ): Promise<DeletedMessage> {
+    return this.withTokenRefresh(async () => {
+      return deleteMessage(this.token, conversationId, messageId);
     });
   }
 
