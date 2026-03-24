@@ -161,8 +161,15 @@ export async function acquireTokenViaAutoLogin(
 
     // Capture tokens via shared helper
     log("Capturing tokens...");
-    const { skypeToken, region, bearerToken, substrateToken, amsToken, sharePointToken, sharePointHost } =
-      await captureTokensFromPage(page, log, TOKEN_INTERCEPT_TIMEOUT);
+    const {
+      skypeToken,
+      region,
+      bearerToken,
+      substrateToken,
+      amsToken,
+      sharePointToken,
+      sharePointHost,
+    } = await captureTokensFromPage(page, log, TOKEN_INTERCEPT_TIMEOUT);
 
     return {
       skypeToken,

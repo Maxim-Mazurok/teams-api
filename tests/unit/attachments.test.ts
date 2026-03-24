@@ -59,7 +59,7 @@ describe("parseInlineImages", () => {
     const content =
       '<img src="https://as-prod.asyncgw.teams.microsoft.com/v1/objects/obj-1/views/imgo" ' +
       'itemtype="http://schema.skype.com/AMSImage">' +
-      'text between' +
+      "text between" +
       '<img src="https://as-prod.asyncgw.teams.microsoft.com/v1/objects/obj-2/views/imgo" ' +
       'itemtype="http://schema.skype.com/AMSImage">';
 
@@ -67,7 +67,9 @@ describe("parseInlineImages", () => {
     expect(images).toHaveLength(2);
     expect(images[0].amsObjectId).toBe("obj-1");
     expect(images[1].amsObjectId).toBe("obj-2");
-    expect(images[1].contentPosition).toBeGreaterThan(images[0].contentPosition);
+    expect(images[1].contentPosition).toBeGreaterThan(
+      images[0].contentPosition,
+    );
   });
 
   it("ignores non-AMS images", () => {
@@ -77,8 +79,7 @@ describe("parseInlineImages", () => {
   });
 
   it("ignores images without src attribute", () => {
-    const content =
-      '<img itemtype="http://schema.skype.com/AMSImage">';
+    const content = '<img itemtype="http://schema.skype.com/AMSImage">';
     expect(parseInlineImages(content)).toEqual([]);
   });
 
@@ -234,7 +235,8 @@ describe("fetchAmsImage", () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       headers: new Headers({ "content-type": "image/png" }),
-      arrayBuffer: () => Promise.resolve(imageBytes.buffer.slice(0, imageBytes.byteLength)),
+      arrayBuffer: () =>
+        Promise.resolve(imageBytes.buffer.slice(0, imageBytes.byteLength)),
     });
     globalThis.fetch = mockFetch;
 
@@ -414,7 +416,12 @@ describe("uploadSharePointFile", () => {
     };
 
     await expect(
-      uploadSharePointFile(tokenWithoutSharePoint, fileData, "test.md", testEmail),
+      uploadSharePointFile(
+        tokenWithoutSharePoint,
+        fileData,
+        "test.md",
+        testEmail,
+      ),
     ).rejects.toThrow("SharePoint token is required");
   });
 
@@ -437,8 +444,10 @@ describe("uploadSharePointFile", () => {
         Promise.resolve({
           id: "sp-item-id",
           name: "test.md",
-          webDavUrl: "https://company-my.sharepoint.com/personal/user_name_company_com/Documents/Microsoft%20Teams%20Chat%20Files/test.md",
-          webUrl: "https://company-my.sharepoint.com/personal/user_name_company_com/Documents/Microsoft%20Teams%20Chat%20Files/test.md",
+          webDavUrl:
+            "https://company-my.sharepoint.com/personal/user_name_company_com/Documents/Microsoft%20Teams%20Chat%20Files/test.md",
+          webUrl:
+            "https://company-my.sharepoint.com/personal/user_name_company_com/Documents/Microsoft%20Teams%20Chat%20Files/test.md",
           sharepointIds: {
             listItemUniqueId: "unique-item-id",
             siteId: "site-id-123",
@@ -463,15 +472,17 @@ describe("uploadSharePointFile", () => {
 
     // Verify the PUT request
     const calledUrl = mockFetch.mock.calls[0][0] as string;
-    expect(calledUrl).toContain("/personal/user_name_company_com/_api/v2.0/drive/root:");
+    expect(calledUrl).toContain(
+      "/personal/user_name_company_com/_api/v2.0/drive/root:",
+    );
     expect(calledUrl).toContain("Microsoft%20Teams%20Chat%20Files/test.md");
     expect(calledUrl).toContain("@name.conflictBehavior=rename");
 
     const calledOptions = mockFetch.mock.calls[0][1] as RequestInit;
     expect(calledOptions.method).toBe("PUT");
-    expect((calledOptions.headers as Record<string, string>).Authorization).toBe(
-      "Bearer test-sharepoint-token",
-    );
+    expect(
+      (calledOptions.headers as Record<string, string>).Authorization,
+    ).toBe("Bearer test-sharepoint-token");
   });
 
   it("throws ApiAuthError on 401", async () => {

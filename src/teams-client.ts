@@ -190,7 +190,12 @@ export class TeamsClient {
       // Re-authenticate if the cached token is missing substrate or bearer
       // tokens — these are required for people/chat search and profile
       // resolution. Tokens captured before these were added will be stale.
-      if (!cachedToken.substrateToken || !cachedToken.bearerToken || !cachedToken.amsToken || !cachedToken.sharePointHost) {
+      if (
+        !cachedToken.substrateToken ||
+        !cachedToken.bearerToken ||
+        !cachedToken.amsToken ||
+        !cachedToken.sharePointHost
+      ) {
         log(
           "Cached token is missing substrate, bearer, AMS token, or SharePoint host, re-authenticating...",
         );
@@ -291,7 +296,15 @@ export class TeamsClient {
     sharePointToken?: string,
     sharePointHost?: string,
   ): TeamsClient {
-    return new TeamsClient({ skypeToken, region, bearerToken, substrateToken, amsToken, sharePointToken, sharePointHost });
+    return new TeamsClient({
+      skypeToken,
+      region,
+      bearerToken,
+      substrateToken,
+      amsToken,
+      sharePointToken,
+      sharePointHost,
+    });
   }
 
   /**
@@ -859,7 +872,12 @@ export class TeamsClient {
   async downloadFile(
     fileUrl: string,
     itemId: string,
-  ): Promise<{ data: Buffer; contentType: string; size: number; fileName: string }> {
+  ): Promise<{
+    data: Buffer;
+    contentType: string;
+    size: number;
+    fileName: string;
+  }> {
     return this.withTokenRefresh(async () => {
       return fetchSharePointFile(this.token, fileUrl, itemId);
     });
@@ -980,9 +998,8 @@ export class TeamsClient {
         }
       }
 
-      const content = htmlParts.length > 0
-        ? `<div>${htmlParts.join("")}</div>`
-        : "";
+      const content =
+        htmlParts.length > 0 ? `<div>${htmlParts.join("")}</div>` : "";
       const filesJson = buildFilesPropertyJson(uploadResults);
       const displayName = await this.getCurrentUserDisplayName();
       return postMessage(

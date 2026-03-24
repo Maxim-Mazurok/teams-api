@@ -115,7 +115,9 @@ async function createClient(flags: AuthFlags): Promise<TeamsClient> {
       email: flags.email,
       verbose: true,
     };
-    const client = await TeamsClient.fromInteractiveLogin(interactiveLoginOptions);
+    const client = await TeamsClient.fromInteractiveLogin(
+      interactiveLoginOptions,
+    );
     if (flags.email) {
       client.setEmail(flags.email);
     }
@@ -168,10 +170,7 @@ for (const action of actions) {
     const flag = camelToKebab(parameter.name);
 
     if (parameter.type === "string[]") {
-      command.option(
-        `--${flag} <value...>`,
-        parameter.description,
-      );
+      command.option(`--${flag} <value...>`, parameter.description);
     } else if (parameter.type === "boolean") {
       if (parameter.default === true) {
         // Default-true boolean: define --no-* to allow opting out.

@@ -131,7 +131,9 @@ describe("action registry", () => {
       for (const parameter of action.parameters) {
         expect(parameter.description.length).toBeGreaterThan(5);
         expect(parameter.name.length).toBeGreaterThan(0);
-        expect(["string", "number", "boolean", "string[]"]).toContain(parameter.type);
+        expect(["string", "number", "boolean", "string[]"]).toContain(
+          parameter.type,
+        );
       }
     }
   });
@@ -2002,7 +2004,9 @@ describe("action registry (parametrized)", () => {
     it("should have well-formed parameter definitions", () => {
       for (const parameter of action.parameters) {
         expect(parameter.name.length).toBeGreaterThan(0);
-        expect(["string", "number", "boolean", "string[]"]).toContain(parameter.type);
+        expect(["string", "number", "boolean", "string[]"]).toContain(
+          parameter.type,
+        );
         expect(parameter.description.length).toBeGreaterThan(0);
         expect(typeof parameter.required).toBe("boolean");
       }

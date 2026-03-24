@@ -290,6 +290,7 @@ Files shared in Teams conversations are uploaded to the sender's OneDrive for Bu
 ### Upload flow
 
 1. **PUT file content** to SharePoint:
+
    ```
    PUT https://{tenant}-my.sharepoint.com/personal/{user_email_underscored}/_api/v2.0/drive/root:/Microsoft%20Teams%20Chat%20Files/{fileName}:/content?@name.conflictBehavior=rename&$select=*,sharepointIds,webDavUrl
    Authorization: Bearer {sharePointToken}

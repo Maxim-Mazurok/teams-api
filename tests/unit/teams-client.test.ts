@@ -1607,7 +1607,9 @@ describe("sendMessageWithFiles", () => {
       personalPath: "/personal/user_company_com",
     };
     mockedAttachments.uploadSharePointFile.mockResolvedValue(uploadResult);
-    mockedAttachments.buildFilesPropertyJson.mockReturnValue('[{"@type":"http://schema.skype.com/File"}]');
+    mockedAttachments.buildFilesPropertyJson.mockReturnValue(
+      '[{"@type":"http://schema.skype.com/File"}]',
+    );
 
     const expectedResult: SentMessage = {
       messageId: "1773000000000",
@@ -1634,7 +1636,9 @@ describe("sendMessageWithFiles", () => {
     );
 
     // Verify buildFilesPropertyJson was called with upload results
-    expect(mockedAttachments.buildFilesPropertyJson).toHaveBeenCalledWith([uploadResult]);
+    expect(mockedAttachments.buildFilesPropertyJson).toHaveBeenCalledWith([
+      uploadResult,
+    ]);
 
     // Verify postMessage was called with files JSON
     expect(mockedApi.postMessage).toHaveBeenCalledWith(

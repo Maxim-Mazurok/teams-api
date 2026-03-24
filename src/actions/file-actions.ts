@@ -6,10 +6,7 @@
 
 import { writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
-import {
-  type ActionDefinition,
-  toonHeader,
-} from "./formatters.js";
+import { type ActionDefinition, toonHeader } from "./formatters.js";
 import {
   conversationParameters,
   resolveConversationId,
@@ -63,17 +60,17 @@ export const downloadFileAction: ActionDefinition = {
     }
 
     if (message.files.length === 0 && message.images.length === 0) {
-      throw new Error(
-        `Message ${messageId} has no file attachments or images`,
-      );
+      throw new Error(`Message ${messageId} has no file attachments or images`);
     }
 
     const results: DownloadResult[] = [];
 
     // Download file attachments (SharePoint)
     for (const file of message.files) {
-      const { data, contentType, size, fileName } =
-        await client.downloadFile(file.fileUrl, file.itemId);
+      const { data, contentType, size, fileName } = await client.downloadFile(
+        file.fileUrl,
+        file.itemId,
+      );
 
       let savedTo: string | null = null;
       if (outputDirectory) {
@@ -93,8 +90,10 @@ export const downloadFileAction: ActionDefinition = {
 
     // Download inline images (AMS)
     for (const image of message.images) {
-      const { data, contentType, size } =
-        await client.downloadImage(image.amsObjectId, true);
+      const { data, contentType, size } = await client.downloadImage(
+        image.amsObjectId,
+        true,
+      );
 
       const fileName = `${image.amsObjectId}.jpg`;
       let savedTo: string | null = null;
@@ -119,7 +118,9 @@ export const downloadFileAction: ActionDefinition = {
     const downloads = result as DownloadResult[];
     const lines = [`Downloaded ${downloads.length} file(s):`];
     for (const download of downloads) {
-      lines.push(`  ${download.fileName} (${download.fileType}, ${download.size} bytes)`);
+      lines.push(
+        `  ${download.fileName} (${download.fileType}, ${download.size} bytes)`,
+      );
       if (download.savedTo) {
         lines.push(`    Saved to: ${download.savedTo}`);
       }
@@ -130,7 +131,9 @@ export const downloadFileAction: ActionDefinition = {
     const downloads = result as DownloadResult[];
     const lines = [`## Downloaded ${downloads.length} file(s)`, ""];
     for (const download of downloads) {
-      lines.push(`- **${download.fileName}** (${download.fileType}, ${download.size} bytes)`);
+      lines.push(
+        `- **${download.fileName}** (${download.fileType}, ${download.size} bytes)`,
+      );
       if (download.savedTo) {
         lines.push(`  - Saved to: \`${download.savedTo}\``);
       }

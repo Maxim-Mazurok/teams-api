@@ -6,11 +6,7 @@
  * - File attachments (SharePoint) — referenced in `properties.files` JSON
  */
 
-import type {
-  TeamsToken,
-  ImageAttachment,
-  FileAttachment,
-} from "../types.js";
+import type { TeamsToken, ImageAttachment, FileAttachment } from "../types.js";
 import { fetchWithRetry, ApiAuthError } from "./common.js";
 
 const AMS_BASE = "https://as-prod.asyncgw.teams.microsoft.com/v1/objects";
@@ -89,9 +85,7 @@ interface RawFileEntry {
  * File attachments are SharePoint-hosted documents, videos, and other files
  * shared through Teams. They have a separate schema from inline images.
  */
-export function parseFileAttachments(
-  rawFiles: unknown,
-): FileAttachment[] {
+export function parseFileAttachments(rawFiles: unknown): FileAttachment[] {
   let entries: RawFileEntry[];
 
   if (typeof rawFiles === "string") {
@@ -160,8 +154,6 @@ export async function fetchAmsImage(
 
   return { data, contentType, size: data.length };
 }
-
-
 
 /**
  * Upload an image to the AMS (Async Media Service).
@@ -314,10 +306,7 @@ export async function uploadSharePointFile(
     );
   }
 
-  const { siteBaseUrl, personalPath } = deriveSharePointSiteInfo(
-    token,
-    email,
-  );
+  const { siteBaseUrl, personalPath } = deriveSharePointSiteInfo(token, email);
 
   const encodedFileName = encodeURIComponent(fileName);
   const uploadUrl =
@@ -357,7 +346,7 @@ export async function uploadSharePointFile(
   };
 
   const fileExtension = data.name.includes(".")
-    ? data.name.split(".").pop() ?? ""
+    ? (data.name.split(".").pop() ?? "")
     : "";
 
   return {
@@ -444,11 +433,16 @@ export async function fetchSharePointFile(
   token: TeamsToken,
   fileUrl: string,
   itemId: string,
-): Promise<{ data: Buffer; contentType: string; size: number; fileName: string }> {
+): Promise<{
+  data: Buffer;
+  contentType: string;
+  size: number;
+  fileName: string;
+}> {
   if (!token.sharePointToken) {
     throw new Error(
       "SharePoint token is required for file download but was not captured during authentication. " +
-      "Re-authenticate to capture the SharePoint token.",
+        "Re-authenticate to capture the SharePoint token.",
     );
   }
 
@@ -463,8 +457,7 @@ export async function fetchSharePointFile(
   // Use the SharePoint drive items API with the item's unique ID.
   // This avoids path-encoding issues with special characters in filenames,
   // and works for files on any user's personal OneDrive.
-  const downloadUrl =
-    `${siteBaseUrl}${personalPath}/_api/v2.0/drive/items/${itemId}/content`;
+  const downloadUrl = `${siteBaseUrl}${personalPath}/_api/v2.0/drive/items/${itemId}/content`;
 
   const response = await fetchWithRetry(downloadUrl, {
     headers: {
@@ -483,7 +476,8 @@ export async function fetchSharePointFile(
     );
   }
 
-  const contentType = response.headers.get("content-type") ?? "application/octet-stream";
+  const contentType =
+    response.headers.get("content-type") ?? "application/octet-stream";
   const arrayBuffer = await response.arrayBuffer();
   const data = Buffer.from(arrayBuffer);
 

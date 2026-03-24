@@ -102,8 +102,14 @@ export async function acquireTokenViaInteractiveLogin(
 
     log("Login detected, capturing token...");
 
-    const { skypeToken, region, bearerToken, substrateToken, amsToken, sharePointToken } =
-      await captureTokensFromPage(page, log, TOKEN_INTERCEPT_TIMEOUT);
+    const {
+      skypeToken,
+      region,
+      bearerToken,
+      substrateToken,
+      amsToken,
+      sharePointToken,
+    } = await captureTokensFromPage(page, log, TOKEN_INTERCEPT_TIMEOUT);
 
     return {
       skypeToken,
