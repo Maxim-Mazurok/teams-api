@@ -71,6 +71,7 @@ function makeMessage(overrides: Partial<Message> = {}): Message {
     subject: null,
     isDeleted: false,
     reactions: [],
+    followers: [],
     mentions: [],
     quotedMessageId: null,
     ...overrides,

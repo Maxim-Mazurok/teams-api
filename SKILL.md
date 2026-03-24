@@ -130,6 +130,6 @@ The MCP server handles authentication automatically via environment variables. C
 
 - Conversation IDs look like `19:abc123@thread.v2` for group chats or `48:notes` for self-chat
 - 1:1 chats have no topic name — use `teams_find_one_on_one` or the `to` parameter to find them by person name
-- Messages include reactions, mentions, and quoted message references
+- Messages include reactions, mentions, followers (thread subscribers), and quoted message references
 - Token lifetime is ~24 hours — the server re-authenticates automatically with auto-login
 - All tools share the same parameters and behavior as the CLI commands and programmatic API

@@ -97,6 +97,7 @@ export type {
   MessagesPage,
   Mention,
   Reaction,
+  Follower,
   UserProfile,
   PersonSearchResult,
   ChatSearchResult,

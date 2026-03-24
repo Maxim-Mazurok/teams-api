@@ -468,6 +468,9 @@ const getMessages: ActionDefinition = {
       } else {
         lines.push(`  [${time}] ${sender}: ${body.slice(0, 120)}`);
       }
+      if (message.followers.length > 0) {
+        lines.push(`    [${message.followers.length} follower(s)]`);
+      }
     }
     return lines.join("\n");
   },
@@ -495,6 +498,10 @@ const getMessages: ActionDefinition = {
       }
 
       lines.push(body, "");
+
+      if (message.followers.length > 0) {
+        lines.push(`*${message.followers.length} follower(s)*`, "");
+      }
     }
     return lines.join("\n");
   },
@@ -524,6 +531,9 @@ const getMessages: ActionDefinition = {
         );
       }
       lines.push(`      ${body.slice(0, 120)}`);
+      if (message.followers.length > 0) {
+        lines.push(`      � ${message.followers.length} follower(s)`);
+      }
     }
     return lines.join("\n");
   },

@@ -103,8 +103,10 @@ export interface Message {
   subject: string | null;
   /** Whether the message has been deleted. */
   isDeleted: boolean;
-  /** Reactions on this message. */
+  /** Reactions on this message (excludes follow subscriptions). */
   reactions: Reaction[];
+  /** Users who followed (subscribed to) this message thread. */
+  followers: Follower[];
   /** Users mentioned in this message. */
   mentions: Mention[];
   /** ID of the quoted/replied-to message, or null. */
@@ -117,6 +119,20 @@ export interface Reaction {
   key: string;
   /** Users who reacted with this emotion. */
   users: Array<{ mri: string; time: number }>;
+}
+
+/**
+ * A user who followed (subscribed to) a message thread.
+ *
+ * Teams stores "follow" as an emotion entry in `properties.emotions`.
+ * Unlike regular reactions, the `value` field is "0" (following) or "1" (unfollowed),
+ * not a message timestamp.
+ */
+export interface Follower {
+  /** Full MRI of the follower. */
+  mri: string;
+  /** Epoch milliseconds when the follow action was recorded. */
+  time: number;
 }
 
 /** A user mention in a message. */

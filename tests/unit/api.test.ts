@@ -665,6 +665,7 @@ describe("parseRawMessage", () => {
     expect(message.content).toBe("Hello world");
     expect(message.isDeleted).toBe(false);
     expect(message.reactions).toEqual([]);
+    expect(message.followers).toEqual([]);
     expect(message.mentions).toEqual([]);
     expect(message.quotedMessageId).toBeNull();
   });
@@ -687,6 +688,7 @@ describe("parseRawMessage", () => {
     expect(message.reactions).toHaveLength(1);
     expect(message.reactions[0].key).toBe("like");
     expect(message.reactions[0].users[0].mri).toBe("8:orgid:user1");
+    expect(message.followers).toEqual([]);
   });
 
   it("should parse emotions from array", () => {
@@ -703,6 +705,61 @@ describe("parseRawMessage", () => {
 
     expect(message.reactions).toHaveLength(1);
     expect(message.reactions[0].key).toBe("heart");
+    expect(message.followers).toEqual([]);
+  });
+
+  it("should separate follow entries from reactions", () => {
+    const message = parseRawMessage({
+      id: "123",
+      messagetype: "Text",
+      content: "msg",
+      properties: {
+        emotions: [
+          { key: "like", users: [{ mri: "8:orgid:user1", time: 1773000000 }] },
+          {
+            key: "follow",
+            users: [
+              { mri: "8:orgid:follower1", time: 1773000001, value: "0" },
+              { mri: "8:orgid:follower2", time: 1773000002, value: "0" },
+              { mri: "8:orgid:unfollowed", time: 1773000003, value: "1" },
+            ],
+          },
+          { key: "heart", users: [{ mri: "8:orgid:user2", time: 1773000004 }] },
+        ],
+      },
+    });
+
+    expect(message.reactions).toHaveLength(2);
+    expect(message.reactions[0].key).toBe("like");
+    expect(message.reactions[1].key).toBe("heart");
+
+    expect(message.followers).toHaveLength(2);
+    expect(message.followers[0].mri).toBe("8:orgid:follower1");
+    expect(message.followers[1].mri).toBe("8:orgid:follower2");
+  });
+
+  it("should exclude unfollowed users from followers", () => {
+    const message = parseRawMessage({
+      id: "123",
+      messagetype: "Text",
+      content: "msg",
+      properties: {
+        emotions: [
+          {
+            key: "follow",
+            users: [
+              { mri: "8:orgid:active", time: 1773000001, value: "0" },
+              { mri: "8:orgid:removed", time: 1773000002, value: "1" },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(message.reactions).toEqual([]);
+    expect(message.followers).toHaveLength(1);
+    expect(message.followers[0].mri).toBe("8:orgid:active");
+    expect(message.followers[0].time).toBe(1773000001);
   });
 
   it("should parse mentions from JSON string", () => {

@@ -145,6 +145,17 @@ The `properties.emotions` field is inconsistent:
 
 Both formats must be handled. Each emotion has a `key` (reaction name) and `users` array with MRI and timestamp.
 
+### Follow subscriptions
+
+The `properties.emotions` array may include an entry with `key: "follow"`. This represents users who subscribed to ("followed") a channel thread — it is **not** a visible reaction.
+
+- `value: "0"` — the user is actively following
+- `value: "1"` — the user unfollowed
+
+Regular reactions store a message timestamp as their `value`; follow entries use `"0"` / `"1"` as boolean flags.
+
+The API client separates these into a dedicated `followers` field on `Message` and excludes them from `reactions`.
+
 ### Mentions format
 
 The `properties.mentions` field is an array of objects:

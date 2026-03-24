@@ -15,6 +15,7 @@ import type {
   MessagesPage,
   Member,
   Reaction,
+  Follower,
   Mention,
   SentMessage,
   EditedMessage,
@@ -526,7 +527,12 @@ export async function fetchUserProperties(
 export function parseRawMessage(raw: Record<string, unknown>): Message {
   const properties = (raw.properties ?? {}) as Record<string, unknown>;
 
-  const reactions = parseReactions(properties.emotions);
+  const allEmotions = parseEmotions(properties.emotions);
+  const reactions = allEmotions.filter((emotion) => emotion.key !== "follow");
+  const followEntry = allEmotions.find((emotion) => emotion.key === "follow");
+  const followers = (followEntry?.users ?? [])
+    .filter((user) => String(user.value) === "0")
+    .map((user) => ({ mri: user.mri, time: user.time }));
   const mentions = parseMentions(properties.mentions);
 
   let quotedMessageId: string | null = null;
@@ -552,22 +558,34 @@ export function parseRawMessage(raw: Record<string, unknown>): Message {
       raw.messagetype === "MessageDelete" ||
       String(properties.deletetime ?? "") !== "",
     reactions,
+    followers,
     mentions,
     quotedMessageId,
   };
 }
 
-function parseReactions(rawEmotions: unknown): Reaction[] {
+function parseEmotions(
+  rawEmotions: unknown,
+): Array<{
+  key: string;
+  users: Array<{ mri: string; time: number; value?: unknown }>;
+}> {
   if (typeof rawEmotions === "string") {
     try {
-      return JSON.parse(rawEmotions) as Reaction[];
+      return JSON.parse(rawEmotions) as Array<{
+        key: string;
+        users: Array<{ mri: string; time: number; value?: unknown }>;
+      }>;
     } catch {
       return [];
     }
   }
 
   if (Array.isArray(rawEmotions)) {
-    return rawEmotions as Reaction[];
+    return rawEmotions as Array<{
+      key: string;
+      users: Array<{ mri: string; time: number; value?: unknown }>;
+    }>;
   }
 
   return [];
