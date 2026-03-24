@@ -10,21 +10,23 @@ import {
   fetchConversations,
   fetchMessagesPage,
   fetchMembers,
-  fetchProfiles,
   postMessage,
   editMessage,
   deleteMessage,
   fetchUserProperties,
   parseRawMessage,
-  ApiAuthError,
-  ApiRateLimitError,
+} from "../../src/api/chat-service.js";
+import { ApiAuthError, ApiRateLimitError } from "../../src/api/common.js";
+import { fetchProfiles } from "../../src/api/middle-tier.js";
+import { searchPeople, searchChats } from "../../src/api/substrate.js";
+import {
   extractTranscriptUrl,
   extractMeetingTitle,
   isSuccessfulRecording,
   parseVtt,
   fetchTranscriptVtt,
   fetchTranscript,
-} from "../../src/api.js";
+} from "../../src/api/transcripts.js";
 import type { TeamsToken } from "../../src/types.js";
 
 const testToken: TeamsToken = {
@@ -314,10 +316,11 @@ describe("fetchProfiles", () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it("should return empty on non-auth failure", async () => {
+  it("should throw on server error (5xx)", async () => {
     mockFetchResponse({}, 500);
-    const profiles = await fetchProfiles(tokenWithBearer, ["8:orgid:user1"]);
-    expect(profiles).toEqual([]);
+    await expect(
+      fetchProfiles(tokenWithBearer, ["8:orgid:user1"]),
+    ).rejects.toThrow("Profile resolution server error: 500");
   });
 
   it("should throw ApiAuthError on 401", async () => {

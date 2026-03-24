@@ -1,5 +1,5 @@
 /**
- * Unified action definitions for the Teams API.
+ * All action definitions for the Teams API.
  *
  * This is the single source of truth for all operations. CLI commands,
  * MCP tools, and programmatic usage all derive from these definitions.
@@ -11,7 +11,7 @@
  *   - formatResult — human-readable output formatter (CLI without --json)
  */
 
-import type { TeamsClient } from "./teams-client.js";
+import type { TeamsClient } from "../teams-client.js";
 import type {
   Conversation,
   Message,
@@ -21,206 +21,20 @@ import type {
   PersonSearchResult,
   ChatSearchResult,
   TranscriptResult,
-  TranscriptEntry,
-  EditedMessage,
-  DeletedMessage,
-} from "./types.js";
-
-// ── Parameter & Action types ─────────────────────────────────────────
-
-export interface ActionParameter {
-  /** Parameter name in camelCase (CLI flags auto-converted to kebab-case). */
-  name: string;
-  /** Parameter type. Determines CLI flag syntax and MCP Zod schema. */
-  type: "string" | "number" | "boolean";
-  /** Description for CLI help, MCP tool description, and documentation. */
-  description: string;
-  /** Whether the parameter must be provided. */
-  required: boolean;
-  /** Default value when parameter is omitted. */
-  default?: string | number | boolean;
-}
-
-export interface ActionDefinition {
-  /** Kebab-case name. CLI command name; MCP tool name is `teams_` + snake_case. */
-  name: string;
-  /** Human-readable title (MCP tool title). */
-  title: string;
-  /** Full description shared across CLI help, MCP, and documentation. */
-  description: string;
-  /** Typed parameter definitions. */
-  parameters: ActionParameter[];
-  /** Execute the action against a TeamsClient. */
-  execute: (
-    client: TeamsClient,
-    parameters: Record<string, unknown>,
-  ) => Promise<unknown>;
-  /** Format result as human-readable text (CLI output without --json). */
-  formatResult: (result: unknown) => string;
-  /** Format result as Markdown. */
-  formatMarkdown: (result: unknown) => string;
-  /** Format result as fun ASCII art with emojis. */
-  formatToon: (result: unknown) => string;
-}
-
-// ── Output format types ──────────────────────────────────────────────
-
-export type OutputFormat = "json" | "text" | "md" | "toon";
-export type MessageOrder = "newest-first" | "oldest-first";
-
-/** Format an action result in the specified output format. */
-export function formatOutput(
-  action: ActionDefinition,
-  result: unknown,
-  format: OutputFormat = "json",
-): string {
-  switch (format) {
-    case "json":
-      return JSON.stringify(result, null, 2);
-    case "text":
-      return action.formatResult(result);
-    case "md":
-      return action.formatMarkdown(result);
-    case "toon":
-      return action.formatToon(result);
-  }
-}
-
-function toonHeader(emoji: string, text: string): string {
-  const separator = "─".repeat(40);
-  return `\n  ${emoji} ${text}\n  ${separator}`;
-}
-
-// ── Message formatting utilities ─────────────────────────────────────
-
-/** Decode common HTML entities to plain text. */
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&nbsp;/g, " ")
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#8203;/g, "") // zero-width space
-    .replace(/&#(\d+);/g, (_, code: string) =>
-      String.fromCharCode(Number(code)),
-    );
-}
-
-/** Strip HTML tags and decode entities from message content. */
-function cleanContent(content: string): string {
-  return decodeHtmlEntities(content.replace(/<[^>]*>/g, "")).trim();
-}
-
-/** Extract quoted text from HTML blockquotes, returning quote and body separately. */
-function extractQuote(content: string): {
-  quote: string | null;
-  body: string;
-} {
-  for (const tag of ["blockquote", "quote"]) {
-    const pattern = new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}>`, "i");
-    const match = content.match(pattern);
-    if (match) {
-      const quote = cleanContent(match[0]);
-      const remainder = content.replace(pattern, "");
-      return { quote: quote || null, body: cleanContent(remainder) };
-    }
-  }
-  return { quote: null, body: cleanContent(content) };
-}
-
-/** Build a map from message ID to sender display name. */
-function buildSenderLookup(messages: Message[]): Map<string, string> {
-  const lookup = new Map<string, string>();
-  for (const message of messages) {
-    lookup.set(message.id, message.senderDisplayName || "(system)");
-  }
-  return lookup;
-}
-
-// ── Shared conversation resolution ───────────────────────────────────
-
-/**
- * Resolve a conversation ID from the standard identification parameters.
- *
- * Supports three ways to identify a conversation:
- *   1. conversationId — direct thread ID
- *   2. chat — topic name (partial match via findConversation)
- *   3. to — person name (1:1 lookup via findOneOnOneConversation)
- *
- * Returns both the resolved ID and a human-readable label.
- */
-async function resolveConversationId(
-  client: TeamsClient,
-  parameters: Record<string, unknown>,
-): Promise<{ conversationId: string; label: string }> {
-  const conversationId = parameters.conversationId as string | undefined;
-  const chat = parameters.chat as string | undefined;
-  const to = parameters.to as string | undefined;
-
-  if (conversationId) {
-    return { conversationId, label: conversationId };
-  }
-
-  if (chat) {
-    // If the value looks like a raw conversation ID, use it directly
-    if (chat.startsWith("19:") && chat.includes("@")) {
-      return { conversationId: chat, label: chat };
-    }
-
-    const conversation = await client.findConversation(chat);
-    if (conversation) {
-      return { conversationId: conversation.id, label: conversation.topic };
-    }
-
-    // Fall back to 1:1 resolution (covers person names passed to --chat)
-    const oneOnOne = await client.findOneOnOneConversation(chat);
-    if (oneOnOne) {
-      return {
-        conversationId: oneOnOne.conversationId,
-        label: oneOnOne.memberDisplayName,
-      };
-    }
-
-    throw new Error(`No conversation matching "${chat}" found.`);
-  }
-
-  if (to) {
-    const result = await client.findOneOnOneConversation(to);
-    if (!result) {
-      throw new Error(`No 1:1 conversation found with "${to}".`);
-    }
-    return {
-      conversationId: result.conversationId,
-      label: result.memberDisplayName,
-    };
-  }
-
-  throw new Error("One of --conversation-id, --chat, or --to is required.");
-}
-
-/** Shared parameter definitions for conversation identification. */
-const conversationParameters: ActionParameter[] = [
-  {
-    name: "chat",
-    type: "string",
-    description:
-      "Find conversation by topic name (partial match), person name (1:1 fallback), or direct thread ID",
-    required: false,
-  },
-  {
-    name: "to",
-    type: "string",
-    description: "Find 1:1 conversation by person name",
-    required: false,
-  },
-  {
-    name: "conversationId",
-    type: "string",
-    description: "Direct conversation thread ID",
-    required: false,
-  },
-];
+} from "../types.js";
+import { isTextMessageType } from "../constants.js";
+import {
+  type ActionDefinition,
+  toonHeader,
+  extractQuote,
+  buildSenderLookup,
+  formatTimestamp,
+  groupBySpeaker,
+} from "./formatters.js";
+import {
+  conversationParameters,
+  resolveConversationId,
+} from "./conversation-resolution.js";
 
 // ── Action definitions ───────────────────────────────────────────────
 
@@ -443,9 +257,7 @@ const getMessages: ActionDefinition = {
     if (textOnly) {
       messages = messages.filter(
         (message) =>
-          (message.messageType === "RichText/Html" ||
-            message.messageType === "Text") &&
-          !message.isDeleted,
+          isTextMessageType(message.messageType) && !message.isDeleted,
       );
     }
 
@@ -540,7 +352,7 @@ const getMessages: ActionDefinition = {
       }
       lines.push(`      ${body.slice(0, 120)}`);
       if (message.followers.length > 0) {
-        lines.push(`      � ${message.followers.length} follower(s)`);
+        lines.push(`      👥 ${message.followers.length} follower(s)`);
       }
     }
     return lines.join("\n");
@@ -901,41 +713,6 @@ const whoami: ActionDefinition = {
   },
 };
 
-// ── Transcript action ────────────────────────────────────────────────
-
-/** Format a VTT timestamp (HH:MM:SS.mmm) as a compact time string. */
-function formatTimestamp(timestamp: string): string {
-  // Strip leading "00:" hours if zero, and trim milliseconds
-  const withoutMilliseconds = timestamp.replace(/\.\d+$/, "");
-  return withoutMilliseconds.replace(/^00:/, "");
-}
-
-/** Group consecutive entries by the same speaker for more readable output. */
-function groupBySpeaker(
-  entries: TranscriptEntry[],
-): Array<{ speaker: string; startTime: string; segments: string[] }> {
-  const groups: Array<{
-    speaker: string;
-    startTime: string;
-    segments: string[];
-  }> = [];
-
-  for (const entry of entries) {
-    const lastGroup = groups[groups.length - 1];
-    if (lastGroup && lastGroup.speaker === entry.speaker) {
-      lastGroup.segments.push(entry.text);
-    } else {
-      groups.push({
-        speaker: entry.speaker,
-        startTime: entry.startTime,
-        segments: [entry.text],
-      });
-    }
-  }
-
-  return groups;
-}
-
 const getTranscript: ActionDefinition = {
   name: "get-transcript",
   title: "Get Meeting Transcript",
@@ -1039,8 +816,6 @@ const getTranscript: ActionDefinition = {
   },
 };
 
-// ── find-people ──────────────────────────────────────────────────────
-
 const findPeopleAction: ActionDefinition = {
   name: "find-people",
   title: "Find People",
@@ -1106,8 +881,6 @@ const findPeopleAction: ActionDefinition = {
     return lines.join("\n");
   },
 };
-
-// ── find-chats ───────────────────────────────────────────────────────
 
 const findChatsAction: ActionDefinition = {
   name: "find-chats",
@@ -1189,17 +962,25 @@ const findChatsAction: ActionDefinition = {
 
 // ── Registry ─────────────────────────────────────────────────────────
 
-export const actions: ActionDefinition[] = [
-  listConversations,
-  findConversation,
-  findOneOnOne,
-  findPeopleAction,
-  findChatsAction,
-  getMessages,
-  sendMessage,
-  editMessageAction,
-  deleteMessageAction,
-  getMembers,
-  whoami,
-  getTranscript,
-];
+/**
+ * Map-based action registry keyed by action name.
+ * Ensures compile-time visibility of all actions and prevents
+ * accidental omissions from the exported array.
+ */
+const actionRegistry = new Map<string, ActionDefinition>([
+  ["list-conversations", listConversations],
+  ["find-conversation", findConversation],
+  ["find-one-on-one", findOneOnOne],
+  ["find-people", findPeopleAction],
+  ["find-chats", findChatsAction],
+  ["get-messages", getMessages],
+  ["send-message", sendMessage],
+  ["edit-message", editMessageAction],
+  ["delete-message", deleteMessageAction],
+  ["get-members", getMembers],
+  ["whoami", whoami],
+  ["get-transcript", getTranscript],
+]);
+
+/** All registered actions, derived from the registry map. */
+export const actions: ActionDefinition[] = Array.from(actionRegistry.values());

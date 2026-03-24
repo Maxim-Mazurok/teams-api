@@ -14,8 +14,9 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Command } from "commander";
 import { TeamsClient } from "./teams-client.js";
-import { actions, formatOutput } from "./actions.js";
-import type { ActionParameter, OutputFormat } from "./actions.js";
+import { actions } from "./actions/definitions.js";
+import { formatOutput } from "./actions/formatters.js";
+import type { ActionParameter, OutputFormat } from "./actions/formatters.js";
 import type {
   AutoLoginOptions,
   InteractiveLoginOptions,
@@ -131,8 +132,13 @@ function coerceParameter(
 ): unknown {
   if (value === undefined) return undefined;
   switch (type) {
-    case "number":
-      return Number(value);
+    case "number": {
+      const parsed = Number(value);
+      if (Number.isNaN(parsed)) {
+        throw new Error(`Invalid number: "${String(value)}"`);
+      }
+      return parsed;
+    }
     case "boolean":
       return value === true || value === "true";
     default:

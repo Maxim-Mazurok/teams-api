@@ -35,8 +35,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { TeamsClient } from "./teams-client.js";
-import { actions, formatOutput } from "./actions.js";
-import type { ActionParameter, OutputFormat } from "./actions.js";
+import { actions } from "./actions/definitions.js";
+import { formatOutput } from "./actions/formatters.js";
+import type { ActionParameter, OutputFormat } from "./actions/formatters.js";
 
 let clientInstance: TeamsClient | null = null;
 

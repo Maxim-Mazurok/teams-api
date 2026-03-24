@@ -8,10 +8,12 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TeamsClient } from "../../src/teams-client.js";
-import * as api from "../../src/api.js";
-import { ApiAuthError } from "../../src/api.js";
+import * as chatService from "../../src/api/chat-service.js";
+import * as middleTier from "../../src/api/middle-tier.js";
+import * as substrate from "../../src/api/substrate.js";
+import { ApiAuthError } from "../../src/api/common.js";
 import * as tokenStore from "../../src/token-store.js";
-import * as auth from "../../src/auth.js";
+import * as autoLogin from "../../src/auth/auto-login.js";
 import type {
   Conversation,
   Message,
@@ -20,26 +22,47 @@ import type {
   SentMessage,
 } from "../../src/types.js";
 
-vi.mock("../../src/api.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/api.js")>();
+vi.mock("../../src/api/chat-service.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/api/chat-service.js")>();
   return {
     ...actual,
     fetchConversations: vi.fn(),
     fetchMessagesPage: vi.fn(),
     fetchMembers: vi.fn(),
-    fetchProfiles: vi.fn(),
     postMessage: vi.fn(),
     fetchUserProperties: vi.fn(),
+  };
+});
+vi.mock("../../src/api/middle-tier.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/api/middle-tier.js")>();
+  return {
+    ...actual,
+    fetchProfiles: vi.fn(),
+  };
+});
+vi.mock("../../src/api/substrate.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/api/substrate.js")>();
+  return {
+    ...actual,
     searchPeople: vi.fn(),
     searchChats: vi.fn(),
   };
 });
 vi.mock("../../src/token-store.js");
-vi.mock("../../src/auth.js");
+vi.mock("../../src/auth/auto-login.js");
 
-const mockedApi = vi.mocked(api);
+const mockedApi = {
+  ...vi.mocked(chatService),
+  ...vi.mocked(middleTier),
+  ...vi.mocked(substrate),
+};
 const mockedTokenStore = vi.mocked(tokenStore);
-const mockedAuth = vi.mocked(auth);
+const mockedAuth = {
+  ...vi.mocked(autoLogin),
+};
 
 function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
   return {

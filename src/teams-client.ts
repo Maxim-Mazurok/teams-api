@@ -49,36 +49,31 @@ import type {
   ChatSearchResult,
   MessagesPage,
   TranscriptResult,
-  SYSTEM_STREAM_TYPES,
 } from "./types.js";
+import { SYSTEM_STREAM_TYPES } from "./types.js";
+import { isTextMessageType } from "./constants.js";
 import {
   fetchConversations,
   fetchMessagesPage,
   fetchMembers,
-  fetchProfiles,
   postMessage,
   editMessage,
   deleteMessage,
   fetchUserProperties,
-  fetchTranscript,
-  searchPeople,
-  searchChats,
-  ApiAuthError,
-  ApiRateLimitError,
-} from "./api.js";
-import {
-  acquireTokenViaAutoLogin,
-  acquireTokenViaInteractiveLogin,
-  acquireTokenViaDebugSession,
-} from "./auth.js";
+} from "./api/chat-service.js";
+import { ApiAuthError, ApiRateLimitError } from "./api/common.js";
+import { fetchProfiles } from "./api/middle-tier.js";
+import { searchPeople, searchChats } from "./api/substrate.js";
+import { fetchTranscript } from "./api/transcripts.js";
+import { acquireTokenViaAutoLogin } from "./auth/auto-login.js";
+import { acquireTokenViaInteractiveLogin } from "./auth/interactive.js";
+import { acquireTokenViaDebugSession } from "./auth/debug-session.js";
 import { DEFAULT_TEAMS_REGION, resolveTeamsRegion } from "./region.js";
 import { saveToken, loadToken, clearToken } from "./token-store.js";
 
-export {
-  acquireTokenViaAutoLogin,
-  acquireTokenViaInteractiveLogin,
-  acquireTokenViaDebugSession,
-} from "./auth.js";
+export { acquireTokenViaAutoLogin } from "./auth/auto-login.js";
+export { acquireTokenViaInteractiveLogin } from "./auth/interactive.js";
+export { acquireTokenViaDebugSession } from "./auth/debug-session.js";
 export type {
   TeamsToken,
   AutoLoginOptions,
@@ -105,35 +100,27 @@ export type {
   TranscriptResult,
 } from "./types.js";
 export { SYSTEM_STREAM_TYPES } from "./types.js";
+export { isTextMessageType } from "./constants.js";
+export { parseRawMessage } from "./api/chat-service.js";
+export { ApiAuthError, ApiRateLimitError } from "./api/common.js";
+export { fetchProfiles } from "./api/middle-tier.js";
+export { searchPeople, searchChats } from "./api/substrate.js";
 export {
-  parseRawMessage,
-  ApiAuthError,
-  ApiRateLimitError,
-  fetchProfiles,
-  searchPeople,
-  searchChats,
   fetchTranscript,
   fetchTranscriptVtt,
   parseVtt,
   extractTranscriptUrl,
   extractMeetingTitle,
   isSuccessfulRecording,
-} from "./api.js";
+} from "./api/transcripts.js";
 export { saveToken, loadToken, clearToken } from "./token-store.js";
-export { actions, formatOutput } from "./actions.js";
+export { actions } from "./actions/definitions.js";
+export { formatOutput } from "./actions/formatters.js";
 export type {
   ActionDefinition,
   ActionParameter,
   OutputFormat,
-} from "./actions.js";
-
-const SYSTEM_STREAMS: readonly string[] = [
-  "streamofannotations",
-  "streamofthreads",
-  "streamofnotifications",
-  "streamofmentions",
-  "streamofnotes",
-];
+} from "./actions/formatters.js";
 
 /**
  * Extract the MRI suffix from a sender URL or return the input unchanged.
@@ -307,7 +294,10 @@ export class TeamsClient {
       }
 
       return conversations.filter(
-        (conversation) => !SYSTEM_STREAMS.includes(conversation.threadType),
+        (conversation) =>
+          !(SYSTEM_STREAM_TYPES as readonly string[]).includes(
+            conversation.threadType,
+          ),
       );
     });
   }
@@ -642,10 +632,8 @@ export class TeamsClient {
       for (const chat of untitledChats) {
         try {
           const page = await fetchMessagesPage(this.token, chat.id, 10);
-          const textMessages = page.messages.filter(
-            (message) =>
-              message.messageType === "RichText/Html" ||
-              message.messageType === "Text",
+          const textMessages = page.messages.filter((message) =>
+            isTextMessageType(message.messageType),
           );
 
           const senderNames = [
@@ -915,8 +903,7 @@ export class TeamsClient {
           const page = await fetchMessagesPage(this.token, conversation.id, 10);
           const textMessage = page.messages.find(
             (message) =>
-              (message.messageType === "RichText/Html" ||
-                message.messageType === "Text") &&
+              isTextMessageType(message.messageType) &&
               message.senderDisplayName.length > 0,
           );
 

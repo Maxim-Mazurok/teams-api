@@ -10,8 +10,12 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { actions, formatOutput } from "../../src/actions.js";
-import type { ActionDefinition, OutputFormat } from "../../src/actions.js";
+import { actions } from "../../src/actions/definitions.js";
+import { formatOutput } from "../../src/actions/formatters.js";
+import type {
+  ActionDefinition,
+  OutputFormat,
+} from "../../src/actions/formatters.js";
 import type { TeamsClient } from "../../src/teams-client.js";
 import type {
   Conversation,
@@ -1942,5 +1946,82 @@ describe("message order parameter", () => {
     expect(result).toHaveLength(2);
     expect(result[0].content).toBe("A");
     expect(result[1].content).toBe("C");
+  });
+});
+
+// ── Parametrized structural validation across all actions ────────────
+
+describe("action registry (parametrized)", () => {
+  const expectedActionNames = [
+    "list-conversations",
+    "find-conversation",
+    "find-one-on-one",
+    "find-people",
+    "find-chats",
+    "get-messages",
+    "send-message",
+    "edit-message",
+    "delete-message",
+    "get-members",
+    "whoami",
+    "get-transcript",
+  ];
+
+  it("should contain exactly the expected actions", () => {
+    const actualNames = actions.map((action) => action.name);
+    expect(actualNames).toEqual(expectedActionNames);
+  });
+
+  it("should have no duplicate action names", () => {
+    const names = actions.map((action) => action.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  describe.each(actions)("$name", (action) => {
+    it("should have non-empty title and description", () => {
+      expect(action.title.length).toBeGreaterThan(0);
+      expect(action.description.length).toBeGreaterThan(0);
+    });
+
+    it("should have an execute function", () => {
+      expect(typeof action.execute).toBe("function");
+    });
+
+    it("should have all three format functions", () => {
+      expect(typeof action.formatResult).toBe("function");
+      expect(typeof action.formatMarkdown).toBe("function");
+      expect(typeof action.formatToon).toBe("function");
+    });
+
+    it("should have well-formed parameter definitions", () => {
+      for (const parameter of action.parameters) {
+        expect(parameter.name.length).toBeGreaterThan(0);
+        expect(["string", "number", "boolean"]).toContain(parameter.type);
+        expect(parameter.description.length).toBeGreaterThan(0);
+        expect(typeof parameter.required).toBe("boolean");
+      }
+    });
+
+    it("should not have duplicate parameter names", () => {
+      const names = action.parameters.map((parameter) => parameter.name);
+      expect(new Set(names).size).toBe(names.length);
+    });
+  });
+
+  describe("formatOutput", () => {
+    const formats: OutputFormat[] = ["json", "text", "md", "toon"];
+
+    it.each(formats)("should produce string output for %s format", (format) => {
+      const sampleData = { test: true };
+      const output = formatOutput(actions[0], sampleData, format);
+      expect(typeof output).toBe("string");
+      expect(output.length).toBeGreaterThan(0);
+    });
+
+    it("should return valid JSON for json format", () => {
+      const sampleData = { key: "value" };
+      const output = formatOutput(actions[0], sampleData, "json");
+      expect(() => JSON.parse(output)).not.toThrow();
+    });
   });
 });
