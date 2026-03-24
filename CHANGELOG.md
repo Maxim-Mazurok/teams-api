@@ -1,3 +1,10 @@
+# [0.9.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.8.0...v0.9.0) (2026-03-24)
+
+
+### Features
+
+* add file download action and attachment utilities for Teams messages ([8bd751c](https://github.com/Maxim-Mazurok/teams-api/commit/8bd751ccccb87e0927016b004a4b1bd3c6b34605))
+
 # [0.8.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.7.0...v0.8.0) (2026-03-24)
 
 
