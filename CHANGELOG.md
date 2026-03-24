@@ -1,3 +1,11 @@
+# [0.6.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.5.2...v0.6.0) (2026-03-24)
+
+
+### Features
+
+* add followers field to messages and update related parsing logic ([8b86c89](https://github.com/Maxim-Mazurok/teams-api/commit/8b86c89c918a46e4181acc2cec7b26d42fda4632))
+* implement auto-login, debug session, and interactive login for Teams authentication ([7c25d27](https://github.com/Maxim-Mazurok/teams-api/commit/7c25d2774c3ee98a38a1994a60fbd5e5fb64518c))
+
 ## [0.5.2](https://github.com/Maxim-Mazurok/teams-api/compare/v0.5.1...v0.5.2) (2026-03-24)
 
 
