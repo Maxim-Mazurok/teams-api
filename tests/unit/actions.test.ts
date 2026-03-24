@@ -199,8 +199,7 @@ describe("list-conversations", () => {
 
     expect(output).toContain("2 conversations:");
     expect(output).toContain('[0] chat: "Design Review"');
-    expect(output).toContain("members: 5");
-    expect(output).toContain('[1] chat: "(untitled 1:1 chat)"');
+    expect(output).toContain('[1] chat: "(untitled)"');
     expect(output).toContain("last: unknown");
   });
 });
@@ -1496,10 +1495,10 @@ describe("list-conversations formatMarkdown", () => {
     const output = action.formatMarkdown(conversations);
 
     expect(output).toContain("## Conversations (2)");
-    expect(output).toContain("| # | Topic | Type | Members | Last Message |");
-    expect(output).toContain("| 0 | Design Review | chat | 5 |");
+    expect(output).toContain("| # | Topic | Type | Last Message |");
+    expect(output).toContain("| 0 | Design Review | chat |");
     expect(output).toContain(
-      "| 1 | (untitled 1:1 chat) | chat | ? | unknown |",
+      "| 1 | (untitled) | chat | unknown |",
     );
   });
 
@@ -1523,7 +1522,7 @@ describe("list-conversations formatToon", () => {
     expect(output).toContain("📋 1 Conversations");
     expect(output).toContain("─".repeat(40));
     expect(output).toContain('💬 [0] "Design Review"');
-    expect(output).toContain("chat · 5 members · last: 2026-03-16");
+    expect(output).toContain("chat · last: 2026-03-16");
   });
 });
 

@@ -12,7 +12,7 @@ export const listConversations: ActionDefinition = {
   title: "List Teams Conversations",
   description:
     "List conversations (chats, group chats, meetings, channels). " +
-    "Returns conversation ID, topic, type, member count, and last message time.",
+    "Returns conversation ID, topic, type, and last message time.",
   parameters: [
     {
       name: "limit",
@@ -33,10 +33,10 @@ export const listConversations: ActionDefinition = {
       const conversation = conversations[i];
       const lastMessage =
         conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
-      const topic = conversation.topic || "(untitled 1:1 chat)";
+      const topic = conversation.topic || "(untitled)";
       lines.push(
         `  [${i}] ${conversation.threadType}: "${topic}" ` +
-          `(members: ${conversation.memberCount ?? "?"}, last: ${lastMessage})`,
+          `(last: ${lastMessage})`,
       );
     }
     return lines.join("\n");
@@ -45,15 +45,15 @@ export const listConversations: ActionDefinition = {
     const conversations = result as Conversation[];
     const lines = [`## Conversations (${conversations.length})`, ""];
     if (conversations.length === 0) return lines.join("\n");
-    lines.push("| # | Topic | Type | Members | Last Message |");
-    lines.push("|---|-------|------|---------|--------------|");
+    lines.push("| # | Topic | Type | Last Message |");
+    lines.push("|---|-------|------|--------------|");
     for (let i = 0; i < conversations.length; i++) {
       const conversation = conversations[i];
       const lastMessage =
         conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
-      const topic = conversation.topic || "(untitled 1:1 chat)";
+      const topic = conversation.topic || "(untitled)";
       lines.push(
-        `| ${i} | ${topic} | ${conversation.threadType} | ${conversation.memberCount ?? "?"} | ${lastMessage} |`,
+        `| ${i} | ${topic} | ${conversation.threadType} | ${lastMessage} |`,
       );
     }
     return lines.join("\n");
@@ -65,12 +65,10 @@ export const listConversations: ActionDefinition = {
       const conversation = conversations[i];
       const lastMessage =
         conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
-      const topic = conversation.topic || "(untitled 1:1 chat)";
+      const topic = conversation.topic || "(untitled)";
       lines.push("");
       lines.push(`  💬 [${i}] "${topic}"`);
-      lines.push(
-        `      ${conversation.threadType} · ${conversation.memberCount ?? "?"} members · last: ${lastMessage}`,
-      );
+      lines.push(`      ${conversation.threadType} · last: ${lastMessage}`);
     }
     return lines.join("\n");
   },
@@ -103,21 +101,21 @@ export const findConversation: ActionDefinition = {
     return (
       `Found: "${conversation.topic}" ` +
       `(${conversation.id}, ${conversation.threadType}, ` +
-      `members: ${conversation.memberCount ?? "?"}, last: ${lastMessage})`
+      `last: ${lastMessage})`
     );
   },
   formatMarkdown: (result) => {
     if (!result) return "No conversation found.";
     const conversation = result as Conversation;
     const lastMessage = conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
-    return [
+    const lines = [
       `## Found: "${conversation.topic}"`,
       "",
       `- **ID:** ${conversation.id}`,
       `- **Type:** ${conversation.threadType}`,
-      `- **Members:** ${conversation.memberCount ?? "?"}`,
-      `- **Last message:** ${lastMessage}`,
-    ].join("\n");
+    ];
+    lines.push(`- **Last message:** ${lastMessage}`);
+    return lines.join("\n");
   },
   formatToon: (result) => {
     if (!result) return "\n  🔍 No conversation found.";
@@ -126,7 +124,7 @@ export const findConversation: ActionDefinition = {
     return [
       toonHeader("🔍", `Found: "${conversation.topic}"`),
       `  🆔 ${conversation.id}`,
-      `  📁 ${conversation.threadType} · ${conversation.memberCount ?? "?"} members · last: ${lastMessage}`,
+      `  📁 ${conversation.threadType} · last: ${lastMessage}`,
     ].join("\n");
   },
 };

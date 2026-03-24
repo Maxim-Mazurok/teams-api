@@ -53,6 +53,7 @@ import type {
   ImageAttachment,
   FileAttachment,
   MessageContentPart,
+  UserProfile,
 } from "./types.js";
 import { SYSTEM_STREAM_TYPES } from "./types.js";
 import { isTextMessageType } from "./constants.js";
@@ -163,10 +164,60 @@ function extractMriSuffix(senderMri: string): string {
   return senderMri;
 }
 
+interface CurrentUserIdentity {
+  displayName: string;
+  userPrincipalName: string | null;
+}
+
+function parseCurrentUserIdentity(
+  properties: Record<string, unknown>,
+): CurrentUserIdentity | null {
+  let displayName =
+    typeof properties.displayname === "string" && properties.displayname
+      ? properties.displayname
+      : null;
+  let userPrincipalName: string | null = null;
+
+  if (typeof properties.userDetails === "string") {
+    try {
+      const userDetails = JSON.parse(properties.userDetails) as {
+        name?: string;
+        upn?: string;
+      };
+      if (!displayName && userDetails.name) {
+        displayName = userDetails.name;
+      }
+      if (userDetails.upn) {
+        userPrincipalName = userDetails.upn;
+      }
+    } catch {
+      // Ignore malformed userDetails JSON and continue with other fields.
+    }
+  }
+
+  if (
+    !displayName &&
+    typeof properties.primaryMemberName === "string" &&
+    properties.primaryMemberName
+  ) {
+    displayName = properties.primaryMemberName;
+  }
+
+  if (!displayName && !userPrincipalName) {
+    return null;
+  }
+
+  return {
+    displayName: displayName ?? "Unknown User",
+    userPrincipalName,
+  };
+}
+
 export class TeamsClient {
   private token: TeamsToken;
   private autoLoginOptions: AutoLoginOptions | null = null;
   private cachedDisplayName: string | null = null;
+  private cachedUserPrincipalName: string | null = null;
   private userEmail: string | null = null;
 
   private constructor(token: TeamsToken) {
@@ -349,17 +400,88 @@ export class TeamsClient {
 
       const conversations = await fetchConversations(this.token, pageSize);
 
-      if (!excludeSystem) {
-        return conversations;
+      const filtered = excludeSystem
+        ? conversations.filter(
+            (conversation) =>
+              !(SYSTEM_STREAM_TYPES as readonly string[]).includes(
+                conversation.threadType,
+              ),
+          )
+        : conversations;
+
+      // Resolve display names for untitled 1:1 chats.
+      await this.resolveOneOnOneDisplayNames(filtered);
+
+      return filtered;
+    });
+  }
+
+  /**
+   * Enrich untitled 1:1 conversations with the other member's display name.
+   */
+  private async resolveOneOnOneDisplayNames(
+    conversations: Conversation[],
+  ): Promise<void> {
+    const untitledOneOnOnes = conversations.filter(
+      (conversation) =>
+        !conversation.topic &&
+        conversation.id.includes("@unq.gbl.spaces") &&
+        !conversation.id.startsWith("48:"),
+    );
+
+    if (untitledOneOnOnes.length === 0) return;
+    const currentUserIdentity = await this.resolveCurrentUserIdentity({
+      allowSelfChatFallback: false,
+    });
+    const currentUserDisplayName = currentUserIdentity.displayName.toLowerCase();
+
+    for (const chat of untitledOneOnOnes) {
+      try {
+        const members = await this.getMembers(chat.id);
+        const namedMembers = members.filter((member) => member.displayName);
+        const otherNamedMember = namedMembers.find(
+          (member) =>
+            member.displayName.toLowerCase() !== currentUserDisplayName,
+        );
+        if (otherNamedMember) {
+          chat.topic = otherNamedMember.displayName;
+          continue;
+        }
+      } catch {
+        // Fall through to profile-based lookup.
       }
 
-      return conversations.filter(
-        (conversation) =>
-          !(SYSTEM_STREAM_TYPES as readonly string[]).includes(
-            conversation.threadType,
-          ),
+      if (!currentUserIdentity.userPrincipalName) {
+        continue;
+      }
+
+      const conversationMatch = chat.id.match(
+        /19:([a-f0-9-]+)_([a-f0-9-]+)@unq\.gbl\.spaces/i,
       );
-    });
+      if (!conversationMatch) {
+        continue;
+      }
+
+      const memberMris = [conversationMatch[1], conversationMatch[2]].map(
+        (uuid) => `8:orgid:${uuid}`,
+      );
+
+      let profiles: UserProfile[];
+      try {
+        profiles = await fetchProfiles(this.token, memberMris);
+      } catch {
+        continue;
+      }
+
+      const otherProfile = profiles.find(
+        (profile) =>
+          profile.email.toLowerCase() !==
+          currentUserIdentity.userPrincipalName?.toLowerCase(),
+      );
+      if (otherProfile?.displayName) {
+        chat.topic = otherProfile.displayName;
+      }
+    }
   }
 
   /**
@@ -1143,65 +1265,72 @@ export class TeamsClient {
 
   /**
    * Get the display name of the currently authenticated user.
-   *
-   * Resolved by reading messages from the self-chat (48:notes) or
-   * falling back to the user properties endpoint.
    */
   async getCurrentUserDisplayName(): Promise<string> {
     return this.withTokenRefresh(async () => {
-      if (this.cachedDisplayName) {
-        return this.cachedDisplayName;
+      return (await this.resolveCurrentUserIdentity()).displayName;
+    });
+  }
+
+  private async resolveCurrentUserIdentity(options?: {
+    allowSelfChatFallback?: boolean;
+  }): Promise<CurrentUserIdentity> {
+    if (this.cachedDisplayName) {
+      return {
+        displayName: this.cachedDisplayName,
+        userPrincipalName: this.cachedUserPrincipalName,
+      };
+    }
+
+    try {
+      const properties = await fetchUserProperties(this.token);
+      const currentUserIdentity = parseCurrentUserIdentity(properties);
+      if (currentUserIdentity) {
+        this.cachedDisplayName = currentUserIdentity.displayName;
+        this.cachedUserPrincipalName = currentUserIdentity.userPrincipalName;
+        return currentUserIdentity;
       }
+    } catch {
+      // Fall through to self-chat fallback.
+    }
 
-      const conversations = await fetchConversations(this.token, 10);
+    if (options?.allowSelfChatFallback === false) {
+      return {
+        displayName: "Unknown User",
+        userPrincipalName: null,
+      };
+    }
 
-      // First try: self-chat messages (most reliable)
-      for (const conversation of conversations) {
-        try {
-          if (!conversation.id.startsWith("48:notes")) continue;
+    const conversations = await fetchConversations(this.token, 10);
 
-          const page = await fetchMessagesPage(this.token, conversation.id, 10);
-          const textMessage = page.messages.find(
-            (message) =>
-              isTextMessageType(message.messageType) &&
-              message.senderDisplayName.length > 0,
-          );
-
-          if (textMessage) {
-            this.cachedDisplayName = textMessage.senderDisplayName;
-            return this.cachedDisplayName;
-          }
-        } catch {
-          continue;
-        }
-      }
-
-      // Fallback: user properties endpoint (userDetails JSON field)
+    for (const conversation of conversations) {
       try {
-        const properties = await fetchUserProperties(this.token);
-        if (typeof properties.displayname === "string") {
-          this.cachedDisplayName = properties.displayname;
-          return this.cachedDisplayName;
-        }
-        if (typeof properties.userDetails === "string") {
-          try {
-            const userDetails = JSON.parse(properties.userDetails) as {
-              name?: string;
-            };
-            if (userDetails.name) {
-              this.cachedDisplayName = userDetails.name;
-              return this.cachedDisplayName;
-            }
-          } catch {
-            // Malformed JSON — fall through
-          }
+        if (!conversation.id.startsWith("48:notes")) continue;
+
+        const page = await fetchMessagesPage(this.token, conversation.id, 10);
+        const textMessage = page.messages.find(
+          (message) =>
+            isTextMessageType(message.messageType) &&
+            message.senderDisplayName.length > 0,
+        );
+
+        if (textMessage) {
+          this.cachedDisplayName = textMessage.senderDisplayName;
+          this.cachedUserPrincipalName = null;
+          return {
+            displayName: textMessage.senderDisplayName,
+            userPrincipalName: null,
+          };
         }
       } catch {
-        // Fall through
+        continue;
       }
+    }
 
-      return "Unknown User";
-    });
+    return {
+      displayName: "Unknown User",
+      userPrincipalName: null,
+    };
   }
 
   /**
@@ -1219,6 +1348,7 @@ export class TeamsClient {
     saveToken(this.autoLoginOptions.email, freshToken);
     this.token = freshToken;
     this.cachedDisplayName = null;
+    this.cachedUserPrincipalName = null;
   }
 
   /**

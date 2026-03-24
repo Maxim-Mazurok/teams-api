@@ -36,7 +36,14 @@ The skype token is acquired from the Teams web application at `https://teams.mic
 GET /users/ME/conversations?view=mychats&pageSize={n}
 ```
 
-Returns `{ conversations: [...] }` with fields: `id`, `version`, `threadProperties.topic`, `threadProperties.memberCount`, `threadProperties.threadType`, `threadProperties.lastMessage.composetime`.
+Returns `{ conversations: [...] }` with fields including `id`, `version`, `threadProperties.threadType`, `threadProperties.topic`, and `properties.lastimreceivedtime`.
+
+Live verification notes:
+
+- `threadProperties.memberCount` was not present in the real payloads observed during integration testing.
+- 1:1 chats arrived as `threadType: "chat"` with an empty topic and an ID of the form `19:{memberA}_{memberB}@unq.gbl.spaces`.
+- Group chats, meetings, channels/topics, and spaces all omitted a reliable member count in this feed.
+- `properties.lastimreceivedtime` was the stable field for the last message timestamp.
 
 **Get messages (one page):**
 
@@ -103,12 +110,17 @@ Returns empty body on success. Only the message author can delete a message. The
 **Get members:**
 
 ```
-GET /threads/{conversationId}?view=msnp24Equivalent
+GET /threads/{conversationId}/members
 ```
 
-Returns `{ members: [{ id, friendlyName, role }] }`.
+Returns `{ members: [{ id, userDisplayName, role }], totalMemberCount, ... }`.
 
-Note: For 1:1 chats, `friendlyName` is typically empty. To resolve display names, scan recent message senders.
+Live verification notes:
+
+- `totalMemberCount` is available on this endpoint and is the reliable source for member counts when counts are needed.
+- Large threads can also return `nextLink`, so deriving counts from `members.length` alone is not reliable for paginated responses.
+- For 1:1 chats, one member may still arrive without a useful `userDisplayName`; profile lookup or message-history fallback is still needed for name resolution.
+- Because this requires a per-thread call, it is too expensive for the general `list-conversations` output.
 
 **Get user properties:**
 
@@ -116,7 +128,14 @@ Note: For 1:1 chats, `friendlyName` is typically empty. To resolve display names
 GET /users/ME/properties
 ```
 
-Returns user metadata including `displayname`.
+Returns user metadata including `userDetails` JSON.
+
+Live verification notes:
+
+- `displayname` was not present in the verified live payload.
+- `userDetails` contained JSON with at least `name` and `upn`.
+- `userDetails.name` is sufficient for `whoami` and current-user display-name resolution.
+- `userDetails.upn` is useful for distinguishing the current user from the other participant in 1:1 chats.
 
 ### Message structure
 

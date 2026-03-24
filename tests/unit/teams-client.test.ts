@@ -184,6 +184,38 @@ describe("listConversations", () => {
     expect(conversations[0].topic).toBe("Real Chat");
   });
 
+  it("should resolve untitled 1:1 chats using the current user identity", async () => {
+    mockedApi.fetchConversations.mockResolvedValueOnce([
+      makeConversation({
+        id: "19:first_second@unq.gbl.spaces",
+        topic: "",
+        threadType: "chat",
+      }),
+    ]);
+    mockedApi.fetchUserProperties.mockResolvedValueOnce({
+      userDetails: JSON.stringify({ name: "Alice Smith" }),
+    });
+    mockedApi.fetchMembers.mockResolvedValueOnce([
+      {
+        id: "8:orgid:self",
+        displayName: "Alice Smith",
+        role: "member",
+        memberType: "person",
+      },
+      {
+        id: "8:orgid:other",
+        displayName: "Bob Jones",
+        role: "member",
+        memberType: "person",
+      },
+    ]);
+
+    const client = TeamsClient.fromToken("token");
+    const conversations = await client.listConversations();
+
+    expect(conversations[0].topic).toBe("Bob Jones");
+  });
+
   it("should include system streams when excludeSystemStreams is false", async () => {
     mockedApi.fetchConversations.mockResolvedValueOnce([
       makeConversation({ threadType: "chat" }),
@@ -1323,50 +1355,46 @@ describe("getMembers", () => {
 });
 
 describe("getCurrentUserDisplayName", () => {
-  it("should get name from self-chat messages", async () => {
-    mockedApi.fetchConversations.mockResolvedValue([
-      makeConversation({ id: "48:notes" }),
-    ]);
-    mockedApi.fetchMessagesPage.mockResolvedValue(
-      makeMessagesPage([makeMessage({ senderDisplayName: "Alice Smith" })]),
-    );
-
-    const client = TeamsClient.fromToken("token");
-    const name = await client.getCurrentUserDisplayName();
-
-    expect(name).toBe("Alice Smith");
-  });
-
-  it("should cache the result", async () => {
-    mockedApi.fetchConversations.mockResolvedValue([
-      makeConversation({ id: "48:notes" }),
-    ]);
-    mockedApi.fetchMessagesPage.mockResolvedValue(
-      makeMessagesPage([makeMessage({ senderDisplayName: "Cached Name" })]),
-    );
-
-    const client = TeamsClient.fromToken("token");
-    await client.getCurrentUserDisplayName();
-    await client.getCurrentUserDisplayName();
-
-    // fetchConversations should only be called once due to caching
-    expect(mockedApi.fetchConversations).toHaveBeenCalledTimes(1);
-  });
-
-  it("should fallback to user properties endpoint", async () => {
-    mockedApi.fetchConversations.mockResolvedValue([]);
+  it("should get name from user properties endpoint first", async () => {
     mockedApi.fetchUserProperties.mockResolvedValue({
-      displayname: "From Properties",
+      userDetails: JSON.stringify({ name: "Alice Smith" }),
     });
 
     const client = TeamsClient.fromToken("token");
     const name = await client.getCurrentUserDisplayName();
 
-    expect(name).toBe("From Properties");
+    expect(name).toBe("Alice Smith");
+    expect(mockedApi.fetchConversations).not.toHaveBeenCalled();
+  });
+
+  it("should cache the result", async () => {
+    mockedApi.fetchUserProperties.mockResolvedValue({
+      userDetails: JSON.stringify({ name: "Cached Name" }),
+    });
+
+    const client = TeamsClient.fromToken("token");
+    await client.getCurrentUserDisplayName();
+    await client.getCurrentUserDisplayName();
+
+    expect(mockedApi.fetchUserProperties).toHaveBeenCalledTimes(1);
+  });
+
+  it("should fallback to self-chat messages when user properties fail", async () => {
+    mockedApi.fetchUserProperties.mockRejectedValue(new Error("Network error"));
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes" }),
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([makeMessage({ senderDisplayName: "From Self Chat" })]),
+    );
+
+    const client = TeamsClient.fromToken("token");
+    const name = await client.getCurrentUserDisplayName();
+
+    expect(name).toBe("From Self Chat");
   });
 
   it("should fallback to userDetails JSON in user properties", async () => {
-    mockedApi.fetchConversations.mockResolvedValue([]);
     mockedApi.fetchUserProperties.mockResolvedValue({
       userDetails: JSON.stringify({ name: "Alice Smith" }),
     });
@@ -1378,7 +1406,6 @@ describe("getCurrentUserDisplayName", () => {
   });
 
   it("should prefer displayname over userDetails", async () => {
-    mockedApi.fetchConversations.mockResolvedValue([]);
     mockedApi.fetchUserProperties.mockResolvedValue({
       displayname: "From Properties",
       userDetails: JSON.stringify({ name: "From UserDetails" }),
