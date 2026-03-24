@@ -33,11 +33,13 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { ContentBlock } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { TeamsClient } from "./teams-client.js";
 import { actions } from "./actions/definitions.js";
 import { formatOutput } from "./actions/formatters.js";
 import type { ActionParameter, OutputFormat } from "./actions/formatters.js";
+import type { DownloadResult } from "./actions/file-actions.js";
 import { serverInstructions } from "./server-instructions.js";
 
 let clientInstance: TeamsClient | null = null;
@@ -145,6 +147,111 @@ const server = new McpServer(
 
 // ── Register all actions as MCP tools ─────────────────────────────────
 
+/** MIME types that are safe to return as inline text to the LLM. */
+const TEXT_MIME_PREFIXES = [
+  "text/",
+  "application/json",
+  "application/xml",
+  "application/javascript",
+  "application/typescript",
+  "application/x-yaml",
+  "application/yaml",
+  "application/toml",
+];
+
+/** File extensions that are known to be text-based. */
+const TEXT_FILE_EXTENSIONS = new Set([
+  "md",
+  "txt",
+  "csv",
+  "tsv",
+  "json",
+  "xml",
+  "yaml",
+  "yml",
+  "toml",
+  "html",
+  "htm",
+  "css",
+  "js",
+  "ts",
+  "jsx",
+  "tsx",
+  "py",
+  "rb",
+  "sh",
+  "bash",
+  "zsh",
+  "ps1",
+  "bat",
+  "cmd",
+  "sql",
+  "graphql",
+  "svg",
+  "log",
+  "ini",
+  "cfg",
+  "conf",
+  "env",
+  "properties",
+]);
+
+function isTextContent(mimeType: string, fileName: string): boolean {
+  const lowerMime = mimeType.toLowerCase();
+  if (TEXT_MIME_PREFIXES.some((prefix) => lowerMime.startsWith(prefix))) {
+    return true;
+  }
+  // Fall back to file extension when MIME type is generic (e.g. application/octet-stream)
+  const extension = fileName.includes(".")
+    ? fileName.split(".").pop()?.toLowerCase()
+    : undefined;
+  return extension !== undefined && TEXT_FILE_EXTENSIONS.has(extension);
+}
+
+/**
+ * Build MCP content blocks for file download results.
+ *
+ * Returns the file content inline so the LLM can read it directly:
+ * - Text files → EmbeddedResource with text content
+ * - Images → ImageContent with base64 data
+ * - Other binary → EmbeddedResource with base64 blob
+ */
+function buildDownloadContentBlocks(
+  downloads: DownloadResult[],
+): ContentBlock[] {
+  const blocks: ContentBlock[] = [];
+  for (const download of downloads) {
+    const fileUri = `file://${download.savedTo}`;
+
+    if (download.contentType.startsWith("image/")) {
+      blocks.push({
+        type: "image" as const,
+        data: download.data.toString("base64"),
+        mimeType: download.contentType,
+      });
+    } else if (isTextContent(download.contentType, download.fileName)) {
+      blocks.push({
+        type: "resource" as const,
+        resource: {
+          uri: fileUri,
+          mimeType: download.contentType,
+          text: download.data.toString("utf-8"),
+        },
+      });
+    } else {
+      blocks.push({
+        type: "resource" as const,
+        resource: {
+          uri: fileUri,
+          mimeType: download.contentType,
+          blob: download.data.toString("base64"),
+        },
+      });
+    }
+  }
+  return blocks;
+}
+
 for (const action of actions) {
   const toolName = `teams_${action.name.replace(/-/g, "_")}`;
 
@@ -180,20 +287,34 @@ for (const action of actions) {
           parameters as Record<string, unknown>,
         );
 
+        // Build content blocks — file downloads get inline file content
+        const contentBlocks: ContentBlock[] = [
+          {
+            type: "text" as const,
+            text: formatOutput(action, result, outputFormat),
+          },
+        ];
+
+        let structuredResult = result;
+
+        if (action.name === "download-file" && Array.isArray(result)) {
+          const downloads = result as DownloadResult[];
+          contentBlocks.push(...buildDownloadContentBlocks(downloads));
+          // Strip Buffer data from structuredContent (not JSON-serializable)
+          structuredResult = downloads.map(
+            ({ data: _data, ...metadata }) => metadata,
+          );
+        }
+
         const structuredContent =
-          result !== null &&
-          typeof result === "object" &&
-          !Array.isArray(result)
-            ? (result as Record<string, unknown>)
-            : { data: result };
+          structuredResult !== null &&
+          typeof structuredResult === "object" &&
+          !Array.isArray(structuredResult)
+            ? (structuredResult as Record<string, unknown>)
+            : { data: structuredResult };
 
         return {
-          content: [
-            {
-              type: "text" as const,
-              text: formatOutput(action, result, outputFormat),
-            },
-          ],
+          content: contentBlocks,
           structuredContent,
         };
       } catch (error) {

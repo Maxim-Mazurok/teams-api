@@ -272,6 +272,16 @@ export interface DeletedMessage {
   messageId: string;
 }
 
+/** Result of scheduling a message (creating a scheduled draft). */
+export interface ScheduledMessage {
+  /** Server-assigned message ID (OriginalArrivalTime). */
+  messageId: string;
+  /** Server-reported arrival timestamp (epoch milliseconds). */
+  arrivalTime: number;
+  /** ISO timestamp when the message is scheduled to be sent. */
+  scheduledTime: string;
+}
+
 /** A page of messages with pagination metadata. */
 export interface MessagesPage {
   /** Messages in this page. */

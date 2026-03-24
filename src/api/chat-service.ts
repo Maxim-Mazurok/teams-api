@@ -18,6 +18,7 @@ import type {
   SentMessage,
   EditedMessage,
   DeletedMessage,
+  ScheduledMessage,
 } from "../types.js";
 import { fetchWithRetry, ApiAuthError } from "./common.js";
 import { parseInlineImages, parseFileAttachments } from "./attachments.js";
@@ -368,6 +369,109 @@ export async function deleteMessage(
   }
 
   return { messageId };
+}
+
+/**
+ * Schedule a message to be sent at a future time.
+ *
+ * Creates a "ScheduledDraft" via the Chat Service drafts endpoint.
+ * The server delivers the message automatically at the specified time.
+ *
+ * The `format` parameter controls how `content` is interpreted:
+ * - `"text"` — plain text, sent as-is
+ * - `"markdown"` (default) — converted from Markdown to HTML
+ * - `"html"` — raw HTML, sent as-is
+ */
+export async function postScheduledMessage(
+  token: TeamsToken,
+  conversationId: string,
+  content: string,
+  senderDisplayName: string,
+  scheduleAt: Date,
+  format: MessageFormat = "markdown",
+  amsReferences: string[] = [],
+  filesJson?: string,
+): Promise<ScheduledMessage> {
+  const url = `${chatServiceBase(token.region)}/users/ME/drafts`;
+
+  const clientMessageId = String(Date.now());
+  const { resolvedContent, messagetype } = resolveMessageContent(content, format);
+  const now = new Date().toISOString();
+
+  const body = {
+    draftDetails: {
+      sendAt: String(scheduleAt.getTime()),
+    },
+    draftType: "ScheduledDraft",
+    innerThreadId: conversationId,
+    message: {
+      id: "-1",
+      type: "Message",
+      conversationid: conversationId,
+      conversationLink: `blah/${conversationId}`,
+      composetime: now,
+      originalarrivaltime: now,
+      content: resolvedContent,
+      messagetype,
+      contenttype: "Text",
+      imdisplayname: senderDisplayName,
+      clientmessageid: clientMessageId,
+      callId: "",
+      state: 0,
+      version: "0",
+      amsreferences: amsReferences,
+      properties: {
+        importance: "",
+        subject: "",
+        title: "",
+        cards: "[]",
+        links: "[]",
+        mentions: "[]",
+        onbehalfof: null,
+        ...(filesJson ? { files: filesJson } : { files: "[]" }),
+        policyViolation: null,
+        formatVariant: "TEAMS",
+        draftId: clientMessageId,
+      },
+      crossPostChannels: [],
+      draftDetails: {
+        sendAt: scheduleAt.toISOString(),
+      },
+      threadtype: "streamofdrafts",
+      innerThreadId: conversationId,
+    },
+  };
+
+  const response = await fetchWithRetry(url, {
+    method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
+    const errorText = await response.text();
+    throw new Error(
+      `Failed to schedule message: ${response.status} ${response.statusText} — ${errorText}`,
+    );
+  }
+
+  const data = (await response.json()) as {
+    OriginalArrivalTime: number;
+  };
+
+  return {
+    messageId: String(data.OriginalArrivalTime),
+    arrivalTime: data.OriginalArrivalTime,
+    scheduledTime: scheduleAt.toISOString(),
+  };
 }
 
 /**

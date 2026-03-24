@@ -25,6 +25,7 @@ import type {
   SentMessage,
   EditedMessage,
   DeletedMessage,
+  ScheduledMessage,
 } from "../../src/types.js";
 
 // ── Mock client factory ──────────────────────────────────────────────
@@ -45,6 +46,7 @@ function createMockClient(
     sendMessageWithFiles: vi.fn(),
     editMessage: vi.fn(),
     deleteMessage: vi.fn(),
+    scheduleMessage: vi.fn(),
     getMembers: vi.fn(),
     getCurrentUserDisplayName: vi.fn(),
     getToken: vi.fn(() => ({ skypeToken: "test-token", region: "apac" })),
@@ -931,6 +933,124 @@ describe("send-message", () => {
     expect(output).toContain('Message sent to "Design Review"');
     expect(output).toContain("Message ID: 1773000000000");
     expect(output).toContain("Arrival time: 1773000000000");
+  });
+
+  it("should schedule message when scheduleAt is provided", async () => {
+    const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
+    const conversation = makeConversation({
+      id: "19:chat@thread.v2",
+      topic: "Design Review",
+    });
+    const scheduledMessage: ScheduledMessage = {
+      messageId: "1753021800000",
+      arrivalTime: 1753021800000,
+      scheduledTime: futureDate,
+    };
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(conversation),
+      scheduleMessage: vi.fn().mockResolvedValue(scheduledMessage),
+    });
+
+    const result = (await action.execute(client, {
+      chat: "Design Review",
+      content: "Future hello!",
+      scheduleAt: futureDate,
+    })) as ScheduledMessage & { conversation: string; scheduled: boolean };
+
+    expect(client.scheduleMessage).toHaveBeenCalledWith(
+      "19:chat@thread.v2",
+      "Future hello!",
+      expect.any(Date),
+      "markdown",
+    );
+    expect(result.messageId).toBe("1753021800000");
+    expect(result.scheduledTime).toBe(futureDate);
+    expect(result.scheduled).toBe(true);
+    expect(result.conversation).toBe("Design Review");
+  });
+
+  it("should reject scheduleAt with image attachments", async () => {
+    const client = createMockClient();
+
+    await expect(
+      action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        content: "Hello",
+        scheduleAt: "2025-07-20T14:30:00.000Z",
+        image: ["/path/to/image.png"],
+      }),
+    ).rejects.toThrow(
+      "Scheduled messages cannot include --image or --file attachments",
+    );
+  });
+
+  it("should reject invalid scheduleAt value", async () => {
+    const client = createMockClient();
+
+    await expect(
+      action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        content: "Hello",
+        scheduleAt: "not-a-date",
+      }),
+    ).rejects.toThrow('Invalid --scheduleAt value: "not-a-date"');
+  });
+
+  it("should reject scheduleAt in the past", async () => {
+    const client = createMockClient();
+
+    await expect(
+      action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        content: "Hello",
+        scheduleAt: "2020-01-01T00:00:00.000Z",
+      }),
+    ).rejects.toThrow("Scheduled time must be in the future");
+  });
+
+  it("should format scheduled result correctly", () => {
+    const result = {
+      messageId: "1753021800000",
+      arrivalTime: 1753021800000,
+      scheduledTime: "2025-07-20T14:30:00.000Z",
+      conversation: "Design Review",
+      scheduled: true,
+    };
+
+    const output = action.formatResult(result);
+
+    expect(output).toContain('Message scheduled for "Design Review"');
+    expect(output).toContain("Scheduled for: 2025-07-20T14:30:00.000Z");
+  });
+
+  it("should format scheduled result as markdown", () => {
+    const result = {
+      messageId: "1753021800000",
+      arrivalTime: 1753021800000,
+      scheduledTime: "2025-07-20T14:30:00.000Z",
+      conversation: "Design Review",
+      scheduled: true,
+    };
+
+    const output = action.formatMarkdown!(result);
+
+    expect(output).toContain("## Message Scheduled");
+    expect(output).toContain("**Scheduled for:** 2025-07-20T14:30:00.000Z");
+  });
+
+  it("should format scheduled result as toon", () => {
+    const result = {
+      messageId: "1753021800000",
+      arrivalTime: 1753021800000,
+      scheduledTime: "2025-07-20T14:30:00.000Z",
+      conversation: "Design Review",
+      scheduled: true,
+    };
+
+    const output = action.formatToon!(result);
+
+    expect(output).toContain("Message Scheduled!");
+    expect(output).toContain("Scheduled for: 2025-07-20T14:30:00.000Z");
   });
 });
 
@@ -1953,6 +2073,200 @@ describe("message order parameter", () => {
     expect(result).toHaveLength(2);
     expect(result[0].content).toBe("A");
     expect(result[1].content).toBe("C");
+  });
+});
+
+// ── Download file ────────────────────────────────────────────────────
+
+describe("download-file", () => {
+  const downloadFileAction = getAction("download-file");
+
+  it("should download SharePoint file and save to temp directory", async () => {
+    const fileData = Buffer.from("# Hello World");
+    const mockClient = createMockClient({
+      getMessages: vi.fn().mockResolvedValue([
+        makeMessage({
+          id: "msg-1",
+          files: [
+            {
+              itemId: "item-1",
+              fileName: "readme.md",
+              fileType: "md",
+              fileUrl:
+                "https://contoso-my.sharepoint.com/personal/alice_contoso_com/Documents/readme.md",
+              shareUrl: "https://contoso.sharepoint.com/share/abc",
+            },
+          ],
+        }),
+      ]),
+      downloadFile: vi.fn().mockResolvedValue({
+        data: fileData,
+        contentType: "text/markdown",
+        size: fileData.length,
+        fileName: "readme.md",
+      }),
+    });
+
+    const result = (await downloadFileAction.execute(mockClient, {
+      conversationId: "19:test@thread.space",
+      messageId: "msg-1",
+    })) as import("../../src/actions/file-actions.js").DownloadResult[];
+
+    expect(result).toHaveLength(1);
+    expect(result[0].fileName).toBe("readme.md");
+    expect(result[0].fileType).toBe("md");
+    expect(result[0].size).toBe(fileData.length);
+    expect(result[0].contentType).toBe("text/markdown");
+    expect(result[0].data).toEqual(fileData);
+    // savedTo should always be populated (temp directory)
+    expect(result[0].savedTo).toMatch(/readme\.md$/);
+    expect(result[0].savedTo).toContain("teams-download-");
+  });
+
+  it("should save to specified output directory", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const testDirectory = mkdtempSync(join(tmpdir(), "teams-test-"));
+
+    const fileData = Buffer.from("test content");
+    const mockClient = createMockClient({
+      getMessages: vi.fn().mockResolvedValue([
+        makeMessage({
+          id: "msg-1",
+          files: [
+            {
+              itemId: "item-1",
+              fileName: "test.txt",
+              fileType: "txt",
+              fileUrl:
+                "https://contoso-my.sharepoint.com/personal/alice_contoso_com/Documents/test.txt",
+              shareUrl: "",
+            },
+          ],
+        }),
+      ]),
+      downloadFile: vi.fn().mockResolvedValue({
+        data: fileData,
+        contentType: "text/plain",
+        size: fileData.length,
+        fileName: "test.txt",
+      }),
+    });
+
+    const result = (await downloadFileAction.execute(mockClient, {
+      conversationId: "19:test@thread.space",
+      messageId: "msg-1",
+      outputDirectory: testDirectory,
+    })) as import("../../src/actions/file-actions.js").DownloadResult[];
+
+    expect(result[0].savedTo).toBe(join(testDirectory, "test.txt"));
+
+    // Verify the file was actually written
+    const { readFileSync } = await import("node:fs");
+    expect(readFileSync(result[0].savedTo, "utf-8")).toBe("test content");
+
+    // Cleanup
+    const { rmSync } = await import("node:fs");
+    rmSync(testDirectory, { recursive: true });
+  });
+
+  it("should download AMS images", async () => {
+    const imageData = Buffer.from("fake-image-data");
+    const mockClient = createMockClient({
+      getMessages: vi.fn().mockResolvedValue([
+        makeMessage({
+          id: "msg-1",
+          images: [
+            {
+              amsObjectId: "ams-123",
+              url: "https://as-prod.asyncgw.teams.microsoft.com/v1/objects/ams-123/views/imgo",
+              fullSizeUrl:
+                "https://as-prod.asyncgw.teams.microsoft.com/v1/objects/ams-123/views/imgpsh_fullsize_anim",
+              width: 800,
+              height: 600,
+              contentPosition: 0,
+            },
+          ],
+        }),
+      ]),
+      downloadImage: vi.fn().mockResolvedValue({
+        data: imageData,
+        contentType: "image/jpeg",
+        size: imageData.length,
+      }),
+    });
+
+    const result = (await downloadFileAction.execute(mockClient, {
+      conversationId: "19:test@thread.space",
+      messageId: "msg-1",
+    })) as import("../../src/actions/file-actions.js").DownloadResult[];
+
+    expect(result).toHaveLength(1);
+    expect(result[0].fileName).toBe("ams-123.jpg");
+    expect(result[0].fileType).toBe("image");
+    expect(result[0].contentType).toBe("image/jpeg");
+    expect(result[0].data).toEqual(imageData);
+    expect(result[0].savedTo).toBeTruthy();
+  });
+
+  it("should throw when message not found", async () => {
+    const mockClient = createMockClient({
+      getMessages: vi.fn().mockResolvedValue([makeMessage({ id: "other" })]),
+    });
+
+    await expect(
+      downloadFileAction.execute(mockClient, {
+        conversationId: "19:test@thread.space",
+        messageId: "missing",
+      }),
+    ).rejects.toThrow("Message missing not found");
+  });
+
+  it("should throw when message has no attachments", async () => {
+    const mockClient = createMockClient({
+      getMessages: vi.fn().mockResolvedValue([makeMessage({ id: "msg-1" })]),
+    });
+
+    await expect(
+      downloadFileAction.execute(mockClient, {
+        conversationId: "19:test@thread.space",
+        messageId: "msg-1",
+      }),
+    ).rejects.toThrow("has no file attachments or images");
+  });
+
+  it("formatResult should include saved path", () => {
+    const result = [
+      {
+        fileName: "test.md",
+        fileType: "md",
+        size: 100,
+        contentType: "text/markdown",
+        savedTo: "/tmp/teams-download-abc/test.md",
+        data: Buffer.from("test"),
+      },
+    ];
+    const output = downloadFileAction.formatResult(result);
+    expect(output).toContain("test.md");
+    expect(output).toContain("100 bytes");
+    expect(output).toContain("/tmp/teams-download-abc/test.md");
+  });
+
+  it("formatToon should include saved path", () => {
+    const result = [
+      {
+        fileName: "test.md",
+        fileType: "md",
+        size: 100,
+        contentType: "text/markdown",
+        savedTo: "/tmp/teams-download-abc/test.md",
+        data: Buffer.from("test"),
+      },
+    ];
+    const output = downloadFileAction.formatToon(result);
+    expect(output).toContain("test.md");
+    expect(output).toContain("/tmp/teams-download-abc/test.md");
   });
 });
 

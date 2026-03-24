@@ -13,6 +13,7 @@ import {
   postMessage,
   editMessage,
   deleteMessage,
+  postScheduledMessage,
   fetchUserProperties,
   parseRawMessage,
 } from "../../src/api/chat-service.js";
@@ -676,6 +677,125 @@ describe("deleteMessage", () => {
     await expect(
       deleteMessage(testToken, "conv-id", "msg-123"),
     ).rejects.toBeInstanceOf(ApiAuthError);
+  });
+});
+
+describe("postScheduledMessage", () => {
+  it("should send POST to /users/ME/drafts with correct body", async () => {
+    const scheduleAt = new Date("2025-07-20T14:30:00.000Z");
+    mockFetchResponse({ OriginalArrivalTime: 1753021800000 });
+
+    const result = await postScheduledMessage(
+      testToken,
+      "19:conv-id@thread.v2",
+      "Scheduled hello",
+      "Alice Smith",
+      scheduleAt,
+    );
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/users/ME/drafts"),
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"draftType":"ScheduledDraft"'),
+      }),
+    );
+
+    const callBody = JSON.parse(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
+    );
+    expect(callBody.draftDetails.sendAt).toBe(
+      String(scheduleAt.getTime()),
+    );
+    expect(callBody.innerThreadId).toBe("19:conv-id@thread.v2");
+    expect(callBody.message.content).toContain("Scheduled hello");
+    expect(callBody.message.imdisplayname).toBe("Alice Smith");
+    expect(callBody.message.draftDetails.sendAt).toBe(
+      scheduleAt.toISOString(),
+    );
+    expect(callBody.message.threadtype).toBe("streamofdrafts");
+
+    expect(result.messageId).toBe("1753021800000");
+    expect(result.arrivalTime).toBe(1753021800000);
+    expect(result.scheduledTime).toBe("2025-07-20T14:30:00.000Z");
+  });
+
+  it("should throw on failure with error body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      text: () => Promise.resolve("Invalid draft"),
+      headers: new Headers(),
+    });
+
+    await expect(
+      postScheduledMessage(
+        testToken,
+        "conv-id",
+        "Test",
+        "Alice",
+        new Date("2025-07-20T14:30:00Z"),
+      ),
+    ).rejects.toThrow(
+      "Failed to schedule message: 400 Bad Request — Invalid draft",
+    );
+  });
+
+  it("should throw ApiAuthError on 401", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      text: () => Promise.resolve("Token expired"),
+    });
+
+    await expect(
+      postScheduledMessage(
+        testToken,
+        "conv-id",
+        "Test",
+        "Alice",
+        new Date("2025-07-20T14:30:00Z"),
+      ),
+    ).rejects.toBeInstanceOf(ApiAuthError);
+  });
+
+  it("should convert markdown content to HTML", async () => {
+    mockFetchResponse({ OriginalArrivalTime: 1753021800000 });
+
+    await postScheduledMessage(
+      testToken,
+      "conv-id",
+      "**bold text**",
+      "Alice",
+      new Date("2025-07-20T14:30:00Z"),
+      "markdown",
+    );
+
+    const callBody = JSON.parse(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
+    );
+    expect(callBody.message.messagetype).toBe("RichText/Html");
+  });
+
+  it("should send plain text when format is text", async () => {
+    mockFetchResponse({ OriginalArrivalTime: 1753021800000 });
+
+    await postScheduledMessage(
+      testToken,
+      "conv-id",
+      "plain text",
+      "Alice",
+      new Date("2025-07-20T14:30:00Z"),
+      "text",
+    );
+
+    const callBody = JSON.parse(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
+    );
+    expect(callBody.message.messagetype).toBe("Text");
+    expect(callBody.message.content).toBe("plain text");
   });
 });
 

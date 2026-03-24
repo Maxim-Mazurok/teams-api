@@ -42,6 +42,7 @@ import type {
   SentMessage,
   EditedMessage,
   DeletedMessage,
+  ScheduledMessage,
   GetMessagesOptions,
   ListConversationsOptions,
   OneOnOneSearchResult,
@@ -62,6 +63,7 @@ import {
   postMessage,
   editMessage,
   deleteMessage,
+  postScheduledMessage,
   fetchUserProperties,
 } from "./api/chat-service.js";
 import { ApiAuthError, ApiRateLimitError } from "./api/common.js";
@@ -842,6 +844,35 @@ export class TeamsClient {
   ): Promise<DeletedMessage> {
     return this.withTokenRefresh(async () => {
       return deleteMessage(this.token, conversationId, messageId);
+    });
+  }
+
+  /**
+   * Schedule a message to be sent at a future time.
+   *
+   * The `format` parameter controls how `content` is interpreted:
+   * - `"text"` — plain text, sent as-is
+   * - `"markdown"` (default) — converted from Markdown to HTML
+   * - `"html"` — raw HTML, sent as-is
+   */
+  async scheduleMessage(
+    conversationId: string,
+    content: string,
+    scheduleAt: Date,
+    format: MessageFormat = "markdown",
+    amsReferences: string[] = [],
+  ): Promise<ScheduledMessage> {
+    return this.withTokenRefresh(async () => {
+      const displayName = await this.getCurrentUserDisplayName();
+      return postScheduledMessage(
+        this.token,
+        conversationId,
+        content,
+        displayName,
+        scheduleAt,
+        format,
+        amsReferences,
+      );
     });
   }
 

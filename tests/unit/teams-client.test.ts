@@ -21,6 +21,7 @@ import type {
   Member,
   MessagesPage,
   SentMessage,
+  ScheduledMessage,
 } from "../../src/types.js";
 
 vi.mock("../../src/api/chat-service.js", async (importOriginal) => {
@@ -32,6 +33,7 @@ vi.mock("../../src/api/chat-service.js", async (importOriginal) => {
     fetchMessagesPage: vi.fn(),
     fetchMembers: vi.fn(),
     postMessage: vi.fn(),
+    postScheduledMessage: vi.fn(),
     fetchUserProperties: vi.fn(),
   };
 });
@@ -886,6 +888,71 @@ describe("sendMessage", () => {
       "conv-id",
       "<b>Bold</b>",
       "Test User",
+      "html",
+      [],
+    );
+  });
+});
+
+describe("scheduleMessage", () => {
+  it("should resolve display name and schedule with default markdown format", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes" }),
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
+    );
+
+    const expectedResult: ScheduledMessage = {
+      messageId: "1753021800000",
+      arrivalTime: 1753021800000,
+      scheduledTime: "2025-07-20T14:30:00.000Z",
+    };
+    mockedApi.postScheduledMessage.mockResolvedValue(expectedResult);
+
+    const client = TeamsClient.fromToken("token");
+    const scheduleAt = new Date("2025-07-20T14:30:00.000Z");
+    const result = await client.scheduleMessage("conv-id", "Hello later!", scheduleAt);
+
+    expect(result).toEqual(expectedResult);
+    expect(mockedApi.postScheduledMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ skypeToken: "token" }),
+      "conv-id",
+      "Hello later!",
+      "Test User",
+      scheduleAt,
+      "markdown",
+      [],
+    );
+  });
+
+  it("should pass explicit format to postScheduledMessage", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes" }),
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
+    );
+    mockedApi.postScheduledMessage.mockResolvedValue({
+      messageId: "msg-2",
+      arrivalTime: 1753021800000,
+      scheduledTime: "2025-07-20T14:30:00.000Z",
+    });
+
+    const client = TeamsClient.fromToken("token");
+    await client.scheduleMessage(
+      "conv-id",
+      "<b>Bold</b>",
+      new Date("2025-07-20T14:30:00.000Z"),
+      "html",
+    );
+
+    expect(mockedApi.postScheduledMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ skypeToken: "token" }),
+      "conv-id",
+      "<b>Bold</b>",
+      "Test User",
+      expect.any(Date),
       "html",
       [],
     );

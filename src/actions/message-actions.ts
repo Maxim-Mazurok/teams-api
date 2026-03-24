@@ -6,7 +6,7 @@
 
 import { readFileSync } from "node:fs";
 import { basename, extname } from "node:path";
-import type { Message, MessageFormat, MessageContentPart } from "../types.js";
+import type { Message, MessageFormat, MessageContentPart, ScheduledMessage } from "../types.js";
 import { isTextMessageType } from "../constants.js";
 import {
   type ActionDefinition,
@@ -332,6 +332,15 @@ export const sendMessage: ActionDefinition = {
       required: false,
       default: "markdown",
     },
+    {
+      name: "scheduleAt",
+      type: "string",
+      description:
+        "Schedule the message to be sent at a future time. " +
+        "Accepts an ISO 8601 timestamp (e.g. 2025-01-15T14:30:00Z). " +
+        "Cannot be combined with --image or --file attachments.",
+      required: false,
+    },
   ],
   execute: async (client, parameters) => {
     const { conversationId, label } = await resolveConversationId(
@@ -341,11 +350,44 @@ export const sendMessage: ActionDefinition = {
     const content = (parameters.content as string | undefined) ?? "";
     const imagePaths = (parameters.image as string[] | undefined) ?? [];
     const filePaths = (parameters.file as string[] | undefined) ?? [];
+    const scheduleAtRaw = parameters.scheduleAt as string | undefined;
 
     if (!content && imagePaths.length === 0 && filePaths.length === 0) {
       throw new Error(
         "At least one of --content, --image, or --file must be provided",
       );
+    }
+
+    if (
+      scheduleAtRaw &&
+      (imagePaths.length > 0 || filePaths.length > 0)
+    ) {
+      throw new Error(
+        "Scheduled messages cannot include --image or --file attachments",
+      );
+    }
+
+    if (scheduleAtRaw) {
+      const scheduleAt = new Date(scheduleAtRaw);
+      if (isNaN(scheduleAt.getTime())) {
+        throw new Error(
+          `Invalid --scheduleAt value: "${scheduleAtRaw}". Use an ISO 8601 timestamp (e.g. 2025-01-15T14:30:00Z).`,
+        );
+      }
+      if (scheduleAt.getTime() <= Date.now()) {
+        throw new Error(
+          "Scheduled time must be in the future",
+        );
+      }
+      const messageFormat =
+        (parameters.messageFormat as MessageFormat | undefined) ?? "markdown";
+      const result = await client.scheduleMessage(
+        conversationId,
+        content,
+        scheduleAt,
+        messageFormat,
+      );
+      return { ...result, conversation: label, scheduled: true };
     }
 
     if (filePaths.length > 0) {
@@ -376,11 +418,21 @@ export const sendMessage: ActionDefinition = {
     return { ...result, conversation: label };
   },
   formatResult: (result) => {
-    const { messageId, arrivalTime, conversation } = result as {
-      messageId: string;
-      arrivalTime: number;
-      conversation: string;
-    };
+    const { messageId, arrivalTime, conversation, scheduled, scheduledTime } =
+      result as {
+        messageId: string;
+        arrivalTime: number;
+        conversation: string;
+        scheduled?: boolean;
+        scheduledTime?: string;
+      };
+    if (scheduled) {
+      return [
+        `Message scheduled for "${conversation}"`,
+        `  Message ID: ${messageId}`,
+        `  Scheduled for: ${scheduledTime}`,
+      ].join("\n");
+    }
     return [
       `Message sent to "${conversation}"`,
       `  Message ID: ${messageId}`,
@@ -388,11 +440,23 @@ export const sendMessage: ActionDefinition = {
     ].join("\n");
   },
   formatMarkdown: (result) => {
-    const { messageId, arrivalTime, conversation } = result as {
-      messageId: string;
-      arrivalTime: number;
-      conversation: string;
-    };
+    const { messageId, arrivalTime, conversation, scheduled, scheduledTime } =
+      result as {
+        messageId: string;
+        arrivalTime: number;
+        conversation: string;
+        scheduled?: boolean;
+        scheduledTime?: string;
+      };
+    if (scheduled) {
+      return [
+        "## Message Scheduled",
+        "",
+        `- **To:** ${conversation}`,
+        `- **Message ID:** ${messageId}`,
+        `- **Scheduled for:** ${scheduledTime}`,
+      ].join("\n");
+    }
     return [
       "## Message Sent",
       "",
@@ -402,11 +466,22 @@ export const sendMessage: ActionDefinition = {
     ].join("\n");
   },
   formatToon: (result) => {
-    const { messageId, arrivalTime, conversation } = result as {
-      messageId: string;
-      arrivalTime: number;
-      conversation: string;
-    };
+    const { messageId, arrivalTime, conversation, scheduled, scheduledTime } =
+      result as {
+        messageId: string;
+        arrivalTime: number;
+        conversation: string;
+        scheduled?: boolean;
+        scheduledTime?: string;
+      };
+    if (scheduled) {
+      return [
+        toonHeader("📅", "Message Scheduled!"),
+        `  📨 To: "${conversation}"`,
+        `  🆔 ${messageId}`,
+        `  ⏰ Scheduled for: ${scheduledTime}`,
+      ].join("\n");
+    }
     return [
       toonHeader("✅", "Message Sent!"),
       `  📨 To: "${conversation}"`,

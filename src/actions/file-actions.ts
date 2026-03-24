@@ -4,20 +4,23 @@
  * Actions: download-file.
  */
 
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 import { type ActionDefinition, toonHeader } from "./formatters.js";
 import {
   conversationParameters,
   resolveConversationId,
 } from "./conversation-resolution.js";
 
-interface DownloadResult {
+export interface DownloadResult {
   fileName: string;
   fileType: string;
   size: number;
   contentType: string;
-  savedTo: string | null;
+  savedTo: string;
+  data: Buffer;
 }
 
 export const downloadFileAction: ActionDefinition = {
@@ -28,8 +31,9 @@ export const downloadFileAction: ActionDefinition = {
     "Identify the conversation by topic name (--chat), " +
     "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
     "Specify the message containing the file(s) via --message-id. " +
-    "Use --output-directory to save files to disk. " +
-    "Without --output-directory, returns file metadata only.",
+    "Use --output-directory to save files to a specific directory. " +
+    "Without --output-directory, files are saved to a temporary directory. " +
+    "File contents are returned inline in the response.",
   parameters: [
     ...conversationParameters,
     {
@@ -63,6 +67,12 @@ export const downloadFileAction: ActionDefinition = {
       throw new Error(`Message ${messageId} has no file attachments or images`);
     }
 
+    // Determine output directory — use provided directory or create a unique temp directory
+    const resolvedOutputDirectory = outputDirectory
+      ? resolve(outputDirectory)
+      : resolve(join(tmpdir(), `teams-download-${randomUUID()}`));
+    mkdirSync(resolvedOutputDirectory, { recursive: true });
+
     const results: DownloadResult[] = [];
 
     // Download file attachments (SharePoint)
@@ -72,19 +82,16 @@ export const downloadFileAction: ActionDefinition = {
         file.itemId,
       );
 
-      let savedTo: string | null = null;
-      if (outputDirectory) {
-        const outputPath = resolve(join(outputDirectory, fileName));
-        writeFileSync(outputPath, data);
-        savedTo = outputPath;
-      }
+      const outputPath = resolve(join(resolvedOutputDirectory, fileName));
+      writeFileSync(outputPath, data);
 
       results.push({
         fileName,
         fileType: file.fileType,
         size,
         contentType,
-        savedTo,
+        savedTo: outputPath,
+        data,
       });
     }
 
@@ -96,19 +103,16 @@ export const downloadFileAction: ActionDefinition = {
       );
 
       const fileName = `${image.amsObjectId}.jpg`;
-      let savedTo: string | null = null;
-      if (outputDirectory) {
-        const outputPath = resolve(join(outputDirectory, fileName));
-        writeFileSync(outputPath, data);
-        savedTo = outputPath;
-      }
+      const outputPath = resolve(join(resolvedOutputDirectory, fileName));
+      writeFileSync(outputPath, data);
 
       results.push({
         fileName,
         fileType: "image",
         size,
         contentType,
-        savedTo,
+        savedTo: outputPath,
+        data,
       });
     }
 
@@ -121,9 +125,7 @@ export const downloadFileAction: ActionDefinition = {
       lines.push(
         `  ${download.fileName} (${download.fileType}, ${download.size} bytes)`,
       );
-      if (download.savedTo) {
-        lines.push(`    Saved to: ${download.savedTo}`);
-      }
+      lines.push(`    Saved to: ${download.savedTo}`);
     }
     return lines.join("\n");
   },
@@ -134,9 +136,7 @@ export const downloadFileAction: ActionDefinition = {
       lines.push(
         `- **${download.fileName}** (${download.fileType}, ${download.size} bytes)`,
       );
-      if (download.savedTo) {
-        lines.push(`  - Saved to: \`${download.savedTo}\``);
-      }
+      lines.push(`  - Saved to: \`${download.savedTo}\``);
     }
     return lines.join("\n");
   },
@@ -147,9 +147,7 @@ export const downloadFileAction: ActionDefinition = {
       lines.push("");
       lines.push(`  📄 ${download.fileName}`);
       lines.push(`     ${download.fileType} · ${download.size} bytes`);
-      if (download.savedTo) {
-        lines.push(`     💾 ${download.savedTo}`);
-      }
+      lines.push(`     💾 ${download.savedTo}`);
     }
     return lines.join("\n");
   },
