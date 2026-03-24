@@ -167,6 +167,23 @@ export class TeamsClient {
 
     const cachedToken = loadToken(options.email);
     if (cachedToken) {
+      // Re-authenticate if the cached token is missing substrate or bearer
+      // tokens — these are required for people/chat search and profile
+      // resolution. Tokens captured before these were added will be stale.
+      if (!cachedToken.substrateToken || !cachedToken.bearerToken) {
+        log(
+          "Cached token is missing substrate or bearer token, re-authenticating...",
+        );
+        clearToken(options.email);
+        const freshToken = await acquireTokenViaAutoLogin(options);
+        saveToken(options.email, freshToken);
+        log("Fresh token saved to Keychain");
+
+        const client = new TeamsClient(freshToken);
+        client.autoLoginOptions = options;
+        return client;
+      }
+
       const region = resolveTeamsRegion(options.region, cachedToken.region);
       const token =
         region === cachedToken.region
@@ -309,7 +326,7 @@ export class TeamsClient {
       if (topicMatch) return topicMatch;
 
       // Use Substrate chat search for broader matching (by member names, etc.)
-      if (this.token.substrateToken) {
+      try {
         const chatResults = await searchChats(this.token, query, 5);
         for (const chatResult of chatResults) {
           const matchingConversation = conversations.find(
@@ -317,6 +334,8 @@ export class TeamsClient {
           );
           if (matchingConversation) return matchingConversation;
         }
+      } catch {
+        // Substrate unavailable — local topic match above was the only option
       }
 
       return null;
@@ -326,41 +345,158 @@ export class TeamsClient {
   /**
    * Search for people in the organization directory by name.
    *
-   * Uses the Substrate search API (requires a Substrate token captured
-   * during authentication). Returns matching people with MRIs, emails,
-   * job titles, and departments.
+   * Primary: Substrate search API (requires Substrate token).
+   * Fallback: resolves members of recent conversations via the
+   * middle-tier profile API (requires Bearer token). Extracts
+   * member UUIDs directly from 1:1 conversation IDs (zero extra
+   * API calls for those) and scans a limited set of group chats.
    */
   async findPeople(
     query: string,
     maxResults = 10,
   ): Promise<PersonSearchResult[]> {
     return this.withTokenRefresh(async () => {
-      return searchPeople(this.token, query, maxResults);
+      try {
+        const substrateResults = await searchPeople(
+          this.token,
+          query,
+          maxResults,
+        );
+        if (substrateResults.length > 0) {
+          return substrateResults;
+        }
+      } catch {
+        // Substrate unavailable — fall through to profile-based search
+      }
+
+      // Fallback: search members of recent conversations via profiles
+      if (!this.token.bearerToken) {
+        return [];
+      }
+
+      const queryLower = query.toLowerCase();
+      const conversations = await fetchConversations(this.token, 100);
+      const memberMris = new Set<string>();
+
+      // Step 1: Extract UUIDs from 1:1 conversation IDs (no API calls needed)
+      for (const conversation of conversations) {
+        const match = conversation.id.match(
+          /19:([a-f0-9-]+)_([a-f0-9-]+)@unq\.gbl\.spaces/i,
+        );
+        if (match) {
+          memberMris.add(`8:orgid:${match[1]}`);
+          memberMris.add(`8:orgid:${match[2]}`);
+        }
+      }
+
+      // Step 2: Scan a limited set of group chats for their members
+      const maxGroupChatsToScan = 10;
+      let groupChatsScanned = 0;
+      for (const conversation of conversations) {
+        if (groupChatsScanned >= maxGroupChatsToScan) break;
+        if (
+          conversation.id.includes("@unq.gbl.spaces") ||
+          conversation.id.startsWith("48:")
+        ) {
+          continue;
+        }
+        if (
+          conversation.threadType === "chat" ||
+          conversation.threadType === "topic"
+        ) {
+          try {
+            const members = await fetchMembers(this.token, conversation.id);
+            for (const member of members) {
+              if (member.id.startsWith("8:orgid:")) {
+                memberMris.add(member.id);
+              }
+            }
+            groupChatsScanned++;
+          } catch {
+            continue;
+          }
+        }
+      }
+
+      if (memberMris.size === 0) {
+        return [];
+      }
+
+      const profiles = await fetchProfiles(this.token, [...memberMris]);
+      const matchingProfiles = profiles
+        .filter((profile) =>
+          profile.displayName.toLowerCase().includes(queryLower),
+        )
+        .slice(0, maxResults);
+
+      return matchingProfiles.map((profile) => ({
+        displayName: profile.displayName,
+        mri: profile.mri,
+        email: profile.email,
+        jobTitle: profile.jobTitle,
+        department: "",
+        objectId: profile.mri.replace("8:orgid:", ""),
+      }));
     });
   }
 
   /**
    * Search for chats by name or member name.
    *
-   * Uses the Substrate search API (requires a Substrate token captured
-   * during authentication). Returns matching chats with thread IDs,
-   * member lists, and matching member details.
+   * Primary: Substrate search API (requires Substrate token).
+   * Fallback: local topic matching on listed conversations.
    */
   async findChats(query: string, maxResults = 10): Promise<ChatSearchResult[]> {
     return this.withTokenRefresh(async () => {
-      return searchChats(this.token, query, maxResults);
+      try {
+        const substrateResults = await searchChats(
+          this.token,
+          query,
+          maxResults,
+        );
+        if (substrateResults.length > 0) {
+          return substrateResults;
+        }
+      } catch {
+        // Substrate unavailable — fall through to local topic matching
+      }
+
+      // Fallback: match conversation topics locally
+      const conversations = await this.listConversations({ pageSize: 100 });
+      const queryLower = query.toLowerCase();
+      const matchingChats: ChatSearchResult[] = [];
+
+      for (const conversation of conversations) {
+        if (
+          conversation.topic &&
+          conversation.topic.toLowerCase().includes(queryLower)
+        ) {
+          matchingChats.push({
+            name: conversation.topic,
+            threadId: conversation.id,
+            threadType: conversation.threadType,
+            matchingMembers: [],
+            chatMembers: [],
+            totalMemberCount: conversation.memberCount ?? 0,
+          });
+          if (matchingChats.length >= maxResults) break;
+        }
+      }
+
+      return matchingChats;
     });
   }
 
   /**
    * Find a 1:1 conversation with a specific person.
    *
-   * Uses the Substrate people/chat search API to find the person by name
-   * and locate the corresponding 1:1 chat thread. Falls back to scanning
-   * message history when the Substrate token is unavailable.
-   *
-   * Also checks the self-chat (48:notes) if the query matches the
-   * current user's name.
+   * Tries multiple strategies in order:
+   *   1. Self-chat check (if the name matches the current user)
+   *   2. Substrate people/chat search (if Substrate token available)
+   *   3. Profile-based 1:1 matching (if Bearer token available) —
+   *      extracts member UUIDs from conversation IDs and resolves
+   *      display names via the middle-tier profile API
+   *   4. Message sender scanning (slowest, always available)
    */
   async findOneOnOneConversation(
     personName: string,
@@ -383,16 +519,14 @@ export class TeamsClient {
         }
       }
 
-      // Primary: use Substrate search API for people + chat lookup
-      if (this.token.substrateToken) {
-        // Search for the person to confirm they exist and get their MRI
+      // Strategy 1: Substrate search API for people + chat lookup
+      try {
         const people = await searchPeople(this.token, personName, 5);
         const matchedPerson = people.find((person) =>
           person.displayName.toLowerCase().includes(targetLower),
         );
 
         if (matchedPerson) {
-          // Search for chats that include this person
           const chats = await searchChats(this.token, personName, 10);
 
           // Look for a 1:1 chat (Chat type, exactly 2 members)
@@ -411,8 +545,7 @@ export class TeamsClient {
             }
           }
 
-          // If no 1:1 chat was found in search results, check if any
-          // conversation in our list matches the person's MRI
+          // Check if any conversation ID contains the person's UUID
           const personUuid = matchedPerson.mri.replace("8:orgid:", "");
           const matchingConversation = conversations.find(
             (conversation) =>
@@ -426,11 +559,56 @@ export class TeamsClient {
             };
           }
         }
-
-        return null;
+      } catch {
+        // Substrate unavailable — fall through to profile-based matching
       }
 
-      // Fallback: scan message senders when substrate token is unavailable
+      // Strategy 2: Profile-based matching for 1:1 chats (uses Bearer token)
+      if (this.token.bearerToken) {
+        const oneOnOneChats = conversations.filter(
+          (conversation) =>
+            conversation.id.includes("@unq.gbl.spaces") &&
+            !conversation.id.startsWith("48:"),
+        );
+
+        // Extract all member UUIDs from 1:1 conversation IDs
+        // Format: 19:{uuid1}_{uuid2}@unq.gbl.spaces
+        const uuidToConversationId = new Map<string, string>();
+        for (const chat of oneOnOneChats) {
+          const match = chat.id.match(
+            /19:([a-f0-9-]+)_([a-f0-9-]+)@unq\.gbl\.spaces/i,
+          );
+          if (match) {
+            uuidToConversationId.set(match[1], chat.id);
+            uuidToConversationId.set(match[2], chat.id);
+          }
+        }
+
+        if (uuidToConversationId.size > 0) {
+          const mris = [...uuidToConversationId.keys()].map(
+            (uuid) => `8:orgid:${uuid}`,
+          );
+          try {
+            const profiles = await fetchProfiles(this.token, mris);
+            for (const profile of profiles) {
+              if (profile.displayName.toLowerCase().includes(targetLower)) {
+                const uuid = profile.mri.replace("8:orgid:", "");
+                const conversationId = uuidToConversationId.get(uuid);
+                if (conversationId) {
+                  return {
+                    conversationId,
+                    memberDisplayName: profile.displayName,
+                  };
+                }
+              }
+            }
+          } catch {
+            // Profile resolution failed, fall through to message scanning
+          }
+        }
+      }
+
+      // Strategy 3: scan message senders (slowest fallback)
       const untitledChats = conversations.filter(
         (conversation) =>
           conversation.threadType === "chat" &&

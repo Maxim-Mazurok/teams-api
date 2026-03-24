@@ -684,7 +684,9 @@ export async function searchPeople(
   maxResults = 10,
 ): Promise<PersonSearchResult[]> {
   if (!token.substrateToken) {
-    return [];
+    throw new ApiAuthError(
+      "Substrate token is missing — re-authentication required for people search",
+    );
   }
 
   const url = `${SUBSTRATE_SEARCH_BASE}/search/api/v1/suggestions?scenario=peoplepicker.newChat`;
@@ -796,7 +798,9 @@ export async function searchChats(
   maxResults = 10,
 ): Promise<ChatSearchResult[]> {
   if (!token.substrateToken) {
-    return [];
+    throw new ApiAuthError(
+      "Substrate token is missing — re-authentication required for chat search",
+    );
   }
 
   const url = `${SUBSTRATE_SEARCH_BASE}/search/api/v1/suggestions?scenario=peoplepicker.newChat`;

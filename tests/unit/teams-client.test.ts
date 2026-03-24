@@ -368,6 +368,11 @@ describe("findOneOnOneConversation", () => {
       makeConversation({ id: "19:chat1", threadType: "chat", topic: "" }),
     ]);
 
+    // searchPeople throws when substrate token is missing
+    mockedApi.searchPeople.mockRejectedValue(
+      new ApiAuthError("Substrate token is missing"),
+    );
+
     mockedApi.fetchMessagesPage.mockResolvedValue(
       makeMessagesPage([
         makeMessage({
@@ -383,7 +388,6 @@ describe("findOneOnOneConversation", () => {
 
     expect(result).not.toBeNull();
     expect(result!.memberDisplayName).toBe("Alice Smith");
-    expect(mockedApi.searchPeople).not.toHaveBeenCalled();
   });
 
   it("should return null when no match found via search", async () => {
@@ -391,6 +395,7 @@ describe("findOneOnOneConversation", () => {
 
     mockedApi.searchPeople.mockResolvedValue([]);
     mockedApi.searchChats.mockResolvedValue([]);
+    mockedApi.fetchProfiles.mockResolvedValue([]);
 
     const client = TeamsClient.fromToken(
       "token",
@@ -403,10 +408,96 @@ describe("findOneOnOneConversation", () => {
     expect(result).toBeNull();
   });
 
+  it("should fall back to profile-based matching when substrate search returns empty", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({
+        id: "19:aaa11111-1111-1111-1111-111111111111_bbb22222-2222-2222-2222-222222222222@unq.gbl.spaces",
+        threadType: "chat",
+        topic: "",
+      }),
+    ]);
+
+    // Substrate returns nothing
+    mockedApi.searchPeople.mockResolvedValue([]);
+    mockedApi.searchChats.mockResolvedValue([]);
+
+    // Profile resolution resolves the UUIDs from conversation IDs
+    mockedApi.fetchProfiles.mockResolvedValue([
+      {
+        mri: "8:orgid:aaa11111-1111-1111-1111-111111111111",
+        displayName: "Current User",
+        email: "me@example.com",
+        jobTitle: "",
+        userType: "Member",
+      },
+      {
+        mri: "8:orgid:bbb22222-2222-2222-2222-222222222222",
+        displayName: "Alice Smith",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        userType: "Member",
+      },
+    ]);
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findOneOnOneConversation("Alice");
+
+    expect(result).not.toBeNull();
+    expect(result!.conversationId).toBe(
+      "19:aaa11111-1111-1111-1111-111111111111_bbb22222-2222-2222-2222-222222222222@unq.gbl.spaces",
+    );
+    expect(result!.memberDisplayName).toBe("Alice Smith");
+  });
+
+  it("should fall back to profile-based matching when no substrate token", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({
+        id: "19:aaa11111-1111-1111-1111-111111111111_bbb22222-2222-2222-2222-222222222222@unq.gbl.spaces",
+        threadType: "chat",
+        topic: "",
+      }),
+    ]);
+
+    // searchPeople will throw when no substrate token
+    mockedApi.searchPeople.mockRejectedValue(
+      new ApiAuthError("Substrate token is missing"),
+    );
+
+    mockedApi.fetchProfiles.mockResolvedValue([
+      {
+        mri: "8:orgid:bbb22222-2222-2222-2222-222222222222",
+        displayName: "Alice Smith",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        userType: "Member",
+      },
+    ]);
+
+    // Bearer token but no substrate token
+    const client = TeamsClient.fromToken("token", "apac", "bearer");
+    const result = await client.findOneOnOneConversation("Alice");
+
+    expect(result).not.toBeNull();
+    expect(result!.conversationId).toBe(
+      "19:aaa11111-1111-1111-1111-111111111111_bbb22222-2222-2222-2222-222222222222@unq.gbl.spaces",
+    );
+    expect(result!.memberDisplayName).toBe("Alice Smith");
+  });
+
   it("should return null when no match found via fallback", async () => {
     mockedApi.fetchConversations.mockResolvedValue([
       makeConversation({ id: "19:chat1", threadType: "chat", topic: "" }),
     ]);
+
+    // No substrate token — searchPeople throws
+    mockedApi.searchPeople.mockRejectedValue(
+      new ApiAuthError("Substrate token is missing"),
+    );
 
     mockedApi.fetchMessagesPage.mockResolvedValue(
       makeMessagesPage([makeMessage({ senderDisplayName: "Someone Else" })]),
@@ -451,13 +542,73 @@ describe("findPeople", () => {
     );
   });
 
-  it("should return empty array when no substrate token", async () => {
-    mockedApi.searchPeople.mockResolvedValue([]);
+  it("should return empty array when no substrate token and no bearer token", async () => {
+    mockedApi.searchPeople.mockRejectedValue(
+      new ApiAuthError("Substrate token is missing"),
+    );
+    mockedApi.fetchConversations.mockResolvedValue([]);
 
     const client = TeamsClient.fromToken("token");
     const result = await client.findPeople("Alice");
 
     expect(result).toEqual([]);
+  });
+
+  it("should fall back to conversation members when substrate returns empty", async () => {
+    mockedApi.searchPeople.mockRejectedValue(
+      new ApiAuthError("Substrate token is missing"),
+    );
+
+    // 1:1 chat → UUIDs extracted from conversation ID directly
+    // Group chat → members fetched via fetchMembers
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({
+        id: "19:aaa11111-1111-1111-1111-111111111111_bbb22222-2222-2222-2222-222222222222@unq.gbl.spaces",
+        threadType: "chat",
+        topic: "",
+      }),
+      makeConversation({ id: "19:group@thread.v2", threadType: "chat" }),
+    ]);
+
+    mockedApi.fetchMembers.mockResolvedValue([
+      {
+        id: "8:orgid:ccc33333-3333-3333-3333-333333333333",
+        displayName: "",
+        role: "User",
+        memberType: "person" as const,
+      },
+    ]);
+
+    mockedApi.fetchProfiles.mockResolvedValue([
+      {
+        mri: "8:orgid:aaa11111-1111-1111-1111-111111111111",
+        displayName: "Current User",
+        email: "me@example.com",
+        jobTitle: "",
+        userType: "Member",
+      },
+      {
+        mri: "8:orgid:bbb22222-2222-2222-2222-222222222222",
+        displayName: "Alice Smith",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        userType: "Member",
+      },
+      {
+        mri: "8:orgid:ccc33333-3333-3333-3333-333333333333",
+        displayName: "Bob Jones",
+        email: "bob@example.com",
+        jobTitle: "Designer",
+        userType: "Member",
+      },
+    ]);
+
+    const client = TeamsClient.fromToken("token", "apac", "bearer");
+    const result = await client.findPeople("Alice");
+
+    expect(result).toHaveLength(1);
+    expect(result[0].displayName).toBe("Alice Smith");
+    expect(result[0].email).toBe("alice@example.com");
   });
 });
 
@@ -493,8 +644,48 @@ describe("findChats", () => {
     );
   });
 
-  it("should return empty array when no substrate token", async () => {
-    mockedApi.searchChats.mockResolvedValue([]);
+  it("should fall back to local topic matching when substrate returns empty", async () => {
+    mockedApi.searchChats.mockRejectedValue(
+      new ApiAuthError("Substrate token is missing"),
+    );
+
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({
+        id: "19:design@thread.v2",
+        topic: "Design Team Chat",
+        threadType: "topic",
+        memberCount: 5,
+      }),
+      makeConversation({
+        id: "19:other@thread.v2",
+        topic: "Marketing Team",
+        threadType: "topic",
+        memberCount: 3,
+      }),
+    ]);
+
+    const client = TeamsClient.fromToken("token");
+    const result = await client.findChats("Design");
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Design Team Chat");
+    expect(result[0].threadId).toBe("19:design@thread.v2");
+    expect(result[0].threadType).toBe("topic");
+    expect(result[0].totalMemberCount).toBe(5);
+  });
+
+  it("should return empty array when no substrate token and no topic matches", async () => {
+    mockedApi.searchChats.mockRejectedValue(
+      new ApiAuthError("Substrate token is missing"),
+    );
+
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({
+        id: "19:other@thread.v2",
+        topic: "Marketing Team",
+        threadType: "topic",
+      }),
+    ]);
 
     const client = TeamsClient.fromToken("token");
     const result = await client.findChats("Design");
@@ -1058,7 +1249,12 @@ describe("getCurrentUserDisplayName", () => {
 
 describe("TeamsClient.create", () => {
   it("should use cached token when available", async () => {
-    const cachedToken = { skypeToken: "cached-token", region: "apac" };
+    const cachedToken = {
+      skypeToken: "cached-token",
+      region: "apac",
+      substrateToken: "substrate-token",
+      bearerToken: "bearer-token",
+    };
     mockedTokenStore.loadToken.mockReturnValue(cachedToken);
 
     const client = await TeamsClient.create({
@@ -1071,7 +1267,12 @@ describe("TeamsClient.create", () => {
   });
 
   it("should apply an explicit region override to a cached token", async () => {
-    const cachedToken = { skypeToken: "cached-token", region: "apac" };
+    const cachedToken = {
+      skypeToken: "cached-token",
+      region: "apac",
+      substrateToken: "substrate-token",
+      bearerToken: "bearer-token",
+    };
     mockedTokenStore.loadToken.mockReturnValue(cachedToken);
 
     const client = await TeamsClient.create({
@@ -1108,6 +1309,60 @@ describe("TeamsClient.create", () => {
     );
     expect(client.getToken()).toEqual(freshToken);
   });
+
+  it("should re-authenticate when cached token is missing substrate token", async () => {
+    const incompleteToken = { skypeToken: "cached-token", region: "apac" };
+    const freshToken = {
+      skypeToken: "fresh-token",
+      region: "apac",
+      substrateToken: "substrate-token",
+      bearerToken: "bearer-token",
+    };
+    mockedTokenStore.loadToken.mockReturnValue(incompleteToken);
+    mockedAuth.acquireTokenViaAutoLogin.mockResolvedValue(freshToken);
+
+    const client = await TeamsClient.create({
+      email: "user@company.com",
+    });
+
+    expect(mockedTokenStore.clearToken).toHaveBeenCalledWith(
+      "user@company.com",
+    );
+    expect(mockedAuth.acquireTokenViaAutoLogin).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "user@company.com" }),
+    );
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "user@company.com",
+      freshToken,
+    );
+    expect(client.getToken()).toEqual(freshToken);
+  });
+
+  it("should re-authenticate when cached token is missing bearer token", async () => {
+    const incompleteToken = {
+      skypeToken: "cached-token",
+      region: "apac",
+      substrateToken: "substrate-token",
+    };
+    const freshToken = {
+      skypeToken: "fresh-token",
+      region: "apac",
+      substrateToken: "substrate-token",
+      bearerToken: "bearer-token",
+    };
+    mockedTokenStore.loadToken.mockReturnValue(incompleteToken);
+    mockedAuth.acquireTokenViaAutoLogin.mockResolvedValue(freshToken);
+
+    const client = await TeamsClient.create({
+      email: "user@company.com",
+    });
+
+    expect(mockedTokenStore.clearToken).toHaveBeenCalledWith(
+      "user@company.com",
+    );
+    expect(mockedAuth.acquireTokenViaAutoLogin).toHaveBeenCalled();
+    expect(client.getToken()).toEqual(freshToken);
+  });
 });
 
 describe("TeamsClient.clearCachedToken", () => {
@@ -1122,7 +1377,12 @@ describe("TeamsClient.clearCachedToken", () => {
 
 describe("withTokenRefresh (automatic 401 retry)", () => {
   it("should refresh token and retry on ApiAuthError", async () => {
-    const initialToken = { skypeToken: "old-token", region: "apac" };
+    const initialToken = {
+      skypeToken: "old-token",
+      region: "apac",
+      substrateToken: "substrate-token",
+      bearerToken: "bearer-token",
+    };
     const refreshedToken = { skypeToken: "new-token", region: "apac" };
     mockedTokenStore.loadToken.mockReturnValue(initialToken);
 
@@ -1157,6 +1417,8 @@ describe("withTokenRefresh (automatic 401 retry)", () => {
     mockedTokenStore.loadToken.mockReturnValue({
       skypeToken: "token",
       region: "apac",
+      substrateToken: "substrate-token",
+      bearerToken: "bearer-token",
     });
 
     const client = await TeamsClient.create({
@@ -1189,7 +1451,12 @@ describe("withTokenRefresh (automatic 401 retry)", () => {
   });
 
   it("should propagate error if retry also fails", async () => {
-    const initialToken = { skypeToken: "token", region: "apac" };
+    const initialToken = {
+      skypeToken: "token",
+      region: "apac",
+      substrateToken: "substrate-token",
+      bearerToken: "bearer-token",
+    };
     const refreshedToken = { skypeToken: "new-token", region: "apac" };
     mockedTokenStore.loadToken.mockReturnValue(initialToken);
 
