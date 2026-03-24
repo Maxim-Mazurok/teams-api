@@ -1,3 +1,10 @@
+# [0.8.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.7.0...v0.8.0) (2026-03-24)
+
+
+### Features
+
+* add search and utility actions for people and chats ([937e077](https://github.com/Maxim-Mazurok/teams-api/commit/937e07785e5d05288c92ff47ae9addb74a5d471e))
+
 # [0.7.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.6.0...v0.7.0) (2026-03-24)
 
 
