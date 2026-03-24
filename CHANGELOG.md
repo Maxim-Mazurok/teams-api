@@ -1,3 +1,10 @@
+# [0.4.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.3.3...v0.4.0) (2026-03-24)
+
+
+### Features
+
+* add edit message functionality to API and client ([640f0f4](https://github.com/Maxim-Mazurok/teams-api/commit/640f0f4268813c18e189b16c7c414b6f015020d8))
+
 ## [0.3.3](https://github.com/Maxim-Mazurok/teams-api/compare/v0.3.2...v0.3.3) (2026-03-24)
 
 
