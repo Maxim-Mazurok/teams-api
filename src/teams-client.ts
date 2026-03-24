@@ -675,16 +675,18 @@ export class TeamsClient {
   }
 
   /**
-   * Get all messages from a conversation.
+   * Get messages from a conversation.
    *
-   * Follows pagination links to fetch the complete message history.
-   * Use `maxPages` and `pageSize` to control how much is fetched.
+   * Follows pagination links to fetch message history.
+   * Use `limit` to cap the total number of messages returned.
+   * Use `maxPages` and `pageSize` to fine-tune pagination behaviour.
    */
   async getMessages(
     conversationId: string,
     options?: GetMessagesOptions,
   ): Promise<Message[]> {
     return this.withTokenRefresh(async () => {
+      const limit = options?.limit;
       const maxPages = options?.maxPages ?? 100;
       const pageSize = options?.pageSize ?? 200;
       const allMessages: Message[] = [];
@@ -701,10 +703,14 @@ export class TeamsClient {
 
         options?.onProgress?.(allMessages.length);
 
+        if (limit !== undefined && allMessages.length >= limit) break;
         if (!result.backwardLink) break;
         backwardLink = result.backwardLink;
       }
 
+      if (limit !== undefined && allMessages.length > limit) {
+        return allMessages.slice(0, limit);
+      }
       return allMessages;
     });
   }

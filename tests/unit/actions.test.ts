@@ -431,8 +431,7 @@ describe("get-messages", () => {
     });
 
     expect(client.getMessages).toHaveBeenCalledWith("19:direct@thread.v2", {
-      maxPages: 100,
-      pageSize: 200,
+      limit: undefined,
       onProgress: undefined,
     });
     expect(result).toEqual(messages);
@@ -451,7 +450,7 @@ describe("get-messages", () => {
     expect(client.findConversation).toHaveBeenCalledWith("Design Review");
     expect(client.getMessages).toHaveBeenCalledWith(
       "19:resolved@thread.v2",
-      expect.objectContaining({ maxPages: 100 }),
+      expect.objectContaining({ limit: undefined }),
     );
   });
 
@@ -471,7 +470,7 @@ describe("get-messages", () => {
     expect(client.findOneOnOneConversation).toHaveBeenCalledWith("Luke");
     expect(client.getMessages).toHaveBeenCalledWith(
       "19:one-on-one@unq.gbl.spaces",
-      expect.objectContaining({ maxPages: 100 }),
+      expect.objectContaining({ limit: undefined }),
     );
   });
 
@@ -512,7 +511,7 @@ describe("get-messages", () => {
     expect(client.findOneOnOneConversation).toHaveBeenCalledWith("Witold");
     expect(client.getMessages).toHaveBeenCalledWith(
       "19:one-on-one@unq.gbl.spaces",
-      expect.objectContaining({ maxPages: 100 }),
+      expect.objectContaining({ limit: undefined }),
     );
   });
 
@@ -530,7 +529,7 @@ describe("get-messages", () => {
     expect(client.findOneOnOneConversation).not.toHaveBeenCalled();
     expect(client.getMessages).toHaveBeenCalledWith(
       conversationId,
-      expect.objectContaining({ maxPages: 100 }),
+      expect.objectContaining({ limit: undefined }),
     );
   });
 
@@ -588,20 +587,18 @@ describe("get-messages", () => {
     expect(result).toHaveLength(2);
   });
 
-  it("should pass custom maxPages and pageSize", async () => {
+  it("should pass custom limit", async () => {
     const client = createMockClient({
       getMessages: vi.fn().mockResolvedValue([]),
     });
 
     await action.execute(client, {
       conversationId: "19:test@thread.v2",
-      maxPages: 5,
-      pageSize: 50,
+      limit: 50,
     });
 
     expect(client.getMessages).toHaveBeenCalledWith("19:test@thread.v2", {
-      maxPages: 5,
-      pageSize: 50,
+      limit: 50,
       onProgress: undefined,
     });
   });
@@ -618,8 +615,7 @@ describe("get-messages", () => {
     });
 
     expect(client.getMessages).toHaveBeenCalledWith("19:test@thread.v2", {
-      maxPages: 100,
-      pageSize: 200,
+      limit: undefined,
       onProgress,
     });
   });

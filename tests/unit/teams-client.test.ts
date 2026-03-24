@@ -762,6 +762,41 @@ describe("getMessages", () => {
 
     expect(mockedApi.fetchMessagesPage).toHaveBeenCalledTimes(1);
   });
+
+  it("should stop fetching once limit is reached", async () => {
+    mockedApi.fetchMessagesPage
+      .mockResolvedValueOnce(
+        makeMessagesPage(
+          [makeMessage({ id: "1" }), makeMessage({ id: "2" })],
+          "https://next-page",
+        ),
+      )
+      .mockResolvedValueOnce(
+        makeMessagesPage(
+          [makeMessage({ id: "3" }), makeMessage({ id: "4" })],
+          "https://another-page",
+        ),
+      );
+
+    const client = TeamsClient.fromToken("token");
+    const messages = await client.getMessages("conv-id", { limit: 3 });
+
+    expect(messages).toHaveLength(3);
+    expect(messages.map((message) => message.id)).toEqual(["1", "2", "3"]);
+    // Should not fetch a third page since limit was reached after page 2
+    expect(mockedApi.fetchMessagesPage).toHaveBeenCalledTimes(2);
+  });
+
+  it("should return all messages when limit exceeds available", async () => {
+    mockedApi.fetchMessagesPage.mockResolvedValueOnce(
+      makeMessagesPage([makeMessage({ id: "1" })], null),
+    );
+
+    const client = TeamsClient.fromToken("token");
+    const messages = await client.getMessages("conv-id", { limit: 100 });
+
+    expect(messages).toHaveLength(1);
+  });
 });
 
 describe("sendMessage", () => {

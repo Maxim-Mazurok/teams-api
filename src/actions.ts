@@ -403,18 +403,12 @@ const getMessages: ActionDefinition = {
   parameters: [
     ...conversationParameters,
     {
-      name: "maxPages",
+      name: "limit",
       type: "number",
-      description: "Maximum pagination pages to fetch",
+      description:
+        "Maximum number of messages to return. " +
+        "Omit to fetch the entire conversation history.",
       required: false,
-      default: 100,
-    },
-    {
-      name: "pageSize",
-      type: "number",
-      description: "Messages per page",
-      required: false,
-      default: 200,
     },
     {
       name: "textOnly",
@@ -435,16 +429,14 @@ const getMessages: ActionDefinition = {
   ],
   execute: async (client, parameters) => {
     const { conversationId } = await resolveConversationId(client, parameters);
-    const maxPages = (parameters.maxPages as number | undefined) ?? 100;
-    const pageSize = (parameters.pageSize as number | undefined) ?? 200;
+    const limit = parameters.limit as number | undefined;
     const textOnly = (parameters.textOnly as boolean | undefined) ?? true;
     const onProgress = parameters.onProgress as
       | ((count: number) => void)
       | undefined;
 
     let messages = await client.getMessages(conversationId, {
-      maxPages,
-      pageSize,
+      limit,
       onProgress,
     });
 

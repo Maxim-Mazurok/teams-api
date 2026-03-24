@@ -206,6 +206,10 @@ export interface MessagesPage {
 
 /** Options for fetching messages from a conversation. */
 export interface GetMessagesOptions {
+  /** Maximum total number of messages to return. When set, pagination stops
+   *  as soon as at least this many messages have been collected, and the
+   *  result is trimmed to exactly `limit` items. */
+  limit?: number;
   /** Maximum number of pagination pages to fetch (default: 100). */
   maxPages?: number;
   /** Number of messages per page (default: 200). */
