@@ -67,7 +67,9 @@ Content-Type: application/json
 }
 ```
 
-Returns `{ OriginalArrivalTime: <timestamp>, id: <messageId> }`.
+Returns `{ OriginalArrivalTime: <timestamp>, id: <clientMessageId> }`.
+
+**Important:** The `id` field in the response is the echoed-back `clientmessageid`, NOT the server-assigned message ID. The server-assigned ID is `OriginalArrivalTime` — this is the value that must be used for edit and delete operations. Using the `clientmessageid` for edit/delete causes a `ColdStoreNotSupportedForMessageException` error.
 
 The `imdisplayname` field is required — it determines how the sender name appears in the chat. If omitted, the message sender shows as blank.
 

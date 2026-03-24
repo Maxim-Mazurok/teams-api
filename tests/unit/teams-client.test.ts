@@ -774,7 +774,7 @@ describe("sendMessage", () => {
     );
 
     const expectedResult: SentMessage = {
-      messageId: "msg-1",
+      messageId: "1773000000000",
       arrivalTime: 1773000000000,
     };
     mockedApi.postMessage.mockResolvedValue(expectedResult);

@@ -158,9 +158,9 @@ export type MessageFormat = "text" | "markdown" | "html";
 
 /** Result of sending a message. */
 export interface SentMessage {
-  /** Server-assigned or client-generated message ID. */
+  /** Server-assigned message ID (OriginalArrivalTime). Use this for edit/delete operations. */
   messageId: string;
-  /** Server-reported arrival timestamp (epoch milliseconds). */
+  /** Server-reported arrival timestamp (epoch milliseconds). Same value as messageId in numeric form. */
   arrivalTime: number;
 }
 

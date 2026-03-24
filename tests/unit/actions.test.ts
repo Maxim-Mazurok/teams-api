@@ -771,7 +771,7 @@ describe("send-message", () => {
       topic: "Design Review",
     });
     const sentMessage: SentMessage = {
-      messageId: "msg-123",
+      messageId: "1773000000000",
       arrivalTime: 1773000000000,
     };
     const client = createMockClient({
@@ -789,13 +789,13 @@ describe("send-message", () => {
       "Hello!",
       "markdown",
     );
-    expect(result.messageId).toBe("msg-123");
+    expect(result.messageId).toBe("1773000000000");
     expect(result.conversation).toBe("Design Review");
   });
 
   it("should pass explicit messageFormat to sendMessage", async () => {
     const sentMessage: SentMessage = {
-      messageId: "msg-text",
+      messageId: "1773000000000",
       arrivalTime: 1773000000000,
     };
     const client = createMockClient({
@@ -817,7 +817,7 @@ describe("send-message", () => {
 
   it("should pass html messageFormat to sendMessage", async () => {
     const sentMessage: SentMessage = {
-      messageId: "msg-html",
+      messageId: "1773000000000",
       arrivalTime: 1773000000000,
     };
     const client = createMockClient({
@@ -843,7 +843,7 @@ describe("send-message", () => {
       memberDisplayName: "Luke Prior",
     };
     const sentMessage: SentMessage = {
-      messageId: "msg-456",
+      messageId: "1773000000000",
       arrivalTime: 1773000000000,
     };
     const client = createMockClient({
@@ -872,7 +872,7 @@ describe("send-message", () => {
 
   it("should format result correctly", () => {
     const result = {
-      messageId: "msg-123",
+      messageId: "1773000000000",
       arrivalTime: 1773000000000,
       conversation: "Design Review",
     };
@@ -880,7 +880,7 @@ describe("send-message", () => {
     const output = action.formatResult(result);
 
     expect(output).toContain('Message sent to "Design Review"');
-    expect(output).toContain("Message ID: msg-123");
+    expect(output).toContain("Message ID: 1773000000000");
     expect(output).toContain("Arrival time: 1773000000000");
   });
 });

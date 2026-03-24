@@ -330,7 +330,7 @@ describe("fetchProfiles", () => {
 
 describe("postMessage", () => {
   it("should default to markdown format and convert to HTML", async () => {
-    mockFetchResponse({ OriginalArrivalTime: 1773000000000, id: "msg-123" });
+    mockFetchResponse({ OriginalArrivalTime: 1773000000000 });
 
     const result = await postMessage(
       testToken,
@@ -339,7 +339,7 @@ describe("postMessage", () => {
       "Test User",
     );
 
-    expect(result.messageId).toBe("msg-123");
+    expect(result.messageId).toBe("1773000000000");
     expect(result.arrivalTime).toBe(1773000000000);
 
     const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
@@ -357,7 +357,7 @@ describe("postMessage", () => {
   });
 
   it("should send plain text when format is text", async () => {
-    mockFetchResponse({ OriginalArrivalTime: 1773000000000, id: "msg-456" });
+    mockFetchResponse({ OriginalArrivalTime: 1773000000000 });
 
     await postMessage(testToken, "conv-id", "Hello!", "Test User", "text");
 
@@ -372,7 +372,7 @@ describe("postMessage", () => {
   });
 
   it("should pass through raw HTML when format is html", async () => {
-    mockFetchResponse({ OriginalArrivalTime: 1773000000000, id: "msg-789" });
+    mockFetchResponse({ OriginalArrivalTime: 1773000000000 });
 
     const htmlContent = "<b>Bold</b> and <i>italic</i>";
     await postMessage(testToken, "conv-id", htmlContent, "Test User", "html");
@@ -388,7 +388,7 @@ describe("postMessage", () => {
   });
 
   it("should convert markdown features to HTML", async () => {
-    mockFetchResponse({ OriginalArrivalTime: 1773000000000, id: "msg-md" });
+    mockFetchResponse({ OriginalArrivalTime: 1773000000000 });
 
     const markdownContent = [
       "# Heading",
@@ -421,7 +421,7 @@ describe("postMessage", () => {
     expect(sentBody.messagetype).toBe("RichText/Html");
   });
 
-  it("should use clientMessageId as fallback when server returns no id", async () => {
+  it("should use OriginalArrivalTime as messageId", async () => {
     mockFetchResponse({ OriginalArrivalTime: 1773000000000 });
 
     const result = await postMessage(
@@ -431,8 +431,7 @@ describe("postMessage", () => {
       "Test User",
     );
 
-    expect(result.messageId).toBeTruthy();
-    expect(Number(result.messageId)).toBeGreaterThan(0);
+    expect(result.messageId).toBe("1773000000000");
   });
 
   it("should throw on failure with error body", async () => {

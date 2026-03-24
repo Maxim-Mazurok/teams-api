@@ -388,11 +388,10 @@ export async function postMessage(
 
   const data = (await response.json()) as {
     OriginalArrivalTime: number;
-    id?: string;
   };
 
   return {
-    messageId: data.id ?? clientMessageId,
+    messageId: String(data.OriginalArrivalTime),
     arrivalTime: data.OriginalArrivalTime,
   };
 }
