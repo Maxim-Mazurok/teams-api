@@ -362,6 +362,8 @@ export class TeamsClient {
     maxResults = 10,
   ): Promise<PersonSearchResult[]> {
     return this.withTokenRefresh(async () => {
+      let authError: ApiAuthError | null = null;
+
       try {
         const substrateResults = await searchPeople(
           this.token,
@@ -371,14 +373,14 @@ export class TeamsClient {
         if (substrateResults.length > 0) {
           return substrateResults;
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof ApiAuthError) {
+          authError = error;
+        }
         // Substrate unavailable — fall through to profile-based search
       }
 
       // Fallback: search members of recent conversations via profiles
-      if (!this.token.bearerToken) {
-        return [];
-      }
 
       const queryLower = query.toLowerCase();
       const conversations = await fetchConversations(this.token, 100);
@@ -425,6 +427,7 @@ export class TeamsClient {
       }
 
       if (memberMris.size === 0) {
+        if (authError) throw authError;
         return [];
       }
 
@@ -454,6 +457,8 @@ export class TeamsClient {
    */
   async findChats(query: string, maxResults = 10): Promise<ChatSearchResult[]> {
     return this.withTokenRefresh(async () => {
+      let authError: ApiAuthError | null = null;
+
       try {
         const substrateResults = await searchChats(
           this.token,
@@ -463,7 +468,10 @@ export class TeamsClient {
         if (substrateResults.length > 0) {
           return substrateResults;
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof ApiAuthError) {
+          authError = error;
+        }
         // Substrate unavailable — fall through to local topic matching
       }
 
@@ -489,6 +497,7 @@ export class TeamsClient {
         }
       }
 
+      if (matchingChats.length === 0 && authError) throw authError;
       return matchingChats;
     });
   }
@@ -509,6 +518,7 @@ export class TeamsClient {
   ): Promise<OneOnOneSearchResult | null> {
     return this.withTokenRefresh(async () => {
       const targetLower = personName.toLowerCase();
+      let authError: ApiAuthError | null = null;
 
       // Check self-chat first
       const conversations = await fetchConversations(this.token, 100);
@@ -565,12 +575,15 @@ export class TeamsClient {
             };
           }
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof ApiAuthError) {
+          authError = error;
+        }
         // Substrate unavailable — fall through to profile-based matching
       }
 
       // Strategy 2: Profile-based matching for 1:1 chats (uses Bearer token)
-      if (this.token.bearerToken) {
+      {
         const oneOnOneChats = conversations.filter(
           (conversation) =>
             conversation.id.includes("@unq.gbl.spaces") &&
@@ -608,7 +621,10 @@ export class TeamsClient {
                 }
               }
             }
-          } catch {
+          } catch (error) {
+            if (error instanceof ApiAuthError) {
+              authError = error;
+            }
             // Profile resolution failed, fall through to message scanning
           }
         }
@@ -652,6 +668,7 @@ export class TeamsClient {
         }
       }
 
+      if (authError) throw authError;
       return null;
     });
   }
@@ -793,7 +810,7 @@ export class TeamsClient {
       }
 
       // Primary: resolve via middle-tier profile API (requires bearerToken)
-      if (this.token.bearerToken) {
+      {
         const mris = unresolvedPeople.map((member) => member.id);
         try {
           const profiles = await fetchProfiles(this.token, mris);

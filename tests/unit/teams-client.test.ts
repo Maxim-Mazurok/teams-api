@@ -489,7 +489,7 @@ describe("findOneOnOneConversation", () => {
     expect(result!.memberDisplayName).toBe("Alice Smith");
   });
 
-  it("should return null when no match found via fallback", async () => {
+  it("should throw ApiAuthError when no match found via fallback and auth failed", async () => {
     mockedApi.fetchConversations.mockResolvedValue([
       makeConversation({ id: "19:chat1", threadType: "chat", topic: "" }),
     ]);
@@ -499,6 +499,11 @@ describe("findOneOnOneConversation", () => {
       new ApiAuthError("Substrate token is missing"),
     );
 
+    // fetchProfiles also throws (no bearer token)
+    mockedApi.fetchProfiles.mockRejectedValue(
+      new ApiAuthError("Bearer token is missing"),
+    );
+
     mockedApi.fetchMessagesPage.mockResolvedValue(
       makeMessagesPage([makeMessage({ senderDisplayName: "Someone Else" })]),
     );
@@ -506,9 +511,10 @@ describe("findOneOnOneConversation", () => {
     mockedApi.fetchUserProperties.mockResolvedValue({});
 
     const client = TeamsClient.fromToken("token");
-    const result = await client.findOneOnOneConversation("Nonexistent Person");
 
-    expect(result).toBeNull();
+    await expect(
+      client.findOneOnOneConversation("Nonexistent Person"),
+    ).rejects.toBeInstanceOf(ApiAuthError);
   });
 });
 
@@ -542,16 +548,17 @@ describe("findPeople", () => {
     );
   });
 
-  it("should return empty array when no substrate token and no bearer token", async () => {
+  it("should throw ApiAuthError when no substrate token and no bearer token", async () => {
     mockedApi.searchPeople.mockRejectedValue(
       new ApiAuthError("Substrate token is missing"),
     );
     mockedApi.fetchConversations.mockResolvedValue([]);
 
     const client = TeamsClient.fromToken("token");
-    const result = await client.findPeople("Alice");
 
-    expect(result).toEqual([]);
+    await expect(client.findPeople("Alice")).rejects.toBeInstanceOf(
+      ApiAuthError,
+    );
   });
 
   it("should fall back to conversation members when substrate returns empty", async () => {
@@ -674,7 +681,7 @@ describe("findChats", () => {
     expect(result[0].totalMemberCount).toBe(5);
   });
 
-  it("should return empty array when no substrate token and no topic matches", async () => {
+  it("should throw ApiAuthError when no substrate token and no topic matches", async () => {
     mockedApi.searchChats.mockRejectedValue(
       new ApiAuthError("Substrate token is missing"),
     );
@@ -688,9 +695,10 @@ describe("findChats", () => {
     ]);
 
     const client = TeamsClient.fromToken("token");
-    const result = await client.findChats("Design");
 
-    expect(result).toEqual([]);
+    await expect(client.findChats("Design")).rejects.toBeInstanceOf(
+      ApiAuthError,
+    );
   });
 });
 

@@ -301,9 +301,10 @@ describe("fetchProfiles", () => {
     );
   });
 
-  it("should return empty when no bearer token is available", async () => {
-    const profiles = await fetchProfiles(testToken, ["8:orgid:user1"]);
-    expect(profiles).toEqual([]);
+  it("should throw ApiAuthError when no bearer token is available", async () => {
+    await expect(
+      fetchProfiles(testToken, ["8:orgid:user1"]),
+    ).rejects.toBeInstanceOf(ApiAuthError);
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 

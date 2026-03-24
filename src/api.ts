@@ -240,15 +240,20 @@ const MIDDLE_TIER_BASE = "https://teams.cloud.microsoft/api/mt";
 /**
  * Resolve display names for a batch of MRIs via the Teams middle-tier profile endpoint.
  *
- * Requires a Bearer token (api.spaces.skype.com audience). Returns an empty array
- * if the token is unavailable or the request fails.
+ * Requires a Bearer token (api.spaces.skype.com audience). Throws `ApiAuthError`
+ * if the token is unavailable so callers can trigger re-authentication.
  */
 export async function fetchProfiles(
   token: TeamsToken,
   mris: string[],
 ): Promise<UserProfile[]> {
-  if (!token.bearerToken || mris.length === 0) {
+  if (mris.length === 0) {
     return [];
+  }
+  if (!token.bearerToken) {
+    throw new ApiAuthError(
+      "Bearer token is missing — re-authentication required for profile resolution",
+    );
   }
 
   const url = `${MIDDLE_TIER_BASE}/${token.region}/beta/users/fetchShortProfile?isMailAddress=false&enableGuest=true&skypeTeamsInfo=true`;
