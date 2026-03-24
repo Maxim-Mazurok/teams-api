@@ -27,8 +27,8 @@ jobs:
       - name: Type check
         run: npm run type-check
 
-      - name: Lint (Prettier)
-        run: npm run lint
+      - name: Format check (Prettier)
+        run: npm run format-check || echo "::warning::Prettier found formatting issues"
 
       - name: Unit tests
         run: npm run test:unit

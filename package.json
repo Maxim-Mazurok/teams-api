@@ -30,7 +30,7 @@
     "test:integration": "vitest run tests/integration",
     "test:e2e": "vitest run tests/e2e",
     "test:watch": "vitest",
-    "lint": "prettier --check .",
+    "format-check": "prettier --check .",
     "format": "prettier --write .",
     "mcp": "npx -y tsx src/mcp-server.ts",
     "release": "semantic-release",
