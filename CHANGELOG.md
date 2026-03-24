@@ -1,3 +1,10 @@
+## [0.3.3](https://github.com/Maxim-Mazurok/teams-api/compare/v0.3.2...v0.3.3) (2026-03-24)
+
+
+### Bug Fixes
+
+* throw ApiAuthError when substrate token is missing in search functions ([2ef4539](https://github.com/Maxim-Mazurok/teams-api/commit/2ef45394ad46f32dd081d122f4c28f767a7eea9d))
+
 ## [0.3.2](https://github.com/Maxim-Mazurok/teams-api/compare/v0.3.1...v0.3.2) (2026-03-20)
 
 ## [0.3.1](https://github.com/Maxim-Mazurok/teams-api/compare/v0.3.0...v0.3.1) (2026-03-19)
