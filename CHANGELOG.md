@@ -1,3 +1,10 @@
+# [0.11.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.10.2...v0.11.0) (2026-03-25)
+
+
+### Features
+
+* enrich reaction and follower display names from profiles ([571ff47](https://github.com/Maxim-Mazurok/teams-api/commit/571ff47a6a57eec6dac68161580d20e7eca1c0ac))
+
 ## [0.10.2](https://github.com/Maxim-Mazurok/teams-api/compare/v0.10.1...v0.10.2) (2026-03-24)
 
 
