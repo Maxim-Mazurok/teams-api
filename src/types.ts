@@ -179,7 +179,7 @@ export interface Reaction {
   /** Reaction key (e.g. "like", "heart", "laugh"). */
   key: string;
   /** Users who reacted with this emotion. */
-  users: Array<{ mri: string; time: number }>;
+  users: Array<{ mri: string; time: number; displayName?: string }>;
 }
 
 /**
@@ -194,6 +194,8 @@ export interface Follower {
   mri: string;
   /** Epoch milliseconds when the follow action was recorded. */
   time: number;
+  /** Display name when resolved from the profile API. */
+  displayName?: string;
 }
 
 /** A user mention in a message. */

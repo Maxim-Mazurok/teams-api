@@ -868,6 +868,130 @@ describe("getMessages", () => {
 
     expect(messages).toHaveLength(1);
   });
+
+  it("should enrich reaction and follower display names via profiles", async () => {
+    mockedApi.fetchMessagesPage.mockResolvedValueOnce(
+      makeMessagesPage([
+        makeMessage({
+          reactions: [
+            {
+              key: "like",
+              users: [{ mri: "8:orgid:reaction-user", time: 1773000000 }],
+            },
+          ],
+          followers: [{ mri: "8:orgid:follower-user", time: 1773000001 }],
+        }),
+      ]),
+    );
+    mockedApi.fetchProfiles.mockResolvedValueOnce([
+      {
+        mri: "8:orgid:reaction-user",
+        displayName: "Reaction User",
+        email: "reaction.user@example.com",
+        jobTitle: "",
+        userType: "Member",
+      },
+      {
+        mri: "8:orgid:follower-user",
+        displayName: "Follower User",
+        email: "follower.user@example.com",
+        jobTitle: "",
+        userType: "Member",
+      },
+    ]);
+
+    const client = TeamsClient.fromToken("token", "apac", "bearer-token");
+    const messages = await client.getMessages("conv-id");
+
+    expect(mockedApi.fetchProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({ bearerToken: "bearer-token" }),
+      expect.arrayContaining([
+        "8:orgid:reaction-user",
+        "8:orgid:follower-user",
+      ]),
+    );
+    expect(messages[0].reactions[0].users[0].displayName).toBe(
+      "Reaction User",
+    );
+    expect(messages[0].followers[0].displayName).toBe("Follower User");
+  });
+
+  it("should leave reaction display names as empty string when neither profiles nor senders resolve", async () => {
+    mockedApi.fetchMessagesPage.mockResolvedValueOnce(
+      makeMessagesPage([
+        makeMessage({
+          senderMri: "8:orgid:different-user",
+          senderDisplayName: "Someone Else",
+          reactions: [
+            {
+              key: "like",
+              users: [{ mri: "8:orgid:reaction-user", time: 1773000000 }],
+            },
+          ],
+        }),
+      ]),
+    );
+    mockedApi.fetchProfiles.mockRejectedValueOnce(
+      new ApiAuthError("missing bearer token"),
+    );
+
+    const client = TeamsClient.fromToken("token");
+    const messages = await client.getMessages("conv-id");
+
+    expect(messages[0].reactions[0].users[0].displayName).toBe("");
+  });
+
+  it("should fall back to sender display names for MRIs the profile API cannot resolve", async () => {
+    mockedApi.fetchMessagesPage.mockResolvedValueOnce(
+      makeMessagesPage([
+        makeMessage({
+          senderMri: "8:orgid:stale-user",
+          senderDisplayName: "Oscar De Lellis",
+          reactions: [
+            {
+              key: "heart",
+              users: [{ mri: "8:orgid:stale-user", time: 1773000000 }],
+            },
+          ],
+        }),
+      ]),
+    );
+    // Profile API returns empty — the MRI is stale / re-provisioned
+    mockedApi.fetchProfiles.mockResolvedValueOnce([]);
+
+    const client = TeamsClient.fromToken("token", "apac", "bearer-token");
+    const messages = await client.getMessages("conv-id");
+
+    expect(messages[0].reactions[0].users[0].displayName).toBe(
+      "Oscar De Lellis",
+    );
+  });
+
+  it("should fall back to sender names even when profile API throws", async () => {
+    mockedApi.fetchMessagesPage.mockResolvedValueOnce(
+      makeMessagesPage([
+        makeMessage({
+          senderMri:
+            "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/contacts/8:orgid:old-mri",
+          senderDisplayName: "Renamed User",
+          reactions: [
+            {
+              key: "like",
+              users: [{ mri: "8:orgid:old-mri", time: 1773000000 }],
+            },
+          ],
+        }),
+      ]),
+    );
+    mockedApi.fetchProfiles.mockRejectedValueOnce(
+      new ApiAuthError("missing bearer token"),
+    );
+
+    const client = TeamsClient.fromToken("token");
+    const messages = await client.getMessages("conv-id");
+
+    expect(messages[0].reactions[0].users[0].displayName).toBe("Renamed User");
+  });
 });
 
 describe("sendMessage", () => {

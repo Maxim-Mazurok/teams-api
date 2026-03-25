@@ -878,6 +878,8 @@ export class TeamsClient {
         backwardLink = result.backwardLink;
       }
 
+      await this.enrichMessageParticipantDisplayNames(allMessages);
+
       if (limit !== undefined && allMessages.length > limit) {
         return allMessages.slice(0, limit);
       }
@@ -896,13 +898,97 @@ export class TeamsClient {
     backwardLink?: string,
   ): Promise<MessagesPage> {
     return this.withTokenRefresh(async () => {
-      return fetchMessagesPage(
+      const messagesPage = await fetchMessagesPage(
         this.token,
         conversationId,
         pageSize,
         backwardLink,
       );
+      await this.enrichMessageParticipantDisplayNames(messagesPage.messages);
+      return messagesPage;
     });
+  }
+
+  private async enrichMessageParticipantDisplayNames(
+    messages: Message[],
+  ): Promise<void> {
+    const unresolvedParticipantMris = new Set<string>();
+
+    for (const message of messages) {
+      for (const reaction of message.reactions) {
+        for (const reactionUser of reaction.users) {
+          if (!reactionUser.displayName) {
+            unresolvedParticipantMris.add(reactionUser.mri);
+          }
+        }
+      }
+
+      for (const follower of message.followers) {
+        if (!follower.displayName) {
+          unresolvedParticipantMris.add(follower.mri);
+        }
+      }
+    }
+
+    if (unresolvedParticipantMris.size === 0) {
+      return;
+    }
+
+    // Primary: resolve via profile API
+    const displayNameByMri = new Map<string, string>();
+    try {
+      const profiles = await fetchProfiles(
+        this.token,
+        [...unresolvedParticipantMris],
+      );
+      for (const profile of profiles) {
+        if (profile.displayName) {
+          displayNameByMri.set(profile.mri, profile.displayName);
+        }
+      }
+    } catch {
+      // Profile API unavailable — fall through to sender-name fallback
+    }
+
+    // Fallback: use senderDisplayName from messages for any MRIs the profile
+    // API couldn't resolve (e.g. re-provisioned / renamed accounts whose old
+    // MRI is no longer in the directory but still appears in chat history).
+    const stillUnresolved = new Set<string>();
+    for (const mri of unresolvedParticipantMris) {
+      if (!displayNameByMri.has(mri)) {
+        stillUnresolved.add(mri);
+      }
+    }
+
+    if (stillUnresolved.size > 0) {
+      for (const message of messages) {
+        if (stillUnresolved.size === 0) break;
+        if (!message.senderDisplayName) continue;
+        const senderMri = extractMriSuffix(message.senderMri);
+        if (stillUnresolved.has(senderMri)) {
+          displayNameByMri.set(senderMri, message.senderDisplayName);
+          stillUnresolved.delete(senderMri);
+        }
+      }
+    }
+
+    // Apply resolved names
+    for (const message of messages) {
+      for (const reaction of message.reactions) {
+        for (const reactionUser of reaction.users) {
+          if (!reactionUser.displayName) {
+            reactionUser.displayName =
+              displayNameByMri.get(reactionUser.mri) ?? "";
+          }
+        }
+      }
+
+      for (const follower of message.followers) {
+        if (!follower.displayName) {
+          follower.displayName = displayNameByMri.get(follower.mri) ?? "";
+        }
+      }
+    }
   }
 
   /**
