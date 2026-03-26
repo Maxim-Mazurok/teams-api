@@ -103,7 +103,15 @@ async function fetchCurrentVersion(): Promise<string | null> {
       );
       return null;
     }
-    return match[1];
+    const version = match[1];
+    // Validate: must be a 32-char lowercase hex hash to avoid malformed URLs
+    if (!/^[0-9a-f]{32}$/.test(version)) {
+      console.warn(
+        `[emoji-map] Unexpected emoticonAssetVersion format "${version}", will use fallback versions`,
+      );
+      return null;
+    }
+    return version;
   } catch (error) {
     console.warn(
       "[emoji-map] Failed to fetch ECS config:",

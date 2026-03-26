@@ -111,6 +111,46 @@ describe("initializeEmojiMap", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it("falls back to hardcoded versions when ECS returns a version not on the CDN", async () => {
+    // ECS gives a version hash, but CDN 404s for it; hardcoded fallback succeeds
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes("config.teams.microsoft.com")) {
+          return Promise.resolve({ ok: true, text: () => Promise.resolve(TEST_ECS_RESPONSE) });
+        }
+        if (url.includes(TEST_ECS_VERSION)) {
+          return Promise.resolve({ ok: false, status: 404 });
+        }
+        // Fallback CDN versions succeed
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(testCatalog) });
+      }),
+    );
+    await initializeEmojiMap();
+    expect(resolveReactionKey("horse")).toBe("1f40e_horse");
+    const calls = vi.mocked(fetch).mock.calls.map((c) => c[0] as string);
+    // ECS call, ECS-version CDN call (404), then a fallback version CDN call
+    expect(calls.filter((u) => u.includes("statics.teams.cdn.office.net")).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("validates the ECS version format and falls back on malformed values", async () => {
+    const malformedEcsResponse = '{"emoticonAssetVersion":"not-a-valid-hash"}';
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes("config.teams.microsoft.com")) {
+          return Promise.resolve({ ok: true, text: () => Promise.resolve(malformedEcsResponse) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(testCatalog) });
+      }),
+    );
+    await initializeEmojiMap();
+    // Should still succeed via fallback versions
+    expect(resolveReactionKey("horse")).toBe("1f40e_horse");
+    const warnings = vi.mocked(console.warn).mock.calls.map((c) => c[0] as string);
+    expect(warnings.some((w) => w.includes("Unexpected emoticonAssetVersion format"))).toBe(true);
+  });
+
   it("falls back to hardcoded versions when ECS is unreachable", async () => {
     mockFetchEcsFailCdnSuccess();
     await initializeEmojiMap();
