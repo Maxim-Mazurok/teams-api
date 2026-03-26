@@ -255,6 +255,12 @@ export interface SharePointUploadResult {
   siteBaseUrl: string;
   /** SharePoint personal site path segment (e.g. "/personal/user_domain_com/"). */
   personalPath: string;
+  /** Sharing link URL (empty string if sharing scope is "none"). */
+  shareUrl: string;
+  /** Sharing link ID returned by the createLink API (empty string if sharing scope is "none"). */
+  shareId: string;
+  /** SharePoint drive item ID (used for the createLink API call). */
+  driveItemId: string;
 }
 
 /**
@@ -284,6 +290,94 @@ function deriveSharePointSiteInfo(
   return { siteBaseUrl, personalPath };
 }
 
+/** Response from the SharePoint createLink API. */
+interface SharePointSharingLink {
+  /** The sharing link URL that recipients can use to access the file. */
+  shareUrl: string;
+  /** The opaque sharing link ID. */
+  shareId: string;
+}
+
+/**
+ * Sharing options for the createLink API.
+ *
+ * - `{ scope: "organization" }` — anyone in the org with the link can edit.
+ * - `{ scope: "users", emails: [...] }` — only the named recipients can edit.
+ */
+export type SharingLinkOptions =
+  | { scope: "organization" }
+  | { scope: "users"; emails: string[] };
+
+/**
+ * Create a sharing link for a SharePoint file.
+ *
+ * Without this step, files uploaded to the sender's OneDrive are private —
+ * chat participants would see a "Request Access" prompt instead of the file.
+ *
+ * Uses the SharePoint REST API v2.0 `createLink` endpoint.
+ *
+ * @param options - Sharing scope: "organization" (anyone in the org) or
+ *   "users" with specific recipient emails.
+ */
+export async function createSharePointSharingLink(
+  token: TeamsToken,
+  siteBaseUrl: string,
+  personalPath: string,
+  driveItemId: string,
+  options: SharingLinkOptions = { scope: "organization" },
+): Promise<SharePointSharingLink> {
+  if (!token.sharePointToken) {
+    throw new Error(
+      "SharePoint token is required for creating sharing links but was not captured during authentication. " +
+        "Re-authenticate to capture the SharePoint token.",
+    );
+  }
+
+  const createLinkUrl = `${siteBaseUrl}${personalPath}/_api/v2.0/drive/items/${driveItemId}/createLink`;
+
+  const requestBody: Record<string, unknown> = {
+    type: "edit",
+    scope: options.scope,
+  };
+
+  if (options.scope === "users") {
+    requestBody.recipients = options.emails.map((email) => ({ email }));
+  }
+
+  const response = await fetchWithRetry(createLinkUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token.sharePointToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `SharePoint createLink authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
+    const errorText = await response.text();
+    throw new Error(
+      `Failed to create SharePoint sharing link: ${response.status} ${response.statusText} — ${errorText}`,
+    );
+  }
+
+  const data = (await response.json()) as {
+    shareId: string;
+    link: {
+      webUrl: string;
+    };
+  };
+
+  return {
+    shareUrl: data.link.webUrl,
+    shareId: data.shareId,
+  };
+}
+
 /**
  * Upload a file to SharePoint OneDrive for Business (Teams Chat Files folder).
  *
@@ -291,13 +385,18 @@ function deriveSharePointSiteInfo(
  * under "Microsoft Teams Chat Files". This function uploads a file there
  * using the SharePoint REST API, matching the same flow the Teams web client uses.
  *
+ * After uploading, a sharing link is created according to the provided
+ * sharing options so that chat participants can access the file.
+ *
  * @param email - The sender's corporate email (used to derive the personal site path)
+ * @param sharingOptions - Controls who gets access. Pass `null` for no sharing link.
  */
 export async function uploadSharePointFile(
   token: TeamsToken,
   fileData: Buffer,
   fileName: string,
   email: string,
+  sharingOptions: SharingLinkOptions | null = { scope: "organization" },
 ): Promise<SharePointUploadResult> {
   if (!token.sharePointToken) {
     throw new Error(
@@ -349,6 +448,21 @@ export async function uploadSharePointFile(
     ? (data.name.split(".").pop() ?? "")
     : "";
 
+  let shareUrl = "";
+  let shareId = "";
+
+  if (sharingOptions !== null) {
+    const sharingLink = await createSharePointSharingLink(
+      token,
+      siteBaseUrl,
+      personalPath,
+      data.id,
+      sharingOptions,
+    );
+    shareUrl = sharingLink.shareUrl;
+    shareId = sharingLink.shareId;
+  }
+
   return {
     itemId: data.sharepointIds.listItemUniqueId,
     siteId: data.sharepointIds.siteId,
@@ -358,6 +472,9 @@ export async function uploadSharePointFile(
     webDavUrl: data.webDavUrl,
     siteBaseUrl,
     personalPath,
+    shareUrl,
+    shareId,
+    driveItemId: data.id,
   };
 }
 
@@ -392,8 +509,8 @@ export function buildFilesPropertyJson(
       fileUrl: `${result.siteBaseUrl}${result.personalPath}/Documents/Microsoft%20Teams%20Chat%20Files/${encodeURIComponent(result.fileName)}`,
       siteUrl: `${result.siteBaseUrl}${result.personalPath}/`,
       serverRelativeUrl: `${result.personalPath}/Documents/Microsoft Teams Chat Files/${result.fileName}`,
-      shareUrl: null,
-      shareId: null,
+      shareUrl: result.shareUrl,
+      shareId: result.shareId,
     },
     fileChicletState: {
       serviceName: "p2p",

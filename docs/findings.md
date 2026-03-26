@@ -369,3 +369,37 @@ Each entry in the array:
 ### Authentication
 
 Uses the SharePoint Bearer token (audience: `*.sharepoint.com`), captured from the MSAL localStorage cache during authentication. This is the same token used for downloading file attachments.
+
+### Sharing link creation
+
+After uploading a file to the sender's OneDrive, a sharing link must be created so that chat participants can access the file without requesting permission. Without this step, recipients see a "Request Access" prompt when they click the file attachment.
+
+```
+POST https://{tenant}-my.sharepoint.com/personal/{user_email_underscored}/_api/v2.0/drive/items/{driveItemId}/createLink
+Authorization: Bearer {sharePointToken}
+Content-Type: application/json
+
+{
+  "type": "edit",
+  "scope": "organization"
+}
+```
+
+- `{driveItemId}` — the `id` field returned by the upload PUT response (not the `sharepointIds.listItemUniqueId`)
+- `type: "edit"` — grants edit access (matching the Teams web client behavior)
+- `scope: "organization"` — anyone in the organization with the link can access the file
+
+Response (201 Created):
+
+```json
+{
+  "shareId": "u!aHR0cHM6Ly8...",
+  "link": {
+    "scope": "organization",
+    "type": "edit",
+    "webUrl": "https://{tenant}-my.sharepoint.com/:t:/p/{user}/{encoded-id}"
+  }
+}
+```
+
+The `link.webUrl` and `shareId` values are then included in the `properties.files` JSON as `fileInfo.shareUrl` and `fileInfo.shareId` respectively.

@@ -10,6 +10,7 @@ import type {
   Message,
   MessageFormat,
   MessageContentPart,
+  FileSharingScope,
   ScheduledMessage,
 } from "../types.js";
 import { isTextMessageType } from "../constants.js";
@@ -338,6 +339,18 @@ export const sendMessage: ActionDefinition = {
       default: "markdown",
     },
     {
+      name: "fileSharingScope",
+      type: "string",
+      description:
+        'Sharing scope for uploaded files: ' +
+        '"chat" (default — share with chat participants), ' +
+        '"organization" (anyone in the org with the link), ' +
+        '"none" (no sharing — only the uploader can access). ' +
+        "Only applies when --file is provided.",
+      required: false,
+      default: "chat",
+    },
+    {
       name: "scheduleAt",
       type: "string",
       description:
@@ -391,10 +404,13 @@ export const sendMessage: ActionDefinition = {
     }
 
     if (filePaths.length > 0) {
+      const fileSharingScope =
+        (parameters.fileSharingScope as FileSharingScope | undefined) ?? "chat";
       const contentParts = buildContentParts(content, imagePaths, filePaths);
       const result = await client.sendMessageWithFiles(
         conversationId,
         contentParts,
+        fileSharingScope,
       );
       return { ...result, conversation: label };
     }

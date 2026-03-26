@@ -235,6 +235,15 @@ export interface UserProfile {
 /** Format for sending messages. */
 export type MessageFormat = "text" | "markdown" | "html";
 
+/**
+ * Controls who gets access to uploaded SharePoint files.
+ *
+ * - `"chat"` — share with chat participants only (default).
+ * - `"organization"` — anyone in the organization with the link.
+ * - `"none"` — no sharing link; only the uploader can access the file.
+ */
+export type FileSharingScope = "chat" | "organization" | "none";
+
 /** A part of a message body when sending messages with inline images or file attachments. */
 export type MessageContentPart =
   | { type: "text"; text: string }
@@ -250,6 +259,8 @@ export type MessageContentPart =
       type: "file";
       data: Buffer;
       fileName: string;
+      /** Per-file sharing scope override. When omitted, the scope from sendMessageWithFiles is used. */
+      sharingScope?: FileSharingScope | { scope: "users"; emails: string[] };
     };
 
 /** Result of sending a message. */

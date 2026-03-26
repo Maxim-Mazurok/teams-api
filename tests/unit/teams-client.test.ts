@@ -1818,6 +1818,16 @@ describe("sendMessageWithFiles", () => {
       makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
     );
 
+    // Mock member resolution for default "chat" scope
+    mockedApi.fetchMembers.mockResolvedValue([
+      { id: "8:orgid:user-1", displayName: "User One", role: "User", memberType: "person" },
+      { id: "8:orgid:user-2", displayName: "User Two", role: "User", memberType: "person" },
+    ]);
+    mockedApi.fetchProfiles.mockResolvedValue([
+      { mri: "8:orgid:user-1", displayName: "User One", email: "user1@company.com", jobTitle: "", userType: "Member" },
+      { mri: "8:orgid:user-2", displayName: "User Two", email: "user2@company.com", jobTitle: "", userType: "Member" },
+    ]);
+
     const uploadResult: attachments.SharePointUploadResult = {
       itemId: "sp-item-123",
       siteId: "site-456",
@@ -1827,6 +1837,9 @@ describe("sendMessageWithFiles", () => {
       webDavUrl: "https://sp.com/dav/report.md",
       siteBaseUrl: "https://company-my.sharepoint.com",
       personalPath: "/personal/user_company_com",
+      shareUrl: "https://company-my.sharepoint.com/:t:/p/user/shared-link",
+      shareId: "u!share-link-id",
+      driveItemId: "drive-item-123",
     };
     mockedAttachments.uploadSharePointFile.mockResolvedValue(uploadResult);
     mockedAttachments.buildFilesPropertyJson.mockReturnValue(
@@ -1849,12 +1862,19 @@ describe("sendMessageWithFiles", () => {
 
     expect(result).toEqual(expectedResult);
 
-    // Verify SharePoint upload was called
+    // Verify member resolution for "chat" scope
+    expect(mockedApi.fetchMembers).toHaveBeenCalledWith(
+      expect.objectContaining({ skypeToken: "token" }),
+      "conv-id",
+    );
+
+    // Verify SharePoint upload was called with user-scoped sharing
     expect(mockedAttachments.uploadSharePointFile).toHaveBeenCalledWith(
       expect.objectContaining({ skypeToken: "token" }),
       Buffer.from("# Report"),
       "report.md",
       "user@company.com",
+      { scope: "users", emails: ["user1@company.com", "user2@company.com"] },
     );
 
     // Verify buildFilesPropertyJson was called with upload results
@@ -1882,6 +1902,14 @@ describe("sendMessageWithFiles", () => {
       makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
     );
 
+    // Mock member resolution for default "chat" scope
+    mockedApi.fetchMembers.mockResolvedValue([
+      { id: "8:orgid:user-1", displayName: "User One", role: "User", memberType: "person" },
+    ]);
+    mockedApi.fetchProfiles.mockResolvedValue([
+      { mri: "8:orgid:user-1", displayName: "User One", email: "user1@company.com", jobTitle: "", userType: "Member" },
+    ]);
+
     mockedAttachments.uploadSharePointFile.mockResolvedValue({
       itemId: "item-1",
       siteId: "site-1",
@@ -1891,6 +1919,9 @@ describe("sendMessageWithFiles", () => {
       webDavUrl: "https://sp.com/dav/data.csv",
       siteBaseUrl: "https://sp.com",
       personalPath: "/personal/user",
+      shareUrl: "https://sp.com/share/data",
+      shareId: "share-1",
+      driveItemId: "drive-1",
     });
     mockedAttachments.buildFilesPropertyJson.mockReturnValue("[]");
     mockedApi.postMessage.mockResolvedValue({
@@ -1914,6 +1945,158 @@ describe("sendMessageWithFiles", () => {
       "html",
       [],
       expect.any(String),
+    );
+  });
+
+  it("should use organization scope when specified", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes" }),
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
+    );
+
+    mockedAttachments.uploadSharePointFile.mockResolvedValue({
+      itemId: "item-1",
+      siteId: "site-1",
+      fileName: "doc.pdf",
+      fileType: "pdf",
+      fileUrl: "https://sp.com/doc.pdf",
+      webDavUrl: "https://sp.com/dav/doc.pdf",
+      siteBaseUrl: "https://sp.com",
+      personalPath: "/personal/user",
+      shareUrl: "https://sp.com/share/doc",
+      shareId: "share-org",
+      driveItemId: "drive-org",
+    });
+    mockedAttachments.buildFilesPropertyJson.mockReturnValue("[]");
+    mockedApi.postMessage.mockResolvedValue({
+      messageId: "msg-org",
+      arrivalTime: 1773000000000,
+    });
+
+    const client = TeamsClient.fromToken("token");
+    client.setEmail("user@company.com");
+
+    await client.sendMessageWithFiles(
+      "conv-id",
+      [{ type: "file", data: Buffer.from("pdf"), fileName: "doc.pdf" }],
+      "organization",
+    );
+
+    // Should NOT call fetchMembers — org scope doesn't need them
+    expect(mockedApi.fetchMembers).not.toHaveBeenCalled();
+
+    // Verify SharePoint upload was called with org scope
+    expect(mockedAttachments.uploadSharePointFile).toHaveBeenCalledWith(
+      expect.objectContaining({ skypeToken: "token" }),
+      Buffer.from("pdf"),
+      "doc.pdf",
+      "user@company.com",
+      { scope: "organization" },
+    );
+  });
+
+  it("should skip sharing link when scope is none", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes" }),
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
+    );
+
+    mockedAttachments.uploadSharePointFile.mockResolvedValue({
+      itemId: "item-1",
+      siteId: "site-1",
+      fileName: "secret.txt",
+      fileType: "txt",
+      fileUrl: "https://sp.com/secret.txt",
+      webDavUrl: "https://sp.com/dav/secret.txt",
+      siteBaseUrl: "https://sp.com",
+      personalPath: "/personal/user",
+      shareUrl: "",
+      shareId: "",
+      driveItemId: "drive-none",
+    });
+    mockedAttachments.buildFilesPropertyJson.mockReturnValue("[]");
+    mockedApi.postMessage.mockResolvedValue({
+      messageId: "msg-none",
+      arrivalTime: 1773000000000,
+    });
+
+    const client = TeamsClient.fromToken("token");
+    client.setEmail("user@company.com");
+
+    await client.sendMessageWithFiles(
+      "conv-id",
+      [{ type: "file", data: Buffer.from("secret"), fileName: "secret.txt" }],
+      "none",
+    );
+
+    // Should NOT call fetchMembers — none scope doesn't need them
+    expect(mockedApi.fetchMembers).not.toHaveBeenCalled();
+
+    // Verify SharePoint upload was called with null sharing options
+    expect(mockedAttachments.uploadSharePointFile).toHaveBeenCalledWith(
+      expect.objectContaining({ skypeToken: "token" }),
+      Buffer.from("secret"),
+      "secret.txt",
+      "user@company.com",
+      null,
+    );
+  });
+
+  it("should allow per-file sharing scope override", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes" }),
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
+    );
+
+    mockedAttachments.uploadSharePointFile.mockResolvedValue({
+      itemId: "item-1",
+      siteId: "site-1",
+      fileName: "file.txt",
+      fileType: "txt",
+      fileUrl: "https://sp.com/file.txt",
+      webDavUrl: "https://sp.com/dav/file.txt",
+      siteBaseUrl: "https://sp.com",
+      personalPath: "/personal/user",
+      shareUrl: "https://sp.com/share",
+      shareId: "share-1",
+      driveItemId: "drive-1",
+    });
+    mockedAttachments.buildFilesPropertyJson.mockReturnValue("[]");
+    mockedApi.postMessage.mockResolvedValue({
+      messageId: "msg-override",
+      arrivalTime: 1773000000000,
+    });
+
+    const client = TeamsClient.fromToken("token");
+    client.setEmail("user@company.com");
+
+    // Default scope is "none", but this file overrides to "organization"
+    await client.sendMessageWithFiles(
+      "conv-id",
+      [
+        {
+          type: "file",
+          data: Buffer.from("content"),
+          fileName: "file.txt",
+          sharingScope: "organization",
+        },
+      ],
+      "none",
+    );
+
+    // Per-file override should use organization scope
+    expect(mockedAttachments.uploadSharePointFile).toHaveBeenCalledWith(
+      expect.objectContaining({ skypeToken: "token" }),
+      Buffer.from("content"),
+      "file.txt",
+      "user@company.com",
+      { scope: "organization" },
     );
   });
 });

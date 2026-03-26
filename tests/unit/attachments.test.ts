@@ -11,6 +11,7 @@ import {
   buildAmsImageTag,
   uploadSharePointFile,
   buildFilesPropertyJson,
+  createSharePointSharingLink,
 } from "../../src/api/attachments.js";
 import { ApiAuthError } from "../../src/api/common.js";
 import type { TeamsToken } from "../../src/types.js";
@@ -438,22 +439,34 @@ describe("uploadSharePointFile", () => {
   });
 
   it("uploads file content via PUT and returns metadata", async () => {
-    const mockFetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          id: "sp-item-id",
-          name: "test.md",
-          webDavUrl:
-            "https://company-my.sharepoint.com/personal/user_name_company_com/Documents/Microsoft%20Teams%20Chat%20Files/test.md",
-          webUrl:
-            "https://company-my.sharepoint.com/personal/user_name_company_com/Documents/Microsoft%20Teams%20Chat%20Files/test.md",
-          sharepointIds: {
-            listItemUniqueId: "unique-item-id",
-            siteId: "site-id-123",
-          },
-        }),
-    });
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "sp-item-id",
+            name: "test.md",
+            webDavUrl:
+              "https://company-my.sharepoint.com/personal/user_name_company_com/Documents/Microsoft%20Teams%20Chat%20Files/test.md",
+            webUrl:
+              "https://company-my.sharepoint.com/personal/user_name_company_com/Documents/Microsoft%20Teams%20Chat%20Files/test.md",
+            sharepointIds: {
+              listItemUniqueId: "unique-item-id",
+              siteId: "site-id-123",
+            },
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            shareId: "share-link-id",
+            link: {
+              webUrl: "https://company-my.sharepoint.com/:t:/p/user_name/shared-link",
+            },
+          }),
+      });
     globalThis.fetch = mockFetch;
 
     const result = await uploadSharePointFile(
@@ -469,6 +482,11 @@ describe("uploadSharePointFile", () => {
     expect(result.fileType).toBe("md");
     expect(result.siteBaseUrl).toBe("https://company-my.sharepoint.com");
     expect(result.personalPath).toBe("/personal/user_name_company_com");
+    expect(result.shareUrl).toBe(
+      "https://company-my.sharepoint.com/:t:/p/user_name/shared-link",
+    );
+    expect(result.shareId).toBe("share-link-id");
+    expect(result.driveItemId).toBe("sp-item-id");
 
     // Verify the PUT request
     const calledUrl = mockFetch.mock.calls[0][0] as string;
@@ -483,6 +501,18 @@ describe("uploadSharePointFile", () => {
     expect(
       (calledOptions.headers as Record<string, string>).Authorization,
     ).toBe("Bearer test-sharepoint-token");
+
+    // Verify the createLink request
+    const createLinkUrl = mockFetch.mock.calls[1][0] as string;
+    expect(createLinkUrl).toContain(
+      "/_api/v2.0/drive/items/sp-item-id/createLink",
+    );
+    const createLinkOptions = mockFetch.mock.calls[1][1] as RequestInit;
+    expect(createLinkOptions.method).toBe("POST");
+    expect(JSON.parse(createLinkOptions.body as string)).toEqual({
+      type: "edit",
+      scope: "organization",
+    });
   });
 
   it("throws ApiAuthError on 401", async () => {
@@ -511,20 +541,30 @@ describe("uploadSharePointFile", () => {
   });
 
   it("handles file names without extension", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          id: "sp-item-id",
-          name: "Makefile",
-          webDavUrl: "https://company-my.sharepoint.com/dav/Makefile",
-          webUrl: "https://company-my.sharepoint.com/web/Makefile",
-          sharepointIds: {
-            listItemUniqueId: "item-id",
-            siteId: "site-id",
-          },
-        }),
-    });
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "sp-item-id",
+            name: "Makefile",
+            webDavUrl: "https://company-my.sharepoint.com/dav/Makefile",
+            webUrl: "https://company-my.sharepoint.com/web/Makefile",
+            sharepointIds: {
+              listItemUniqueId: "item-id",
+              siteId: "site-id",
+            },
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            shareId: "share-id",
+            link: { webUrl: "https://company-my.sharepoint.com/shared" },
+          }),
+      });
 
     const result = await uploadSharePointFile(
       tokenWithSharePoint,
@@ -535,6 +575,150 @@ describe("uploadSharePointFile", () => {
 
     expect(result.fileType).toBe("");
     expect(result.fileName).toBe("Makefile");
+  });
+});
+
+describe("createSharePointSharingLink", () => {
+  const tokenWithSharePoint: TeamsToken = {
+    skypeToken: "test-skype-token",
+    region: "apac",
+    sharePointToken: "test-sharepoint-token",
+    sharePointHost: "company-my.sharepoint.com",
+  };
+
+  it("throws when sharePointToken is missing", async () => {
+    const tokenWithoutSharePoint: TeamsToken = {
+      skypeToken: "test-skype",
+      region: "apac",
+    };
+
+    await expect(
+      createSharePointSharingLink(
+        tokenWithoutSharePoint,
+        "https://company-my.sharepoint.com",
+        "/personal/user_company_com",
+        "drive-item-id",
+      ),
+    ).rejects.toThrow("SharePoint token is required");
+  });
+
+  it("creates an organization-scoped edit sharing link", async () => {
+    const mockFetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          shareId: "u!encoded-share-id",
+          link: {
+            webUrl:
+              "https://company-my.sharepoint.com/:t:/p/user/shared-link-url",
+          },
+        }),
+    });
+    globalThis.fetch = mockFetch;
+
+    const result = await createSharePointSharingLink(
+      tokenWithSharePoint,
+      "https://company-my.sharepoint.com",
+      "/personal/user_company_com",
+      "drive-item-123",
+      { scope: "organization" },
+    );
+
+    expect(result.shareUrl).toBe(
+      "https://company-my.sharepoint.com/:t:/p/user/shared-link-url",
+    );
+    expect(result.shareId).toBe("u!encoded-share-id");
+
+    // Verify the POST request
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toBe(
+      "https://company-my.sharepoint.com/personal/user_company_com/_api/v2.0/drive/items/drive-item-123/createLink",
+    );
+
+    const calledOptions = mockFetch.mock.calls[0][1] as RequestInit;
+    expect(calledOptions.method).toBe("POST");
+    expect(
+      (calledOptions.headers as Record<string, string>).Authorization,
+    ).toBe("Bearer test-sharepoint-token");
+    expect(JSON.parse(calledOptions.body as string)).toEqual({
+      type: "edit",
+      scope: "organization",
+    });
+  });
+
+  it("creates a user-scoped sharing link with recipients", async () => {
+    const mockFetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          shareId: "u!user-scoped-share-id",
+          link: {
+            webUrl:
+              "https://company-my.sharepoint.com/:t:/p/user/user-scoped-link",
+          },
+        }),
+    });
+    globalThis.fetch = mockFetch;
+
+    const result = await createSharePointSharingLink(
+      tokenWithSharePoint,
+      "https://company-my.sharepoint.com",
+      "/personal/user_company_com",
+      "drive-item-456",
+      { scope: "users", emails: ["alice@company.com", "bob@company.com"] },
+    );
+
+    expect(result.shareUrl).toBe(
+      "https://company-my.sharepoint.com/:t:/p/user/user-scoped-link",
+    );
+    expect(result.shareId).toBe("u!user-scoped-share-id");
+
+    const calledOptions = mockFetch.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(calledOptions.body as string)).toEqual({
+      type: "edit",
+      scope: "users",
+      recipients: [
+        { email: "alice@company.com" },
+        { email: "bob@company.com" },
+      ],
+    });
+  });
+
+  it("throws ApiAuthError on 401", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+    });
+
+    await expect(
+      createSharePointSharingLink(
+        tokenWithSharePoint,
+        "https://company-my.sharepoint.com",
+        "/personal/user_company_com",
+        "drive-item-id",
+      ),
+    ).rejects.toThrow(ApiAuthError);
+  });
+
+  it("throws generic error on non-401 failure", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+      text: () => Promise.resolve("Sharing not allowed"),
+    });
+
+    await expect(
+      createSharePointSharingLink(
+        tokenWithSharePoint,
+        "https://company-my.sharepoint.com",
+        "/personal/user_company_com",
+        "drive-item-id",
+      ),
+    ).rejects.toThrow(
+      "Failed to create SharePoint sharing link: 403 Forbidden",
+    );
   });
 });
 
@@ -550,6 +734,9 @@ describe("buildFilesPropertyJson", () => {
         webDavUrl: "https://sp.com/dav/report.pdf",
         siteBaseUrl: "https://company-my.sharepoint.com",
         personalPath: "/personal/user_company_com",
+        shareUrl: "https://company-my.sharepoint.com/:b:/p/user/share-link",
+        shareId: "u!share-link-id",
+        driveItemId: "drive-item-123",
       },
     ]);
 
@@ -569,6 +756,31 @@ describe("buildFilesPropertyJson", () => {
     expect(sharepointIds.siteId).toBe("site-456");
   });
 
+  it("includes shareUrl and shareId in fileInfo", () => {
+    const json = buildFilesPropertyJson([
+      {
+        itemId: "item-123",
+        siteId: "site-456",
+        fileName: "report.pdf",
+        fileType: "pdf",
+        fileUrl: "https://sp.com/report.pdf",
+        webDavUrl: "https://sp.com/dav/report.pdf",
+        siteBaseUrl: "https://company-my.sharepoint.com",
+        personalPath: "/personal/user_company_com",
+        shareUrl: "https://company-my.sharepoint.com/:b:/p/user/share-link",
+        shareId: "u!share-link-id",
+        driveItemId: "drive-item-123",
+      },
+    ]);
+
+    const parsed = JSON.parse(json) as Array<Record<string, unknown>>;
+    const fileInfo = parsed[0].fileInfo as Record<string, unknown>;
+    expect(fileInfo.shareUrl).toBe(
+      "https://company-my.sharepoint.com/:b:/p/user/share-link",
+    );
+    expect(fileInfo.shareId).toBe("u!share-link-id");
+  });
+
   it("builds valid JSON for multiple files", () => {
     const json = buildFilesPropertyJson([
       {
@@ -580,6 +792,9 @@ describe("buildFilesPropertyJson", () => {
         webDavUrl: "https://sp.com/dav/doc.docx",
         siteBaseUrl: "https://sp.com",
         personalPath: "/personal/user",
+        shareUrl: "https://sp.com/share/doc",
+        shareId: "share-1",
+        driveItemId: "drive-1",
       },
       {
         itemId: "item-2",
@@ -590,6 +805,9 @@ describe("buildFilesPropertyJson", () => {
         webDavUrl: "https://sp.com/dav/sheet.xlsx",
         siteBaseUrl: "https://sp.com",
         personalPath: "/personal/user",
+        shareUrl: "https://sp.com/share/sheet",
+        shareId: "share-2",
+        driveItemId: "drive-2",
       },
     ]);
 

@@ -53,6 +53,7 @@ import type {
   ImageAttachment,
   FileAttachment,
   MessageContentPart,
+  FileSharingScope,
   UserProfile,
 } from "./types.js";
 import { SYSTEM_STREAM_TYPES } from "./types.js";
@@ -79,6 +80,7 @@ import {
   buildAmsImageTag,
   buildFilesPropertyJson,
   type SharePointUploadResult,
+  type SharingLinkOptions,
 } from "./api/attachments.js";
 import { acquireTokenViaAutoLogin } from "./auth/auto-login.js";
 import { acquireTokenViaInteractiveLogin } from "./auth/interactive.js";
@@ -116,6 +118,7 @@ export type {
   ImageAttachment,
   FileAttachment,
   MessageContentPart,
+  FileSharingScope,
 } from "./types.js";
 export { SYSTEM_STREAM_TYPES } from "./types.js";
 export { isTextMessageType } from "./constants.js";
@@ -139,6 +142,7 @@ export {
   parseFileAttachments,
   uploadSharePointFile,
   buildFilesPropertyJson,
+  createSharePointSharingLink,
 } from "./api/attachments.js";
 export type { SharePointUploadResult } from "./api/attachments.js";
 export { saveToken, loadToken, clearToken } from "./token-store.js";
@@ -1195,10 +1199,17 @@ export class TeamsClient {
    *     { type: "text", text: "Here's the document:" },
    *     { type: "file", data: fileBuffer, fileName: "report.md" },
    *   ]);
+   *
+   * @param fileSharingScope - Default sharing scope for all files in this message.
+   *   Individual files can override this via `part.sharingScope`.
+   *   - `"chat"` (default) — share with chat participants only.
+   *   - `"organization"` — anyone in the org with the link.
+   *   - `"none"` — no sharing link; only the uploader can access.
    */
   async sendMessageWithFiles(
     conversationId: string,
     contentParts: MessageContentPart[],
+    fileSharingScope: FileSharingScope = "chat",
   ): Promise<SentMessage> {
     return this.withTokenRefresh(async () => {
       if (!this.userEmail) {
@@ -1206,6 +1217,20 @@ export class TeamsClient {
           "User email is required for file upload but is not set. " +
             "Call setEmail() on the client or use TeamsClient.create() which sets it automatically.",
         );
+      }
+
+      // Resolve member emails once if any file needs "chat" scope
+      const needsChatScope = contentParts.some(
+        (part) =>
+          part.type === "file" &&
+          (part.sharingScope === "chat" ||
+            part.sharingScope === undefined) &&
+          fileSharingScope === "chat",
+      );
+
+      let memberEmails: string[] | undefined;
+      if (needsChatScope) {
+        memberEmails = await this.resolveMemberEmails(conversationId);
       }
 
       const amsReferences: string[] = [];
@@ -1227,11 +1252,17 @@ export class TeamsClient {
             buildAmsImageTag(amsObjectId, part.width, part.height),
           );
         } else if (part.type === "file") {
+          const sharingOptions = this.resolveFileSharingOptions(
+            part.sharingScope,
+            fileSharingScope,
+            memberEmails,
+          );
           const result = await uploadSharePointFile(
             this.token,
             part.data,
             part.fileName,
             this.userEmail,
+            sharingOptions,
           );
           uploadResults.push(result);
         }
@@ -1347,6 +1378,51 @@ export class TeamsClient {
     return this.withTokenRefresh(async () => {
       return fetchTranscript(this.token, conversationId);
     });
+  }
+
+  /**
+   * Resolve emails of all members in a conversation (for user-scoped sharing).
+   */
+  private async resolveMemberEmails(
+    conversationId: string,
+  ): Promise<string[]> {
+    const members = await fetchMembers(this.token, conversationId);
+    const memberIds = members.map((member) => member.id);
+    const profiles = await fetchProfiles(this.token, memberIds);
+    return profiles
+      .map((profile) => profile.email)
+      .filter((email): email is string => email !== null && email !== "");
+  }
+
+  /**
+   * Convert a per-file or default sharing scope into SharingLinkOptions.
+   */
+  private resolveFileSharingOptions(
+    partScope:
+      | FileSharingScope
+      | { scope: "users"; emails: string[] }
+      | undefined,
+    defaultScope: FileSharingScope,
+    memberEmails: string[] | undefined,
+  ): SharingLinkOptions | null {
+    // Per-file override takes precedence
+    const effectiveScope = partScope ?? defaultScope;
+
+    if (typeof effectiveScope === "object") {
+      return { scope: "users", emails: effectiveScope.emails };
+    }
+
+    switch (effectiveScope) {
+      case "chat":
+        if (!memberEmails || memberEmails.length === 0) {
+          return null;
+        }
+        return { scope: "users", emails: memberEmails };
+      case "organization":
+        return { scope: "organization" };
+      case "none":
+        return null;
+    }
   }
 
   /**
