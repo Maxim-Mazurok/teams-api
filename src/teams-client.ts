@@ -71,6 +71,7 @@ import {
   removeReaction,
   postScheduledMessage,
   fetchUserProperties,
+  createOneOnOneConversation,
 } from "./api/chat-service.js";
 import { ApiAuthError, ApiRateLimitError } from "./api/common.js";
 import { resolveReactionKey, initializeEmojiMap } from "./emoji-map.js";
@@ -813,6 +814,7 @@ export class TeamsClient {
       }
 
       // Strategy 1: Substrate search API for people + chat lookup
+      let matchedPersonForCreation: { mri: string; displayName: string } | undefined;
       try {
         const people = await searchPeople(this.token, personName, 5);
         const matchedPerson = people.find((person) =>
@@ -851,12 +853,33 @@ export class TeamsClient {
               memberDisplayName: matchedPerson.displayName,
             };
           }
+
+          // Person identified but no existing chat — remember them for conversation creation.
+          // Only proceed if the MRI is well-formed; an empty/invalid MRI would produce a
+          // malformed API request and also causes the UUID-based match above to spuriously
+          // succeed when personUuid is "" (matches every conversation ID).
+          if (/^8:orgid:[0-9a-f-]+$/i.test(matchedPerson.mri)) {
+            matchedPersonForCreation = matchedPerson;
+          }
         }
       } catch (error) {
         if (error instanceof ApiAuthError) {
           authError = error;
         }
         // Substrate unavailable — fall through to profile-based matching
+      }
+
+      // If substrate search identified the person but found no existing chat, create one.
+      // This handles the case of first-ever contact with someone in the org.
+      if (matchedPersonForCreation) {
+        const newConversation = await createOneOnOneConversation(
+          this.token,
+          matchedPersonForCreation.mri,
+        );
+        return {
+          conversationId: newConversation.id,
+          memberDisplayName: matchedPersonForCreation.displayName,
+        };
       }
 
       // Strategy 2: Profile-based matching for 1:1 chats (uses Bearer token)

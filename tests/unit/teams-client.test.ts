@@ -38,6 +38,7 @@ vi.mock("../../src/api/chat-service.js", async (importOriginal) => {
     fetchUserProperties: vi.fn(),
     addReaction: vi.fn(),
     removeReaction: vi.fn(),
+    createOneOnOneConversation: vi.fn(),
   };
 });
 vi.mock("../../src/api/middle-tier.js", async (importOriginal) => {
@@ -506,6 +507,51 @@ describe("findOneOnOneConversation", () => {
     const result = await client.findOneOnOneConversation("Nonexistent Person");
 
     expect(result).toBeNull();
+    expect(mockedApi.createOneOnOneConversation).not.toHaveBeenCalled();
+  });
+
+  it("should create a new 1:1 conversation when person found via substrate but no existing chat", async () => {
+    // No pre-existing 1:1 conversations
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "19:some-group@thread.v2", threadType: "meeting" }),
+    ]);
+
+    mockedApi.searchPeople.mockResolvedValue([
+      {
+        displayName: "Alice Smith",
+        mri: "8:orgid:a1b2c3d4-e5f6-0000-0000-000000000000",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Dev",
+        objectId: "a1b2c3d4-e5f6-0000-0000-000000000000",
+      },
+    ]);
+
+    // No existing 1:1 chats in search results
+    mockedApi.searchChats.mockResolvedValue([]);
+
+    // Create conversation returns a new ID
+    mockedApi.createOneOnOneConversation.mockResolvedValue({
+      id: "19:00000000-0000-0000-0000-000000000000_a1b2c3d4-e5f6-0000-0000-000000000000@unq.gbl.spaces",
+    });
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findOneOnOneConversation("Alice");
+
+    expect(result).not.toBeNull();
+    expect(result!.conversationId).toBe(
+      "19:00000000-0000-0000-0000-000000000000_a1b2c3d4-e5f6-0000-0000-000000000000@unq.gbl.spaces",
+    );
+    expect(result!.memberDisplayName).toBe("Alice Smith");
+    expect(mockedApi.createOneOnOneConversation).toHaveBeenCalledWith(
+      expect.anything(),
+      "8:orgid:a1b2c3d4-e5f6-0000-0000-000000000000",
+    );
   });
 
   it("should fall back to profile-based matching when substrate search returns empty", async () => {

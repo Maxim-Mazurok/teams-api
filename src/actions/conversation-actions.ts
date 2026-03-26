@@ -133,9 +133,11 @@ export const findOneOnOne: ActionDefinition = {
   name: "find-one-on-one",
   title: "Find 1:1 Conversation",
   description:
-    "Find a 1:1 conversation with a person by name. " +
-    "Uses Substrate people/chat search when available, " +
-    "falls back to scanning message senders. " +
+    "Find or create a 1:1 conversation with a person by name. " +
+    "Uses Substrate people/chat search when available — if a conversation " +
+    "already exists it is returned; if the person is found in the org directory " +
+    "but no chat exists yet, a new 1:1 is started. " +
+    "Falls back to scanning message senders when Substrate is unavailable. " +
     "Also finds the self-chat if the name matches the current user.",
   parameters: [
     {

@@ -19,12 +19,26 @@ const EMOJI_CDN_BASE =
   "https://statics.teams.cdn.office.net/evergreen-assets/personal-expressions/v1/metadata/";
 
 /**
- * Teams ECS (Experimentation and Configuration Service) endpoint.
- * Returns a large JSON config (~1 MB) that includes `emoticonAssetVersion`,
- * the current emoji catalog version hash. No authentication required.
+ * Teams ECS (Experimentation and Configuration Service) endpoint base URL.
+ * We append an app-version segment and a fixed query string.
  */
-const TEAMS_ECS_CONFIG_URL =
-  "https://config.teams.microsoft.com/config/v1/MicrosoftTeams/1415_1.0.0.0?environment=prod&audienceGroup=general&teamsRing=general";
+const TEAMS_ECS_CONFIG_BASE_URL =
+  "https://config.teams.microsoft.com/config/v1/MicrosoftTeams";
+
+/**
+ * Query params required by the public ECS endpoint.
+ */
+const TEAMS_ECS_CONFIG_QUERY =
+  "environment=prod&audienceGroup=general&teamsRing=general";
+
+/**
+ * App-version candidates for ECS config lookup.
+ *
+ * `0_0.0.0.0` is treated as a version-agnostic request and currently returns
+ * the same `emoticonAssetVersion` as concrete app versions. Keep a concrete
+ * fallback in case ECS behavior changes.
+ */
+const TEAMS_ECS_APP_VERSION_CANDIDATES = ["0_0.0.0.0", "1415_1.0.0.0"];
 
 /**
  * Fallback version hashes if the ECS endpoint is unreachable.
@@ -36,6 +50,10 @@ const FALLBACK_VERSIONS = [
 ];
 
 const EMOJI_LOCALE = "en-gb";
+
+function buildTeamsEcsConfigUrl(appVersion: string): string {
+  return `${TEAMS_ECS_CONFIG_BASE_URL}/${appVersion}?${TEAMS_ECS_CONFIG_QUERY}`;
+}
 
 interface EmojiEntry {
   id: string;
@@ -87,38 +105,42 @@ function buildShortcutMap(catalog: EmojiCatalog): Record<string, string> {
  * Returns null if the ECS endpoint is unreachable or doesn't contain the version.
  */
 async function fetchCurrentVersion(): Promise<string | null> {
-  try {
-    const response = await fetch(TEAMS_ECS_CONFIG_URL);
-    if (!response.ok) {
+  for (const appVersionCandidate of TEAMS_ECS_APP_VERSION_CANDIDATES) {
+    const teamsEcsConfigUrl = buildTeamsEcsConfigUrl(appVersionCandidate);
+    try {
+      const response = await fetch(teamsEcsConfigUrl);
+      if (!response.ok) {
+        console.warn(
+          `[emoji-map] ECS config returned ${String(response.status)} for app version ${appVersionCandidate}, trying next candidate`,
+        );
+        continue;
+      }
+      const responseText = await response.text();
+      const emoticonAssetVersionMatch =
+        /"emoticonAssetVersion":"([^"]+)"/.exec(responseText);
+      if (!emoticonAssetVersionMatch) {
+        console.warn(
+          `[emoji-map] emoticonAssetVersion not found for app version ${appVersionCandidate}, trying next candidate`,
+        );
+        continue;
+      }
+      const resolvedVersion = emoticonAssetVersionMatch[1];
+      // Validate: must be a 32-char lowercase hex hash to avoid malformed URLs
+      if (!/^[0-9a-f]{32}$/.test(resolvedVersion)) {
+        console.warn(
+          `[emoji-map] Unexpected emoticonAssetVersion format "${resolvedVersion}" for app version ${appVersionCandidate}, trying next candidate`,
+        );
+        continue;
+      }
+      return resolvedVersion;
+    } catch (error) {
       console.warn(
-        `[emoji-map] ECS config returned ${String(response.status)}, will use fallback versions`,
+        `[emoji-map] Failed to fetch ECS config for app version ${appVersionCandidate}:`,
+        error instanceof Error ? error.message : error,
       );
-      return null;
     }
-    const text = await response.text();
-    const match = /"emoticonAssetVersion":"([^"]+)"/.exec(text);
-    if (!match) {
-      console.warn(
-        "[emoji-map] emoticonAssetVersion not found in ECS config, will use fallback versions",
-      );
-      return null;
-    }
-    const version = match[1];
-    // Validate: must be a 32-char lowercase hex hash to avoid malformed URLs
-    if (!/^[0-9a-f]{32}$/.test(version)) {
-      console.warn(
-        `[emoji-map] Unexpected emoticonAssetVersion format "${version}", will use fallback versions`,
-      );
-      return null;
-    }
-    return version;
-  } catch (error) {
-    console.warn(
-      "[emoji-map] Failed to fetch ECS config:",
-      error instanceof Error ? error.message : error,
-    );
-    return null;
   }
+  return null;
 }
 
 /**
@@ -130,7 +152,12 @@ async function fetchCurrentVersion(): Promise<string | null> {
 async function fetchEmojiCatalog(): Promise<EmojiCatalog | null> {
   const currentVersion = await fetchCurrentVersion();
   const versionsToTry = currentVersion
-    ? [currentVersion, ...FALLBACK_VERSIONS.filter((v) => v !== currentVersion)]
+    ? [
+        currentVersion,
+        ...FALLBACK_VERSIONS.filter(
+          (fallbackVersion) => fallbackVersion !== currentVersion,
+        ),
+      ]
     : FALLBACK_VERSIONS;
 
   for (const version of versionsToTry) {
