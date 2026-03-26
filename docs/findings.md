@@ -119,7 +119,22 @@ Body:
 { "emotions": { "key": "<reactionKey>", "value": "<messageId>" } }
 ```
 
-Known reaction keys: `like`, `heart`, `laugh`, `surprised`, `angry`, `sad`.
+The reaction key is the **Teams emoji ID**, not the user-facing shortcut. Standard keys (`like`, `heart`, `laugh`, `surprised`, `angry`, `sad`) have IDs matching their names. Non-standard emojis use a unicode-prefixed format: e.g. `1f40e_horse` for the horse emoji, `1f525_fire` for fire.
+
+Reaction keys are **case-sensitive**. Using the wrong case (e.g. `horse` instead of `1f40e_horse`) creates a separate reaction with a broken emoji image, because the CDN asset path is based on the emoji ID.
+
+The Teams web client stores its full emoji database (~1660 emojis) in an IndexedDB store (`Teams:emoji-manager` → `teams-emoji`). The emoji catalog is fetched from a public CDN at:
+
+```
+https://statics.teams.cdn.office.net/evergreen-assets/personal-expressions/v1/metadata/{version}/{locale}.json
+```
+
+- **`{version}`** is a content hash (e.g. `ec4576179210cde40ce5494513213583`). The default is embedded in the Teams `config-prod.js` bundle as `emoticonAssetVersion`. No auth is required.
+- **`{locale}`** must be `en-gb` (plain `en` returns 404).
+- The JSON structure is `{ categories: [{ id, title, emoticons: [{ id, shortcuts[], description, unicode, etag, ... }] }] }`.
+- Shortcuts are wrapped in parentheses (e.g. `"(horse)"`). Standard reactions have `id === shortcut` (e.g. `"like"` → `"like"`).
+
+The `src/emoji-map.ts` module dynamically fetches this catalog at runtime and builds a shortcut→ID lookup. Multiple known version hashes are tried in order (newest first). If all fetches fail, `resolveReactionKey()` falls back to lowercasing the input (which still works for standard reactions).
 
 Returns `200` on success. Multiple reactions can coexist on the same message (e.g. both `like` and `heart`). Adding the same reaction twice is idempotent.
 

@@ -15,6 +15,7 @@ import * as attachments from "../../src/api/attachments.js";
 import { ApiAuthError } from "../../src/api/common.js";
 import * as tokenStore from "../../src/token-store.js";
 import * as autoLogin from "../../src/auth/auto-login.js";
+import * as emojiMap from "../../src/emoji-map.js";
 import type {
   Conversation,
   Message,
@@ -35,6 +36,8 @@ vi.mock("../../src/api/chat-service.js", async (importOriginal) => {
     postMessage: vi.fn(),
     postScheduledMessage: vi.fn(),
     fetchUserProperties: vi.fn(),
+    addReaction: vi.fn(),
+    removeReaction: vi.fn(),
   };
 });
 vi.mock("../../src/api/middle-tier.js", async (importOriginal) => {
@@ -56,6 +59,19 @@ vi.mock("../../src/api/substrate.js", async (importOriginal) => {
 });
 vi.mock("../../src/token-store.js");
 vi.mock("../../src/auth/auto-login.js");
+vi.mock("../../src/emoji-map.js", () => {
+  return {
+    initializeEmojiMap: vi.fn().mockResolvedValue(undefined),
+    resolveReactionKey: vi.fn((input: string) => {
+      // Simulate the real behavior for test cases
+      const testMap: Record<string, string> = {
+        horse: "1f40e_horse",
+      };
+      const lowered = input.toLowerCase();
+      return testMap[lowered] ?? lowered;
+    }),
+  };
+});
 vi.mock("../../src/api/attachments.js", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("../../src/api/attachments.js")>();
@@ -119,8 +135,20 @@ function makeMessagesPage(
   return { messages, backwardLink, syncState: null };
 }
 
+const mockedEmojiMap = vi.mocked(emojiMap);
+
 beforeEach(() => {
   vi.resetAllMocks();
+  // Re-apply emoji-map mocks after resetAllMocks clears them —
+  // initializeEmojiMap must return a Promise for the constructor's .catch()
+  mockedEmojiMap.initializeEmojiMap.mockResolvedValue(undefined);
+  mockedEmojiMap.resolveReactionKey.mockImplementation((input: string) => {
+    const testMap: Record<string, string> = {
+      horse: "1f40e_horse",
+    };
+    const lowered = input.toLowerCase();
+    return testMap[lowered] ?? lowered;
+  });
 });
 
 describe("TeamsClient.fromToken", () => {
@@ -2097,6 +2125,77 @@ describe("sendMessageWithFiles", () => {
       "file.txt",
       "user@company.com",
       { scope: "organization" },
+    );
+  });
+});
+
+describe("reaction emoji resolution", () => {
+  const cachedToken = {
+    skypeToken: "token",
+    region: "apac",
+    substrateToken: "substrate-token",
+    bearerToken: "bearer-token",
+    amsToken: "ams-token",
+    sharePointHost: "company-my.sharepoint.com",
+  };
+
+  beforeEach(() => {
+    mockedTokenStore.loadToken.mockReturnValue(cachedToken);
+    mockedApi.addReaction.mockResolvedValue({
+      messageId: "123",
+      reactionKey: "1f40e_horse",
+    });
+    mockedApi.removeReaction.mockResolvedValue({
+      messageId: "123",
+      reactionKey: "1f40e_horse",
+    });
+  });
+
+  it("resolves emoji shortcut to ID when adding reaction", async () => {
+    const client = await TeamsClient.create({ email: "user@company.com" });
+    await client.addReaction("conv-1", "123", "horse");
+
+    expect(mockedApi.addReaction).toHaveBeenCalledWith(
+      cachedToken,
+      "conv-1",
+      "123",
+      "1f40e_horse",
+    );
+  });
+
+  it("resolves emoji shortcut to ID when removing reaction", async () => {
+    const client = await TeamsClient.create({ email: "user@company.com" });
+    await client.removeReaction("conv-1", "123", "horse");
+
+    expect(mockedApi.removeReaction).toHaveBeenCalledWith(
+      cachedToken,
+      "conv-1",
+      "123",
+      "1f40e_horse",
+    );
+  });
+
+  it("passes standard reaction keys unchanged", async () => {
+    const client = await TeamsClient.create({ email: "user@company.com" });
+    await client.addReaction("conv-1", "123", "like");
+
+    expect(mockedApi.addReaction).toHaveBeenCalledWith(
+      cachedToken,
+      "conv-1",
+      "123",
+      "like",
+    );
+  });
+
+  it("passes emoji IDs through unchanged", async () => {
+    const client = await TeamsClient.create({ email: "user@company.com" });
+    await client.removeReaction("conv-1", "123", "1f40e_horse");
+
+    expect(mockedApi.removeReaction).toHaveBeenCalledWith(
+      cachedToken,
+      "conv-1",
+      "123",
+      "1f40e_horse",
     );
   });
 });

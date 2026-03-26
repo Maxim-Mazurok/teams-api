@@ -668,7 +668,8 @@ export const addReactionAction: ActionDefinition = {
     "Identify the conversation by topic name (--chat), " +
     "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
     "At least one identifier is required. " +
-    'Common reaction keys: "like", "heart", "laugh", "surprised".',
+    'Standard reaction keys: "like", "heart", "laugh", "surprised", "angry", "sad". ' +
+    'User-friendly names are auto-resolved to Teams emoji IDs (e.g. "horse" → "1f40e_horse").',
   parameters: [
     ...conversationParameters,
     {
@@ -681,7 +682,9 @@ export const addReactionAction: ActionDefinition = {
       name: "reactionKey",
       type: "string",
       description:
-        'Reaction type to add (e.g. "like", "heart", "laugh", "surprised")',
+        'Reaction name — standard ("like", "heart", "laugh", "surprised", "angry", "sad") ' +
+        'or any Teams emoji shortcut ("horse", "fire", "clap"). ' +
+        'Auto-resolved to the Teams emoji ID.',
       required: true,
     },
   ],
@@ -754,7 +757,8 @@ export const removeReactionAction: ActionDefinition = {
     "Identify the conversation by topic name (--chat), " +
     "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
     "At least one identifier is required. " +
-    "Only removes the current user's reaction of the specified type.",
+    "Only removes the current user's reaction of the specified type. " +
+    'User-friendly names are auto-resolved to Teams emoji IDs (e.g. "horse" → "1f40e_horse").',
   parameters: [
     ...conversationParameters,
     {
@@ -767,7 +771,8 @@ export const removeReactionAction: ActionDefinition = {
       name: "reactionKey",
       type: "string",
       description:
-        'Reaction type to remove (e.g. "like", "heart", "laugh", "surprised")',
+        'Reaction name or emoji ID to remove (e.g. "like", "heart", "horse", "1f40e_horse"). ' +
+        'Auto-resolved to the Teams emoji ID.',
       required: true,
     },
   ],

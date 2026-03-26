@@ -8,3 +8,4 @@ dist/
 .tmp_*
 .DS_Store
 .playwright-mcp/
+.vscode/mcp.json

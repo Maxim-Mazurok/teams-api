@@ -73,6 +73,7 @@ import {
   fetchUserProperties,
 } from "./api/chat-service.js";
 import { ApiAuthError, ApiRateLimitError } from "./api/common.js";
+import { resolveReactionKey, initializeEmojiMap } from "./emoji-map.js";
 import { fetchProfiles } from "./api/middle-tier.js";
 import { searchPeople, searchChats } from "./api/substrate.js";
 import { fetchTranscript } from "./api/transcripts.js";
@@ -254,6 +255,15 @@ export class TeamsClient {
 
   private constructor(token: TeamsToken) {
     this.token = token;
+    // Fire-and-forget: pre-fetch the emoji shortcut→ID map from the Teams CDN.
+    // If this completes before any reaction call, shortcuts like "horse" will
+    // resolve to "1f40e_horse". If not, standard reactions still work.
+    initializeEmojiMap().catch((error: unknown) => {
+      console.warn(
+        "[emoji-map] Unexpected error during emoji map initialization:",
+        error instanceof Error ? error.message : error,
+      );
+    });
   }
 
   /**
@@ -1152,21 +1162,27 @@ export class TeamsClient {
   /**
    * Add a reaction (emotion) to a message.
    *
-   * Common reaction keys: "like", "heart", "laugh", "surprised".
+   * Accepts user-friendly shortcuts (e.g. "horse") which are automatically
+   * resolved to the Teams emoji ID (e.g. "1f40e_horse").
+   * Standard reactions ("like", "heart", "laugh", "surprised") work as-is.
    */
   async addReaction(
     conversationId: string,
     messageId: string,
     reactionKey: string,
   ): Promise<ReactionResult> {
+    await initializeEmojiMap();
+    const resolvedKey = resolveReactionKey(reactionKey);
     return this.withTokenRefresh(async () => {
-      return addReaction(this.token, conversationId, messageId, reactionKey);
+      return addReaction(this.token, conversationId, messageId, resolvedKey);
     });
   }
 
   /**
    * Remove a reaction (emotion) from a message.
    *
+   * Accepts user-friendly shortcuts (e.g. "horse") which are automatically
+   * resolved to the Teams emoji ID (e.g. "1f40e_horse").
    * Only removes the current user's reaction of the specified type.
    */
   async removeReaction(
@@ -1174,8 +1190,10 @@ export class TeamsClient {
     messageId: string,
     reactionKey: string,
   ): Promise<ReactionResult> {
+    await initializeEmojiMap();
+    const resolvedKey = resolveReactionKey(reactionKey);
     return this.withTokenRefresh(async () => {
-      return removeReaction(this.token, conversationId, messageId, reactionKey);
+      return removeReaction(this.token, conversationId, messageId, resolvedKey);
     });
   }
 
