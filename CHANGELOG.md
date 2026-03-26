@@ -1,3 +1,10 @@
+## [0.14.2](https://github.com/Maxim-Mazurok/teams-api/compare/v0.14.1...v0.14.2) (2026-03-26)
+
+
+### Bug Fixes
+
+* clear substrate token polling interval on timeout ([#7](https://github.com/Maxim-Mazurok/teams-api/issues/7)) ([edd3e81](https://github.com/Maxim-Mazurok/teams-api/commit/edd3e819a223d544a38de5e2b3b51dfdbf768631))
+
 ## [0.14.1](https://github.com/Maxim-Mazurok/teams-api/compare/v0.14.0...v0.14.1) (2026-03-26)
 
 
