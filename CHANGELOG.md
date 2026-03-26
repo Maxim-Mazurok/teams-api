@@ -1,3 +1,10 @@
+# [0.17.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.16.0...v0.17.0) (2026-03-26)
+
+
+### Features
+
+* resolve emoji catalog version dynamically from Teams ECS config ([#11](https://github.com/Maxim-Mazurok/teams-api/issues/11)) ([8e33ab7](https://github.com/Maxim-Mazurok/teams-api/commit/8e33ab70c789ec1fca27319e08e688293f133136)), closes [#9](https://github.com/Maxim-Mazurok/teams-api/issues/9)
+
 # [0.16.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.15.0...v0.16.0) (2026-03-26)
 
 
