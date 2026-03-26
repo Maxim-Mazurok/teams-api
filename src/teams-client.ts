@@ -314,12 +314,7 @@ export class TeamsClient {
     if (options?.email) {
       const cachedToken = loadToken(options.email);
       if (cachedToken) {
-        if (
-          !cachedToken.substrateToken ||
-          !cachedToken.bearerToken ||
-          !cachedToken.amsToken ||
-          !cachedToken.sharePointHost
-        ) {
+        if (!cachedToken.skypeToken || !cachedToken.region) {
           log(
             "Cached token is missing required fields, re-authenticating...",
           );

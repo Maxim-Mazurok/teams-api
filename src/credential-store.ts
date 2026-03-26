@@ -20,6 +20,7 @@ import {
   writeFileSync,
   unlinkSync,
 } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -79,7 +80,7 @@ class KeychainStore implements CredentialStore {
 function getWindowsStorePath(): string {
   const appData =
     process.env.APPDATA ??
-    join(process.env.USERPROFILE ?? "", "AppData", "Roaming");
+    join(process.env.USERPROFILE ?? homedir(), "AppData", "Roaming");
   return join(appData, "teams-api");
 }
 
@@ -165,7 +166,7 @@ class WinCredStore implements CredentialStore {
 
 function getLinuxStorePath(): string {
   const configDir =
-    process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? "", ".config");
+    process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? homedir(), ".config");
   return join(configDir, "teams-api");
 }
 
