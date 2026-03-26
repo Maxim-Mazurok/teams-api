@@ -198,12 +198,11 @@ describe("list-conversations", () => {
       }),
     ];
 
-    const output = action.formatResult(conversations);
+    const output = action.formatConcise(conversations);
 
-    expect(output).toContain("2 conversations:");
-    expect(output).toContain('[0] chat: "Design Review"');
-    expect(output).toContain('[1] chat: "(untitled)"');
-    expect(output).toContain("last: unknown");
+    expect(output).toContain("## Conversations (2)");
+    expect(output).toContain("Design Review");
+    expect(output).toContain("(untitled)");
   });
 });
 
@@ -241,7 +240,7 @@ describe("find-conversation", () => {
       threadType: "chat",
     });
 
-    const output = action.formatResult(conversation);
+    const output = action.formatConcise(conversation);
 
     expect(output).toContain('Found: "Engineering"');
     expect(output).toContain("19:abc@thread.v2");
@@ -249,7 +248,7 @@ describe("find-conversation", () => {
   });
 
   it("should format null result", () => {
-    const output = action.formatResult(null);
+    const output = action.formatConcise(null);
     expect(output).toBe("No conversation found.");
   });
 });
@@ -292,14 +291,14 @@ describe("find-one-on-one", () => {
       memberDisplayName: "Luke Prior",
     };
 
-    const output = action.formatResult(searchResult);
+    const output = action.formatConcise(searchResult);
 
     expect(output).toContain("Found 1:1 with Luke Prior");
     expect(output).toContain("19:abc@unq.gbl.spaces");
   });
 
   it("should format null result", () => {
-    const output = action.formatResult(null);
+    const output = action.formatConcise(null);
     expect(output).toBe("No 1:1 conversation found.");
   });
 });
@@ -352,7 +351,7 @@ describe("find-people", () => {
       },
     ];
 
-    const output = action.formatResult(people);
+    const output = action.formatConcise(people);
 
     expect(output).toContain("Alice Smith");
     expect(output).toContain("alice@example.com");
@@ -360,7 +359,7 @@ describe("find-people", () => {
   });
 
   it("should format empty result", () => {
-    const output = action.formatResult([]);
+    const output = action.formatConcise([]);
     expect(output).toBe("No people found.");
   });
 });
@@ -417,7 +416,7 @@ describe("find-chats", () => {
       },
     ];
 
-    const output = action.formatResult(chats);
+    const output = action.formatConcise(chats);
 
     expect(output).toContain("Design Team");
     expect(output).toContain("19:design@thread.v2");
@@ -425,7 +424,7 @@ describe("find-chats", () => {
   });
 
   it("should format empty result", () => {
-    const output = action.formatResult([]);
+    const output = action.formatConcise([]);
     expect(output).toBe("No chats found.");
   });
 });
@@ -681,13 +680,14 @@ describe("get-messages", () => {
       }),
     ];
 
-    const output = action.formatResult(messages);
+    const output = action.formatConcise(messages);
 
-    expect(output).toContain("1 messages:");
-    expect(output).toContain("[2026-03-16 10:00:00] Alice: Hello world");
+    expect(output).toContain("## Messages (1)");
+    expect(output).toContain("### Alice — 2026-03-16 10:00:00");
+    expect(output).toContain("Hello world");
   });
 
-  it("should decode HTML entities in text format", () => {
+  it("should decode HTML entities in concise format", () => {
     const messages = [
       makeMessage({
         senderDisplayName: "Alice",
@@ -695,14 +695,14 @@ describe("get-messages", () => {
       }),
     ];
 
-    const output = action.formatResult(messages);
+    const output = action.formatConcise(messages);
 
     expect(output).toContain('Hello world&friends"hi"');
     expect(output).not.toContain("&nbsp;");
     expect(output).not.toContain("&quot;");
   });
 
-  it("should show reply markers in text format", () => {
+  it("should show reply markers in concise format", () => {
     const quotedMessage = makeMessage({
       id: "msg-100",
       senderDisplayName: "Bob",
@@ -716,13 +716,13 @@ describe("get-messages", () => {
     });
     const messages = [quotedMessage, replyMessage];
 
-    const output = action.formatResult(messages);
+    const output = action.formatConcise(messages);
 
-    expect(output).toContain("> [replying to Bob]:");
+    expect(output).toContain("[replying to Bob");
     expect(output).toContain("My reply here");
   });
 
-  it("should compress repeated authors in markdown format", () => {
+  it("should compress repeated authors in concise format", () => {
     const messages = [
       makeMessage({
         senderDisplayName: "Alice",
@@ -741,7 +741,7 @@ describe("get-messages", () => {
       }),
     ];
 
-    const output = action.formatMarkdown(messages);
+    const output = action.formatConcise(messages);
 
     // First Alice message gets full header
     expect(output).toContain("### Alice");
@@ -749,67 +749,6 @@ describe("get-messages", () => {
     expect(output).toContain("*2026-03-16 10:01:00*");
     // Bob gets full header
     expect(output).toContain("### Bob");
-  });
-
-  it("should show reply markers in markdown format", () => {
-    const messages = [
-      makeMessage({
-        id: "msg-100",
-        senderDisplayName: "Bob",
-        content: "<p>Original</p>",
-      }),
-      makeMessage({
-        id: "msg-200",
-        senderDisplayName: "Alice",
-        content: "<blockquote>Original</blockquote><p>Reply</p>",
-        quotedMessageId: "msg-100",
-      }),
-    ];
-
-    const output = action.formatMarkdown(messages);
-
-    expect(output).toContain("> **[replying to Bob]:**");
-    expect(output).toContain("Reply");
-  });
-
-  it("should decode HTML entities in markdown format", () => {
-    const messages = [
-      makeMessage({
-        content: "<p>test&nbsp;content&#8203;here</p>",
-      }),
-    ];
-
-    const output = action.formatMarkdown(messages);
-
-    expect(output).toContain("test content");
-    expect(output).not.toContain("&nbsp;");
-    expect(output).not.toContain("&#8203;");
-  });
-
-  it("should compress repeated authors in toon format", () => {
-    const messages = [
-      makeMessage({
-        senderDisplayName: "Alice",
-        originalArrivalTime: "2026-03-16T10:00:00.000Z",
-        content: "<p>First</p>",
-      }),
-      makeMessage({
-        senderDisplayName: "Alice",
-        originalArrivalTime: "2026-03-16T10:01:00.000Z",
-        content: "<p>Second</p>",
-      }),
-    ];
-
-    const output = action.formatToon(messages);
-
-    // First message has full name
-    const nameMatches = output.match(/Alice/g);
-    // Should appear in header line once, and only timestamp for second
-    expect(output).toContain("🗣️  Alice · 2026-03-16 10:00:00");
-    expect(output).toContain("2026-03-16 10:01:00");
-    // Name should appear only once (plus the header count line)
-    expect(nameMatches).toBeTruthy();
-    expect(nameMatches!.length).toBeLessThanOrEqual(2);
   });
 });
 
@@ -988,11 +927,12 @@ describe("send-message", () => {
       conversation: "Design Review",
     };
 
-    const output = action.formatResult(result);
+    const output = action.formatConcise(result);
 
-    expect(output).toContain('Message sent to "Design Review"');
-    expect(output).toContain("Message ID: 1773000000000");
-    expect(output).toContain("Arrival time: 1773000000000");
+    expect(output).toContain("## Message Sent");
+    expect(output).toContain("**To:** Design Review");
+    expect(output).toContain("**Message ID:** 1773000000000");
+    expect(output).toContain("**Arrival time:** 1773000000000");
   });
 
   it("should schedule message when scheduleAt is provided", async () => {
@@ -1081,40 +1021,10 @@ describe("send-message", () => {
       scheduled: true,
     };
 
-    const output = action.formatResult(result);
-
-    expect(output).toContain('Message scheduled for "Design Review"');
-    expect(output).toContain("Scheduled for: 2025-07-20T14:30:00.000Z");
-  });
-
-  it("should format scheduled result as markdown", () => {
-    const result = {
-      messageId: "1753021800000",
-      arrivalTime: 1753021800000,
-      scheduledTime: "2025-07-20T14:30:00.000Z",
-      conversation: "Design Review",
-      scheduled: true,
-    };
-
-    const output = action.formatMarkdown!(result);
+    const output = action.formatConcise(result);
 
     expect(output).toContain("## Message Scheduled");
     expect(output).toContain("**Scheduled for:** 2025-07-20T14:30:00.000Z");
-  });
-
-  it("should format scheduled result as toon", () => {
-    const result = {
-      messageId: "1753021800000",
-      arrivalTime: 1753021800000,
-      scheduledTime: "2025-07-20T14:30:00.000Z",
-      conversation: "Design Review",
-      scheduled: true,
-    };
-
-    const output = action.formatToon!(result);
-
-    expect(output).toContain("Message Scheduled!");
-    expect(output).toContain("Scheduled for: 2025-07-20T14:30:00.000Z");
   });
 });
 
@@ -1239,39 +1149,12 @@ describe("edit-message", () => {
       conversation: "Design Review",
     };
 
-    const output = action.formatResult(result);
-
-    expect(output).toContain('Message edited in "Design Review"');
-    expect(output).toContain("Message ID: msg-123");
-    expect(output).toContain("Edit time: 2026-03-24T10:00:00.000Z");
-  });
-
-  it("should format markdown correctly", () => {
-    const result = {
-      messageId: "msg-123",
-      editTime: "2026-03-24T10:00:00.000Z",
-      conversation: "Design Review",
-    };
-
-    const output = formatOutput(action, result, "md");
+    const output = action.formatConcise(result);
 
     expect(output).toContain("## Message Edited");
     expect(output).toContain("**In:** Design Review");
     expect(output).toContain("**Message ID:** msg-123");
-  });
-
-  it("should format toon correctly", () => {
-    const result = {
-      messageId: "msg-123",
-      editTime: "2026-03-24T10:00:00.000Z",
-      conversation: "Design Review",
-    };
-
-    const output = formatOutput(action, result, "toon");
-
-    expect(output).toContain("Message Edited!");
-    expect(output).toContain("Design Review");
-    expect(output).toContain("msg-123");
+    expect(output).toContain("**Edit time:** 2026-03-24T10:00:00.000Z");
   });
 });
 
@@ -1337,36 +1220,11 @@ describe("delete-message", () => {
       conversation: "Design Review",
     };
 
-    const output = action.formatResult(result);
-
-    expect(output).toContain('Message deleted from "Design Review"');
-    expect(output).toContain("Message ID: msg-123");
-  });
-
-  it("should format markdown correctly", () => {
-    const result = {
-      messageId: "msg-123",
-      conversation: "Design Review",
-    };
-
-    const output = formatOutput(action, result, "md");
+    const output = action.formatConcise(result);
 
     expect(output).toContain("## Message Deleted");
     expect(output).toContain("**From:** Design Review");
     expect(output).toContain("**Message ID:** msg-123");
-  });
-
-  it("should format toon correctly", () => {
-    const result = {
-      messageId: "msg-123",
-      conversation: "Design Review",
-    };
-
-    const output = formatOutput(action, result, "toon");
-
-    expect(output).toContain("Message Deleted!");
-    expect(output).toContain("Design Review");
-    expect(output).toContain("msg-123");
   });
 });
 
@@ -1443,38 +1301,12 @@ describe("add-reaction", () => {
       conversation: "Design Review",
     };
 
-    const output = action.formatResult(result);
-
-    expect(output).toContain('Reaction "like" added in "Design Review"');
-    expect(output).toContain("Message ID: msg-123");
-  });
-
-  it("should format markdown correctly", () => {
-    const result = {
-      messageId: "msg-123",
-      reactionKey: "heart",
-      conversation: "Design Review",
-    };
-
-    const output = formatOutput(action, result, "md");
+    const output = action.formatConcise(result);
 
     expect(output).toContain("## Reaction Added");
     expect(output).toContain("**In:** Design Review");
-    expect(output).toContain("**Reaction:** heart");
-  });
-
-  it("should format toon correctly", () => {
-    const result = {
-      messageId: "msg-123",
-      reactionKey: "like",
-      conversation: "Design Review",
-    };
-
-    const output = formatOutput(action, result, "toon");
-
-    expect(output).toContain("Reaction Added!");
-    expect(output).toContain("Design Review");
-    expect(output).toContain("👍");
+    expect(output).toContain("**Reaction:** like");
+    expect(output).toContain("**Message ID:** msg-123");
   });
 });
 
@@ -1551,38 +1383,12 @@ describe("remove-reaction", () => {
       conversation: "Design Review",
     };
 
-    const output = action.formatResult(result);
-
-    expect(output).toContain('Reaction "like" removed from "Design Review"');
-    expect(output).toContain("Message ID: msg-123");
-  });
-
-  it("should format markdown correctly", () => {
-    const result = {
-      messageId: "msg-123",
-      reactionKey: "heart",
-      conversation: "Design Review",
-    };
-
-    const output = formatOutput(action, result, "md");
+    const output = action.formatConcise(result);
 
     expect(output).toContain("## Reaction Removed");
     expect(output).toContain("**From:** Design Review");
-    expect(output).toContain("**Reaction:** heart");
-  });
-
-  it("should format toon correctly", () => {
-    const result = {
-      messageId: "msg-123",
-      reactionKey: "like",
-      conversation: "Design Review",
-    };
-
-    const output = formatOutput(action, result, "toon");
-
-    expect(output).toContain("Reaction Removed!");
-    expect(output).toContain("Design Review");
-    expect(output).toContain("👍");
+    expect(output).toContain("**Reaction:** like");
+    expect(output).toContain("**Message ID:** msg-123");
   });
 });
 
@@ -1631,11 +1437,13 @@ describe("get-members", () => {
       makeMember({ displayName: "", role: "User", id: "8:orgid:unknown" }),
     ];
 
-    const output = action.formatResult(members);
+    const output = action.formatConcise(members);
 
     expect(output).toContain("2 people, 0 bots");
-    expect(output).toContain("Alice Smith (Admin) — 8:orgid:alice");
-    expect(output).toContain("(unknown) (User) — 8:orgid:unknown");
+    expect(output).toContain("Alice Smith");
+    expect(output).toContain("Admin");
+    expect(output).toContain("8:orgid:alice");
+    expect(output).toContain("(unknown)");
   });
 });
 
@@ -1665,9 +1473,10 @@ describe("whoami", () => {
   it("should format correctly", () => {
     const result = { displayName: "Alice Smith", region: "apac" };
 
-    const output = action.formatResult(result);
+    const output = action.formatConcise(result);
 
-    expect(output).toBe("Alice Smith (region: apac)");
+    expect(output).toContain("## Alice Smith");
+    expect(output).toContain("**Region:** apac");
   });
 });
 
@@ -1721,346 +1530,46 @@ describe("formatOutput", () => {
 
   const sampleResult = { displayName: "Alice Smith", region: "apac" };
 
-  it("should return JSON for json format", () => {
-    const output = formatOutput(action, sampleResult, "json");
+  it("should return JSON for detailed format", () => {
+    const output = formatOutput(action, sampleResult, "detailed");
     expect(JSON.parse(output)).toEqual(sampleResult);
   });
 
-  it("should return text for text format", () => {
-    const output = formatOutput(action, sampleResult, "text");
-    expect(output).toBe("Alice Smith (region: apac)");
-  });
-
-  it("should return markdown for md format", () => {
-    const output = formatOutput(action, sampleResult, "md");
+  it("should return concise markdown for concise format", () => {
+    const output = formatOutput(action, sampleResult, "concise");
     expect(output).toContain("## Alice Smith");
     expect(output).toContain("**Region:** apac");
   });
 
-  it("should return toon for toon format", () => {
-    const output = formatOutput(action, sampleResult, "toon");
-    expect(output).toContain("🙋");
-    expect(output).toContain("Alice Smith");
-    expect(output).toContain("📍 region: apac");
-  });
-
-  it("should default to json when no format specified", () => {
+  it("should default to concise when no format specified", () => {
     const output = formatOutput(action, sampleResult);
-    expect(JSON.parse(output)).toEqual(sampleResult);
+    expect(output).toContain("## Alice Smith");
   });
 
-  it("should handle null result in json format", () => {
-    const output = formatOutput(getAction("find-conversation"), null, "json");
+  it("should handle null result in detailed format", () => {
+    const output = formatOutput(getAction("find-conversation"), null, "detailed");
     expect(output).toBe("null");
-  });
-});
-
-// ── list-conversations format tests ──────────────────────────────────
-
-describe("list-conversations formatMarkdown", () => {
-  const action = getAction("list-conversations");
-
-  it("should produce markdown table", () => {
-    const conversations = [
-      makeConversation({ topic: "Design Review", threadType: "chat" }),
-      makeConversation({
-        topic: "",
-        threadType: "chat",
-        lastMessageTime: null,
-        memberCount: null,
-      }),
-    ];
-
-    const output = action.formatMarkdown(conversations);
-
-    expect(output).toContain("## Conversations (2)");
-    expect(output).toContain("| # | Topic | Type | Last Message |");
-    expect(output).toContain("| 0 | Design Review | chat |");
-    expect(output).toContain(
-      "| 1 | (untitled) | chat | unknown |",
-    );
-  });
-
-  it("should handle empty list", () => {
-    const output = action.formatMarkdown([]);
-    expect(output).toContain("## Conversations (0)");
-    expect(output).not.toContain("| # |");
-  });
-});
-
-describe("list-conversations formatToon", () => {
-  const action = getAction("list-conversations");
-
-  it("should produce emoji-decorated output", () => {
-    const conversations = [
-      makeConversation({ topic: "Design Review", threadType: "chat" }),
-    ];
-
-    const output = action.formatToon(conversations);
-
-    expect(output).toContain("📋 1 Conversations");
-    expect(output).toContain("─".repeat(40));
-    expect(output).toContain('💬 [0] "Design Review"');
-    expect(output).toContain("chat · last: 2026-03-16");
   });
 });
 
 // ── find-conversation format tests ───────────────────────────────────
 
-describe("find-conversation formatMarkdown", () => {
-  const action = getAction("find-conversation");
-
-  it("should format found conversation as markdown", () => {
-    const conversation = makeConversation({
-      id: "19:abc@thread.v2",
-      topic: "Engineering",
-      threadType: "chat",
-    });
-
-    const output = action.formatMarkdown(conversation);
-
-    expect(output).toContain('## Found: "Engineering"');
-    expect(output).toContain("**ID:** 19:abc@thread.v2");
-    expect(output).toContain("**Type:** chat");
-  });
-
-  it("should handle null result", () => {
-    expect(action.formatMarkdown(null)).toBe("No conversation found.");
-  });
-});
-
-describe("find-conversation formatToon", () => {
-  const action = getAction("find-conversation");
-
-  it("should format found conversation with emojis", () => {
-    const conversation = makeConversation({
-      id: "19:abc@thread.v2",
-      topic: "Engineering",
-    });
-
-    const output = action.formatToon(conversation);
-
-    expect(output).toContain("🔍");
-    expect(output).toContain('Found: "Engineering"');
-    expect(output).toContain("🆔 19:abc@thread.v2");
-  });
-
-  it("should handle null result", () => {
-    const output = action.formatToon(null);
-    expect(output).toContain("🔍 No conversation found.");
-  });
-});
-
 // ── find-one-on-one format tests ─────────────────────────────────────
-
-describe("find-one-on-one formatMarkdown", () => {
-  const action = getAction("find-one-on-one");
-
-  it("should format as markdown", () => {
-    const searchResult: OneOnOneSearchResult = {
-      conversationId: "19:abc@unq.gbl.spaces",
-      memberDisplayName: "Luke Prior",
-    };
-
-    const output = action.formatMarkdown(searchResult);
-
-    expect(output).toContain("## Found 1:1 with Luke Prior");
-    expect(output).toContain("**Conversation ID:** 19:abc@unq.gbl.spaces");
-  });
-
-  it("should handle null result", () => {
-    expect(action.formatMarkdown(null)).toBe("No 1:1 conversation found.");
-  });
-});
-
-describe("find-one-on-one formatToon", () => {
-  const action = getAction("find-one-on-one");
-
-  it("should format with emojis", () => {
-    const searchResult: OneOnOneSearchResult = {
-      conversationId: "19:abc@unq.gbl.spaces",
-      memberDisplayName: "Luke Prior",
-    };
-
-    const output = action.formatToon(searchResult);
-
-    expect(output).toContain("🔍 Found 1:1 with Luke Prior");
-    expect(output).toContain("🆔 19:abc@unq.gbl.spaces");
-  });
-
-  it("should handle null result", () => {
-    const output = action.formatToon(null);
-    expect(output).toContain("No 1:1 conversation found.");
-  });
-});
 
 // ── get-messages format tests ────────────────────────────────────────
 
-describe("get-messages formatMarkdown", () => {
-  const action = getAction("get-messages");
-
-  it("should produce markdown with headings per message", () => {
-    const messages = [
-      makeMessage({
-        originalArrivalTime: "2026-03-16T10:00:00.000Z",
-        senderDisplayName: "Alice",
-        content: "<p>Hello world</p>",
-      }),
-    ];
-
-    const output = action.formatMarkdown(messages);
-
-    expect(output).toContain("## Messages (1)");
-    expect(output).toContain("### Alice — 2026-03-16 10:00:00");
-    expect(output).toContain("Hello world");
-  });
-});
-
-describe("get-messages formatToon", () => {
-  const action = getAction("get-messages");
-
-  it("should produce emoji-decorated output", () => {
-    const messages = [
-      makeMessage({
-        originalArrivalTime: "2026-03-16T10:00:00.000Z",
-        senderDisplayName: "Alice",
-        content: "<p>Hello world</p>",
-      }),
-    ];
-
-    const output = action.formatToon(messages);
-
-    expect(output).toContain("💬 1 Messages");
-    expect(output).toContain("🗣️  Alice · 2026-03-16 10:00:00");
-    expect(output).toContain("Hello world");
-  });
-});
-
 // ── send-message format tests ────────────────────────────────────────
-
-describe("send-message formatMarkdown", () => {
-  const action = getAction("send-message");
-
-  it("should format as markdown", () => {
-    const result = {
-      messageId: "msg-123",
-      arrivalTime: 1773000000000,
-      conversation: "Design Review",
-    };
-
-    const output = action.formatMarkdown(result);
-
-    expect(output).toContain("## Message Sent");
-    expect(output).toContain("**To:** Design Review");
-    expect(output).toContain("**Message ID:** msg-123");
-  });
-});
-
-describe("send-message formatToon", () => {
-  const action = getAction("send-message");
-
-  it("should format with emojis", () => {
-    const result = {
-      messageId: "msg-123",
-      arrivalTime: 1773000000000,
-      conversation: "Design Review",
-    };
-
-    const output = action.formatToon(result);
-
-    expect(output).toContain("✅ Message Sent!");
-    expect(output).toContain('📨 To: "Design Review"');
-    expect(output).toContain("🆔 msg-123");
-    expect(output).toContain("⏰ 1773000000000");
-  });
-});
 
 // ── get-members format tests ─────────────────────────────────────────
 
-describe("get-members formatMarkdown", () => {
-  const action = getAction("get-members");
-
-  it("should produce markdown table", () => {
-    const members = [
-      makeMember({
-        displayName: "Alice Smith",
-        role: "Admin",
-        id: "8:orgid:alice",
-      }),
-    ];
-
-    const output = action.formatMarkdown(members);
-
-    expect(output).toContain("## Members (1 people, 0 bots)");
-    expect(output).toContain("| Name | Role | ID |");
-    expect(output).toContain("| Alice Smith | Admin | 8:orgid:alice |");
-  });
-
-  it("should handle empty members", () => {
-    const output = action.formatMarkdown([]);
-    expect(output).toContain("## Members (0 people, 0 bots)");
-    expect(output).not.toContain("| Name |");
-  });
-});
-
-describe("get-members formatToon", () => {
-  const action = getAction("get-members");
-
-  it("should format with emojis", () => {
-    const members = [
-      makeMember({
-        displayName: "Alice Smith",
-        role: "Admin",
-        id: "8:orgid:alice",
-      }),
-    ];
-
-    const output = action.formatToon(members);
-
-    expect(output).toContain("👥 1 People, 0 Bots");
-    expect(output).toContain("👤 Alice Smith · Admin");
-    expect(output).toContain("8:orgid:alice");
-  });
-});
-
 // ── whoami format tests ──────────────────────────────────────────────
 
-describe("whoami formatMarkdown", () => {
-  const action = getAction("whoami");
+// ── All actions have formatConcise ───────────────────────────────────
 
-  it("should format as markdown", () => {
-    const result = { displayName: "Alice Smith", region: "apac" };
-
-    const output = action.formatMarkdown(result);
-
-    expect(output).toContain("## Alice Smith");
-    expect(output).toContain("**Region:** apac");
-  });
-});
-
-describe("whoami formatToon", () => {
-  const action = getAction("whoami");
-
-  it("should format with emojis", () => {
-    const result = { displayName: "Alice Smith", region: "apac" };
-
-    const output = action.formatToon(result);
-
-    expect(output).toContain("🙋 Alice Smith");
-    expect(output).toContain("📍 region: apac");
-  });
-});
-
-// ── All actions have all formatters ──────────────────────────────────
-
-describe("all actions have formatMarkdown and formatToon", () => {
+describe("all actions have formatConcise", () => {
   for (const action of actions) {
-    it(`${action.name} should have formatMarkdown`, () => {
-      expect(typeof action.formatMarkdown).toBe("function");
-    });
-
-    it(`${action.name} should have formatToon`, () => {
-      expect(typeof action.formatToon).toBe("function");
+    it(`${action.name} should have formatConcise`, () => {
+      expect(typeof action.formatConcise).toBe("function");
     });
   }
 });
@@ -2072,7 +1581,7 @@ describe("HTML entity decoding in message formats", () => {
 
   it("should decode &amp; correctly (after other entities)", () => {
     const messages = [makeMessage({ content: "<p>A &amp; B</p>" })];
-    const output = action.formatResult(messages);
+    const output = action.formatConcise(messages);
     expect(output).toContain("A & B");
   });
 
@@ -2080,19 +1589,19 @@ describe("HTML entity decoding in message formats", () => {
     const messages = [
       makeMessage({ content: "<p>if (a &lt; b &amp;&amp; c &gt; d)</p>" }),
     ];
-    const output = action.formatResult(messages);
+    const output = action.formatConcise(messages);
     expect(output).toContain("if (a < b && c > d)");
   });
 
   it("should remove zero-width spaces (&#8203;)", () => {
     const messages = [makeMessage({ content: "<p>hello&#8203;world</p>" })];
-    const output = action.formatResult(messages);
+    const output = action.formatConcise(messages);
     expect(output).toContain("helloworld");
   });
 
   it("should decode numeric character references", () => {
     const messages = [makeMessage({ content: "<p>&#65;&#66;&#67;</p>" })];
-    const output = action.formatResult(messages);
+    const output = action.formatConcise(messages);
     expect(output).toContain("ABC");
   });
 
@@ -2103,7 +1612,7 @@ describe("HTML entity decoding in message formats", () => {
         content: "plain text message",
       }),
     ];
-    const output = action.formatResult(messages);
+    const output = action.formatConcise(messages);
     expect(output).toContain("plain text message");
   });
 
@@ -2113,7 +1622,7 @@ describe("HTML entity decoding in message formats", () => {
         content: "<p><b>bold</b> and <i>italic</i> text</p>",
       }),
     ];
-    const output = action.formatResult(messages);
+    const output = action.formatConcise(messages);
     expect(output).toContain("bold and italic text");
   });
 });
@@ -2137,8 +1646,8 @@ describe("quote extraction in message formats", () => {
         content: "<p>Original message</p>",
       }),
     ];
-    const output = action.formatResult(messages);
-    expect(output).toContain("[replying to Original Author]");
+    const output = action.formatConcise(messages);
+    expect(output).toContain("[replying to Original Author");
     expect(output).toContain("Reply");
   });
 
@@ -2149,7 +1658,7 @@ describe("quote extraction in message formats", () => {
         quotedMessageId: null,
       }),
     ];
-    const output = action.formatResult(messages);
+    const output = action.formatConcise(messages);
     expect(output).not.toContain("[replying to");
   });
 
@@ -2160,13 +1669,13 @@ describe("quote extraction in message formats", () => {
         quotedMessageId: "msg-not-in-set",
       }),
     ];
-    const output = action.formatResult(messages);
-    expect(output).toContain("[replying to unknown]");
+    const output = action.formatConcise(messages);
+    expect(output).toContain("[replying to unknown");
   });
 
   it("should handle messages with no blockquote", () => {
     const messages = [makeMessage({ content: "<p>Normal message</p>" })];
-    const output = action.formatResult(messages);
+    const output = action.formatConcise(messages);
     expect(output).not.toContain("[replying to");
     expect(output).toContain("Normal message");
   });
@@ -2174,7 +1683,7 @@ describe("quote extraction in message formats", () => {
 
 // ── Author compression (tested through formatters) ───────────────────
 
-describe("author compression in formatMarkdown", () => {
+describe("author compression in formatConcise", () => {
   const action = getAction("get-messages");
 
   it("should not compress when different senders alternate", () => {
@@ -2196,7 +1705,7 @@ describe("author compression in formatMarkdown", () => {
       }),
     ];
 
-    const output = action.formatMarkdown(messages);
+    const output = action.formatConcise(messages);
 
     // All three should have full headers
     expect(output.match(/### Alice/g)).toHaveLength(2);
@@ -2222,58 +1731,12 @@ describe("author compression in formatMarkdown", () => {
       }),
     ];
 
-    const output = action.formatMarkdown(messages);
+    const output = action.formatConcise(messages);
 
     // Only one full header, two compressed timestamps
     expect(output.match(/### Alice/g)).toHaveLength(1);
     expect(output).toContain("*2026-03-16 10:01:00*");
     expect(output).toContain("*2026-03-16 10:02:00*");
-  });
-});
-
-describe("author compression in formatToon", () => {
-  const action = getAction("get-messages");
-
-  it("should compress consecutive same-sender messages", () => {
-    const messages = [
-      makeMessage({
-        senderDisplayName: "Alice",
-        originalArrivalTime: "2026-03-16T10:00:00.000Z",
-        content: "<p>First</p>",
-      }),
-      makeMessage({
-        senderDisplayName: "Alice",
-        originalArrivalTime: "2026-03-16T10:01:00.000Z",
-        content: "<p>Second</p>",
-      }),
-    ];
-
-    const output = action.formatToon(messages);
-
-    // Full header only once
-    expect(output.match(/🗣️  Alice/g)).toHaveLength(1);
-    // Second message has just the timestamp, indented
-    expect(output).toContain("      2026-03-16 10:01:00");
-  });
-
-  it("should reset compression when sender changes", () => {
-    const messages = [
-      makeMessage({
-        senderDisplayName: "Alice",
-        originalArrivalTime: "2026-03-16T10:00:00.000Z",
-        content: "<p>Hello</p>",
-      }),
-      makeMessage({
-        senderDisplayName: "Bob",
-        originalArrivalTime: "2026-03-16T10:01:00.000Z",
-        content: "<p>Hi</p>",
-      }),
-    ];
-
-    const output = action.formatToon(messages);
-
-    expect(output).toContain("🗣️  Alice");
-    expect(output).toContain("🗣️  Bob");
   });
 });
 
@@ -2516,7 +1979,7 @@ describe("download-file", () => {
     ).rejects.toThrow("has no file attachments or images");
   });
 
-  it("formatResult should include saved path", () => {
+  it("formatConcise should include saved path", () => {
     const result = [
       {
         fileName: "test.md",
@@ -2527,25 +1990,9 @@ describe("download-file", () => {
         data: Buffer.from("test"),
       },
     ];
-    const output = downloadFileAction.formatResult(result);
+    const output = downloadFileAction.formatConcise(result);
     expect(output).toContain("test.md");
     expect(output).toContain("100 bytes");
-    expect(output).toContain("/tmp/teams-download-abc/test.md");
-  });
-
-  it("formatToon should include saved path", () => {
-    const result = [
-      {
-        fileName: "test.md",
-        fileType: "md",
-        size: 100,
-        contentType: "text/markdown",
-        savedTo: "/tmp/teams-download-abc/test.md",
-        data: Buffer.from("test"),
-      },
-    ];
-    const output = downloadFileAction.formatToon(result);
-    expect(output).toContain("test.md");
     expect(output).toContain("/tmp/teams-download-abc/test.md");
   });
 });
@@ -2591,10 +2038,8 @@ describe("action registry (parametrized)", () => {
       expect(typeof action.execute).toBe("function");
     });
 
-    it("should have all three format functions", () => {
-      expect(typeof action.formatResult).toBe("function");
-      expect(typeof action.formatMarkdown).toBe("function");
-      expect(typeof action.formatToon).toBe("function");
+    it("should have formatConcise function", () => {
+      expect(typeof action.formatConcise).toBe("function");
     });
 
     it("should have well-formed parameter definitions", () => {
@@ -2615,7 +2060,7 @@ describe("action registry (parametrized)", () => {
   });
 
   describe("formatOutput", () => {
-    const formats: OutputFormat[] = ["json", "text", "md", "toon"];
+    const formats: OutputFormat[] = ["concise", "detailed"];
 
     it.each(formats)("should produce string output for %s format", (format) => {
       const sampleData = { test: true };
@@ -2624,9 +2069,9 @@ describe("action registry (parametrized)", () => {
       expect(output.length).toBeGreaterThan(0);
     });
 
-    it("should return valid JSON for json format", () => {
+    it("should return valid JSON for detailed format", () => {
       const sampleData = { key: "value" };
-      const output = formatOutput(actions[0], sampleData, "json");
+      const output = formatOutput(actions[0], sampleData, "detailed");
       expect(() => JSON.parse(output)).not.toThrow();
     });
   });

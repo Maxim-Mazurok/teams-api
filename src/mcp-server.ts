@@ -16,6 +16,7 @@
  *     TEAMS_AUTO            — Set to "true" to use auto-login (macOS + FIDO2)
  *     TEAMS_LOGIN           — Set to "true" to use interactive browser login (all platforms)
  *     TEAMS_DEBUG_PORT      — Chrome debug port (default: 9222)
+ *     TEAMS_TELEMETRY       — Set to "true" to enable full debug telemetry (contributor use)
  *
  * Usage in VS Code settings (mcp config):
  *   {
@@ -41,6 +42,7 @@ import { formatOutput } from "./actions/formatters.js";
 import type { ActionParameter, OutputFormat } from "./actions/formatters.js";
 import type { DownloadResult } from "./actions/file-actions.js";
 import { serverInstructions } from "./server-instructions.js";
+import { recordToolCall, recordToolError, recordAuth } from "./telemetry.js";
 
 let clientInstance: TeamsClient | null = null;
 
@@ -84,39 +86,64 @@ async function getClient(toolEmail?: string): Promise<TeamsClient> {
     if (email) {
       clientInstance.setEmail(email);
     }
+    recordAuth({ strategy: "token", success: true });
   } else if (envAuto) {
     if (!email) {
       throw new NeedsEmailError();
     }
-    clientInstance = await TeamsClient.create({
-      email,
-      region: envRegion,
-      headless: true,
-      verbose: false,
-    });
+    try {
+      clientInstance = await TeamsClient.create({
+        email,
+        region: envRegion,
+        headless: true,
+        verbose: false,
+      });
+      recordAuth({ strategy: "auto", success: true });
+    } catch (err) {
+      recordAuth({ strategy: "auto", success: false, error: err });
+      throw err;
+    }
   } else if (envLogin) {
-    clientInstance = await TeamsClient.fromInteractiveLogin({
-      region: envRegion,
-      email,
-      verbose: false,
-    });
-    if (email) {
-      clientInstance.setEmail(email);
+    try {
+      clientInstance = await TeamsClient.fromInteractiveLogin({
+        region: envRegion,
+        email,
+        verbose: false,
+      });
+      if (email) {
+        clientInstance.setEmail(email);
+      }
+      recordAuth({ strategy: "login", success: true });
+    } catch (err) {
+      recordAuth({ strategy: "login", success: false, error: err });
+      throw err;
     }
   } else if (envDebug) {
-    clientInstance = await TeamsClient.fromDebugSession({
-      debugPort: envDebugPort,
-      region: envRegion,
-    });
+    try {
+      clientInstance = await TeamsClient.fromDebugSession({
+        debugPort: envDebugPort,
+        region: envRegion,
+      });
+      recordAuth({ strategy: "debug", success: true });
+    } catch (err) {
+      recordAuth({ strategy: "debug", success: false, error: err });
+      throw err;
+    }
   } else {
     // Default: smart login (cross-platform, zero-config)
-    clientInstance = await TeamsClient.connect({
-      email,
-      region: envRegion,
-      verbose: false,
-    });
-    if (email) {
-      clientInstance.setEmail(email);
+    try {
+      clientInstance = await TeamsClient.connect({
+        email,
+        region: envRegion,
+        verbose: false,
+      });
+      if (email) {
+        clientInstance.setEmail(email);
+      }
+      recordAuth({ strategy: "auto", success: true });
+    } catch (err) {
+      recordAuth({ strategy: "auto", success: false, error: err });
+      throw err;
     }
   }
 
@@ -271,8 +298,12 @@ for (const action of actions) {
     inputSchema[parameter.name] = parameterToZod(parameter);
   }
   inputSchema["format"] = z
-    .enum(["json", "text", "md", "toon"])
-    .describe("Output format (default: toon)")
+    .enum(["concise", "detailed"])
+    .describe(
+      "Output format. " +
+        '"concise" (default): light Markdown with actionable IDs and key decision fields; nested collections may be summarized. ' +
+        '"detailed": full JSON for programmatic processing or inspecting exact field values.',
+    )
     .optional();
   inputSchema["email"] = z
     .string()
@@ -290,51 +321,73 @@ for (const action of actions) {
       inputSchema,
     },
     async (parameters) => {
+      const outputFormat = (parameters.format as OutputFormat) ?? "concise";
+      const start = Date.now();
+
       try {
         const client = await getClient(parameters.email as string | undefined);
-        const outputFormat = (parameters.format as OutputFormat) ?? "toon";
         const result = await action.execute(
           client,
           parameters as Record<string, unknown>,
         );
 
+        const output = formatOutput(action, result, outputFormat);
+        const durationMs = Date.now() - start;
+
+        // Redact binary data before recording telemetry — Buffer serialises as
+        // a large numeric array and would massively bloat telemetry.jsonl.
+        const telemetryResult =
+          action.name === "download-file" && Array.isArray(result)
+            ? (result as DownloadResult[]).map(({ data, ...rest }) => ({
+                ...rest,
+                byteLength: data.byteLength,
+              }))
+            : result;
+
+        recordToolCall({
+          tool: action.name,
+          format: outputFormat,
+          parameters: parameters as Record<string, unknown>,
+          result: telemetryResult,
+          output,
+          durationMs,
+        });
+
         // Build content blocks — file downloads get inline file content
         const contentBlocks: ContentBlock[] = [
-          {
-            type: "text" as const,
-            text: formatOutput(action, result, outputFormat),
-          },
+          { type: "text" as const, text: output },
         ];
-
-        let structuredResult = result;
 
         if (action.name === "download-file" && Array.isArray(result)) {
           const downloads = result as DownloadResult[];
           contentBlocks.push(...buildDownloadContentBlocks(downloads));
-          // Strip Buffer data from structuredContent (not JSON-serializable)
-          structuredResult = downloads.map(
-            ({ data: _data, ...metadata }) => metadata,
-          );
         }
-
-        const structuredContent =
-          structuredResult !== null &&
-          typeof structuredResult === "object" &&
-          !Array.isArray(structuredResult)
-            ? (structuredResult as Record<string, unknown>)
-            : { data: structuredResult };
 
         return {
           content: contentBlocks,
-          structuredContent,
         };
       } catch (error) {
+        const durationMs = Date.now() - start;
         if (error instanceof NeedsEmailError) {
+          recordToolError({
+            tool: action.name,
+            format: outputFormat,
+            parameters: parameters as Record<string, unknown>,
+            error,
+            durationMs,
+          });
           return {
             content: [{ type: "text" as const, text: error.message }],
             isError: true,
           };
         }
+        recordToolError({
+          tool: action.name,
+          format: outputFormat,
+          parameters: parameters as Record<string, unknown>,
+          error,
+          durationMs,
+        });
         throw error;
       }
     },

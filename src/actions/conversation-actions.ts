@@ -5,7 +5,7 @@
  */
 
 import type { Conversation, OneOnOneSearchResult } from "../types.js";
-import { type ActionDefinition, toonHeader } from "./formatters.js";
+import type { ActionDefinition } from "./formatters.js";
 
 export const listConversations: ActionDefinition = {
   name: "list-conversations",
@@ -26,49 +26,20 @@ export const listConversations: ActionDefinition = {
     const limit = (parameters.limit as number | undefined) ?? 50;
     return client.listConversations({ pageSize: limit });
   },
-  formatResult: (result) => {
-    const conversations = result as Conversation[];
-    const lines = [`\n${conversations.length} conversations:\n`];
-    for (let i = 0; i < conversations.length; i++) {
-      const conversation = conversations[i];
-      const lastMessage =
-        conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
-      const topic = conversation.topic || "(untitled)";
-      lines.push(
-        `  [${i}] ${conversation.threadType}: "${topic}" ` +
-          `(last: ${lastMessage})`,
-      );
-    }
-    return lines.join("\n");
-  },
-  formatMarkdown: (result) => {
+  formatConcise: (result) => {
     const conversations = result as Conversation[];
     const lines = [`## Conversations (${conversations.length})`, ""];
     if (conversations.length === 0) return lines.join("\n");
-    lines.push("| # | Topic | Type | Last Message |");
-    lines.push("|---|-------|------|--------------|");
+    lines.push("| # | Topic | Type | ID | Last Message |");
+    lines.push("|---|-------|------|----|--------------|");
     for (let i = 0; i < conversations.length; i++) {
       const conversation = conversations[i];
       const lastMessage =
-        conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
+        conversation.lastMessageTime?.slice(0, 10) ?? "";
       const topic = conversation.topic || "(untitled)";
       lines.push(
-        `| ${i} | ${topic} | ${conversation.threadType} | ${lastMessage} |`,
+        `| ${i} | ${topic} | ${conversation.threadType} | ${conversation.id} | ${lastMessage} |`,
       );
-    }
-    return lines.join("\n");
-  },
-  formatToon: (result) => {
-    const conversations = result as Conversation[];
-    const lines = [toonHeader("📋", `${conversations.length} Conversations`)];
-    for (let i = 0; i < conversations.length; i++) {
-      const conversation = conversations[i];
-      const lastMessage =
-        conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
-      const topic = conversation.topic || "(untitled)";
-      lines.push("");
-      lines.push(`  💬 [${i}] "${topic}"`);
-      lines.push(`      ${conversation.threadType} · last: ${lastMessage}`);
     }
     return lines.join("\n");
   },
@@ -94,38 +65,19 @@ export const findConversation: ActionDefinition = {
     const query = parameters.query as string;
     return client.findConversation(query);
   },
-  formatResult: (result) => {
+  formatConcise: (result) => {
     if (!result) return "No conversation found.";
     const conversation = result as Conversation;
-    const lastMessage = conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
-    return (
-      `Found: "${conversation.topic}" ` +
-      `(${conversation.id}, ${conversation.threadType}, ` +
-      `last: ${lastMessage})`
-    );
-  },
-  formatMarkdown: (result) => {
-    if (!result) return "No conversation found.";
-    const conversation = result as Conversation;
-    const lastMessage = conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
     const lines = [
       `## Found: "${conversation.topic}"`,
       "",
       `- **ID:** ${conversation.id}`,
       `- **Type:** ${conversation.threadType}`,
     ];
-    lines.push(`- **Last message:** ${lastMessage}`);
+    if (conversation.lastMessageTime) {
+      lines.push(`- **Last message:** ${conversation.lastMessageTime.slice(0, 10)}`);
+    }
     return lines.join("\n");
-  },
-  formatToon: (result) => {
-    if (!result) return "\n  🔍 No conversation found.";
-    const conversation = result as Conversation;
-    const lastMessage = conversation.lastMessageTime?.slice(0, 10) ?? "unknown";
-    return [
-      toonHeader("🔍", `Found: "${conversation.topic}"`),
-      `  🆔 ${conversation.id}`,
-      `  📁 ${conversation.threadType} · last: ${lastMessage}`,
-    ].join("\n");
   },
 };
 
@@ -152,26 +104,13 @@ export const findOneOnOne: ActionDefinition = {
     const personName = parameters.personName as string;
     return client.findOneOnOneConversation(personName);
   },
-  formatResult: (result) => {
-    if (!result) return "No 1:1 conversation found.";
-    const searchResult = result as OneOnOneSearchResult;
-    return `Found 1:1 with ${searchResult.memberDisplayName} (${searchResult.conversationId})`;
-  },
-  formatMarkdown: (result) => {
+  formatConcise: (result) => {
     if (!result) return "No 1:1 conversation found.";
     const searchResult = result as OneOnOneSearchResult;
     return [
       `## Found 1:1 with ${searchResult.memberDisplayName}`,
       "",
       `- **Conversation ID:** ${searchResult.conversationId}`,
-    ].join("\n");
-  },
-  formatToon: (result) => {
-    if (!result) return "\n  🔍 No 1:1 conversation found.";
-    const searchResult = result as OneOnOneSearchResult;
-    return [
-      toonHeader("🔍", `Found 1:1 with ${searchResult.memberDisplayName}`),
-      `  🆔 ${searchResult.conversationId}`,
     ].join("\n");
   },
 };

@@ -24,7 +24,7 @@ import type {
   ManualTokenOptions,
 } from "./types.js";
 
-const VALID_FORMATS: OutputFormat[] = ["json", "text", "md", "toon"];
+const VALID_FORMATS: OutputFormat[] = ["concise", "detailed"];
 
 const program = new Command();
 
@@ -208,10 +208,10 @@ for (const action of actions) {
     }
   }
 
-  command.option("--format <format>", "Output format (json, text, md, toon)");
+  command.option("--format <format>", "Output format (concise, detailed)");
   command.option(
     "--output <file>",
-    "Export output to file (default format: md)",
+    "Export output to file (default format: concise)",
   );
 
   command.action(async (flags: Record<string, unknown>) => {
@@ -242,10 +242,8 @@ for (const action of actions) {
     let outputFormat: OutputFormat;
     if (rawFormat) {
       outputFormat = rawFormat as OutputFormat;
-    } else if (flags.output) {
-      outputFormat = "md";
     } else {
-      outputFormat = "text";
+      outputFormat = "concise";
     }
 
     try {

@@ -1,13 +1,9 @@
 # AI Agent Instructions
 
-For architecture, setup, testing, and code conventions, see [CONTRIBUTING.md](../CONTRIBUTING.md).
-For user-facing docs (installation, CLI, MCP setup), see [README.md](../README.md).
+This file contains guidance specific to AI agents working on this codebase — tool usage, MCP workflows, reverse engineering techniques, and domain knowledge that wouldn't be found in standard developer docs.
 
-## Documentation boundaries
-
-- **README.md** — end users: install via npm, CLI usage, MCP config, API quick start
-- **CONTRIBUTING.md** — developers: repo setup, architecture, testing, code style, releases
-- Put content in the right file based on audience
+- When consuming this project **as a user** (installing, configuring, using CLI/MCP), refer to [README.md](../README.md).
+- When **developing** this project (making code changes, writing tests, understanding architecture), refer to [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## Dual-token authentication
 

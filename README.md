@@ -280,8 +280,8 @@ The examples below use `teams-api` for readability. If you are not installing gl
 | `--substrate-token <token>` | Optional Substrate bearer token (advanced/manual)                                |
 | `--debug-port <port>`       | Chrome debug port (default: 9222)                                                |
 | `--region <region>`         | API region override. Auto-detected for login/debug auth; required with `--token` |
-| `--format <format>`         | Output format: json, text, md, toon                                              |
-| `--output <file>`           | Export output to file (default format: md)                                       |
+| `--format <format>`         | Output format: concise, detailed                                             |
+| `--output <file>`           | Export output to file (default format: concise)                              |
 
 ### Examples
 
@@ -293,7 +293,7 @@ teams-api auth --login
 teams-api auth --auto --email you@example.com
 
 # List conversations
-teams-api list-conversations --login --limit 20 --format json
+teams-api list-conversations --login --limit 20 --format detailed
 
 # Find a conversation by topic
 teams-api find-conversation --auto --email you@example.com --query "Design Review"
@@ -304,7 +304,7 @@ teams-api find-one-on-one --auto --email you@example.com --person-name "Jane Doe
 # Read messages (by topic name, person name, or direct ID)
 teams-api get-messages --auto --email you@example.com --chat "Design Review"
 teams-api get-messages --auto --email you@example.com --to "Jane Doe" --max-pages 5
-teams-api get-messages --auto --email you@example.com --conversation-id "19:abc@thread.v2" --format json
+teams-api get-messages --auto --email you@example.com --conversation-id "19:abc@thread.v2" --format detailed
 
 # Newest-first order (API returns newest-first; default is oldest-first/chronological)
 teams-api get-messages --auto --email you@example.com --chat "General" --order newest-first
@@ -314,19 +314,16 @@ teams-api send-message --auto --email you@example.com --to "Jane Doe" --content 
 teams-api send-message --auto --email you@example.com --chat "Design Review" --content "Status update"
 
 # List members
-teams-api get-members --auto --email you@example.com --chat "Design Review" --format md
+teams-api get-members --auto --email you@example.com --chat "Design Review"
 
 # Get current user info
 teams-api whoami --auto --email you@example.com
 
-# Export messages to a file (default format: md)
+# Export messages to a file (default format: concise)
 teams-api get-messages --auto --email you@example.com --chat "General" --output exports/general.md
 
 # Export as JSON to a file
-teams-api get-messages --auto --email you@example.com --chat "General" --format json --output exports/general.json
-
-# Toon format (fun ASCII art output)
-teams-api list-conversations --auto --email you@example.com --format toon
+teams-api get-messages --auto --email you@example.com --chat "General" --format detailed --output exports/general.json
 ```
 
 ## MCP server
@@ -372,7 +369,7 @@ Use this only if you already have tokens from another flow or need to avoid brow
 
 ### Available tools
 
-All MCP tools accept an optional `format` parameter (`json`, `text`, `md`, or `toon`). Default format is `toon`.
+All MCP tools accept an optional `format` parameter (`concise` or `detailed`). Default format is `concise`.
 
 | Tool                       | Description                                           |
 | -------------------------- | ----------------------------------------------------- |
