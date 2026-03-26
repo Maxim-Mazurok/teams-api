@@ -351,6 +351,13 @@ export const sendMessage: ActionDefinition = {
       default: "chat",
     },
     {
+      name: "subject",
+      type: "string",
+      description:
+        "Post title shown prominently above the message body in channel posts.",
+      required: false,
+    },
+    {
       name: "scheduleAt",
       type: "string",
       description:
@@ -369,6 +376,7 @@ export const sendMessage: ActionDefinition = {
     const imagePaths = (parameters.image as string[] | undefined) ?? [];
     const filePaths = (parameters.file as string[] | undefined) ?? [];
     const scheduleAtRaw = parameters.scheduleAt as string | undefined;
+    const subject = parameters.subject as string | undefined;
 
     if (!content && imagePaths.length === 0 && filePaths.length === 0) {
       throw new Error(
@@ -399,6 +407,8 @@ export const sendMessage: ActionDefinition = {
         content,
         scheduleAt,
         messageFormat,
+        [],
+        subject,
       );
       return { ...result, conversation: label, scheduled: true };
     }
@@ -411,6 +421,7 @@ export const sendMessage: ActionDefinition = {
         conversationId,
         contentParts,
         fileSharingScope,
+        subject,
       );
       return { ...result, conversation: label };
     }
@@ -420,6 +431,7 @@ export const sendMessage: ActionDefinition = {
       const result = await client.sendMessageWithImages(
         conversationId,
         contentParts,
+        subject,
       );
       return { ...result, conversation: label };
     }
@@ -430,6 +442,8 @@ export const sendMessage: ActionDefinition = {
       conversationId,
       content,
       messageFormat,
+      [],
+      subject,
     );
     return { ...result, conversation: label };
   },

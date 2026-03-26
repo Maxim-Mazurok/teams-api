@@ -491,6 +491,45 @@ describe("postMessage", () => {
     expect(properties.files).toBe(filesJson);
   });
 
+  it("should set properties.subject when subject is provided", async () => {
+    mockFetchResponse({ OriginalArrivalTime: 1773000000000 });
+
+    await postMessage(
+      testToken,
+      "conv-id",
+      "Hello!",
+      "Test User",
+      "markdown",
+      [],
+      undefined,
+      "My Post Title",
+    );
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    const sentBody = JSON.parse(fetchCall[1].body as string) as Record<
+      string,
+      unknown
+    >;
+    const properties = sentBody.properties as Record<string, unknown>;
+    expect(properties.subject).toBe("My Post Title");
+  });
+
+  it("should set properties.subject to null when subject is omitted", async () => {
+    mockFetchResponse({ OriginalArrivalTime: 1773000000000 });
+
+    await postMessage(testToken, "conv-id", "Hello!", "Test User");
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    const sentBody = JSON.parse(fetchCall[1].body as string) as Record<
+      string,
+      unknown
+    >;
+    const properties = sentBody.properties as Record<string, unknown>;
+    expect(properties.subject).toBeNull();
+  });
+
   it("should not include files property when filesJson is omitted", async () => {
     mockFetchResponse({ OriginalArrivalTime: 1773000000000 });
 
@@ -907,6 +946,46 @@ describe("postScheduledMessage", () => {
     );
     expect(callBody.message.messagetype).toBe("Text");
     expect(callBody.message.content).toBe("plain text");
+  });
+
+  it("should set properties.subject and omit properties.title when subject is provided", async () => {
+    mockFetchResponse({ OriginalArrivalTime: 1753021800000 });
+
+    await postScheduledMessage(
+      testToken,
+      "conv-id",
+      "Scheduled hello",
+      "Alice Smith",
+      new Date("2025-07-20T14:30:00Z"),
+      "markdown",
+      [],
+      undefined,
+      "My Scheduled Title",
+    );
+
+    const callBody = JSON.parse(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
+    );
+    expect(callBody.message.properties.subject).toBe("My Scheduled Title");
+    expect(callBody.message.properties.title).toBeUndefined();
+  });
+
+  it("should default properties.subject to empty string when subject is omitted", async () => {
+    mockFetchResponse({ OriginalArrivalTime: 1753021800000 });
+
+    await postScheduledMessage(
+      testToken,
+      "conv-id",
+      "Scheduled hello",
+      "Alice Smith",
+      new Date("2025-07-20T14:30:00Z"),
+    );
+
+    const callBody = JSON.parse(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
+    );
+    expect(callBody.message.properties.subject).toBe("");
+    expect(callBody.message.properties.title).toBeUndefined();
   });
 });
 

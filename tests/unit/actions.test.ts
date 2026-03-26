@@ -841,6 +841,8 @@ describe("send-message", () => {
       "19:chat@thread.v2",
       "Hello!",
       "markdown",
+      [],
+      undefined,
     );
     expect(result.messageId).toBe("1773000000000");
     expect(result.conversation).toBe("Design Review");
@@ -865,6 +867,8 @@ describe("send-message", () => {
       "19:direct@thread.v2",
       "plain text",
       "text",
+      [],
+      undefined,
     );
   });
 
@@ -887,6 +891,60 @@ describe("send-message", () => {
       "19:direct@thread.v2",
       "<b>Bold</b>",
       "html",
+      [],
+      undefined,
+    );
+  });
+
+  it("should forward --subject to sendMessage", async () => {
+    const sentMessage: SentMessage = {
+      messageId: "1773000000000",
+      arrivalTime: 1773000000000,
+    };
+    const client = createMockClient({
+      sendMessage: vi.fn().mockResolvedValue(sentMessage),
+    });
+
+    await action.execute(client, {
+      conversationId: "19:direct@thread.v2",
+      content: "Hello!",
+      subject: "My Post Title",
+    });
+
+    expect(client.sendMessage).toHaveBeenCalledWith(
+      "19:direct@thread.v2",
+      "Hello!",
+      "markdown",
+      [],
+      "My Post Title",
+    );
+  });
+
+  it("should forward --subject to scheduleMessage", async () => {
+    const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
+    const scheduledMessage: ScheduledMessage = {
+      messageId: "1753021800000",
+      arrivalTime: 1753021800000,
+      scheduledTime: futureDate,
+    };
+    const client = createMockClient({
+      scheduleMessage: vi.fn().mockResolvedValue(scheduledMessage),
+    });
+
+    await action.execute(client, {
+      conversationId: "19:direct@thread.v2",
+      content: "Future hello!",
+      scheduleAt: futureDate,
+      subject: "Scheduled Title",
+    });
+
+    expect(client.scheduleMessage).toHaveBeenCalledWith(
+      "19:direct@thread.v2",
+      "Future hello!",
+      expect.any(Date),
+      "markdown",
+      [],
+      "Scheduled Title",
     );
   });
 
@@ -966,6 +1024,8 @@ describe("send-message", () => {
       "Future hello!",
       expect.any(Date),
       "markdown",
+      [],
+      undefined,
     );
     expect(result.messageId).toBe("1753021800000");
     expect(result.scheduledTime).toBe(futureDate);

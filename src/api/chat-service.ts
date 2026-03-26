@@ -215,6 +215,7 @@ export async function postMessage(
   format: MessageFormat = "markdown",
   amsReferences: string[] = [],
   filesJson?: string,
+  subject?: string,
 ): Promise<SentMessage> {
   const url = `${chatServiceBase(token.region)}/users/ME/conversations/${encodeURIComponent(conversationId)}/messages`;
 
@@ -232,7 +233,7 @@ export async function postMessage(
     imdisplayname: senderDisplayName,
     properties: {
       importance: "",
-      subject: null,
+      subject: subject ?? null,
       ...(filesJson ? { files: filesJson } : {}),
     },
   };
@@ -392,6 +393,7 @@ export async function postScheduledMessage(
   format: MessageFormat = "markdown",
   amsReferences: string[] = [],
   filesJson?: string,
+  subject?: string,
 ): Promise<ScheduledMessage> {
   const url = `${chatServiceBase(token.region)}/users/ME/drafts`;
 
@@ -426,8 +428,7 @@ export async function postScheduledMessage(
       amsreferences: amsReferences,
       properties: {
         importance: "",
-        subject: "",
-        title: "",
+        subject: subject ?? "",
         cards: "[]",
         links: "[]",
         mentions: "[]",

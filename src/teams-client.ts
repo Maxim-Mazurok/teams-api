@@ -1102,12 +1102,16 @@ export class TeamsClient {
    * - `"text"` — plain text, sent as-is
    * - `"markdown"` (default) — converted from Markdown to HTML
    * - `"html"` — raw HTML, sent as-is
+   *
+   * The `subject` parameter sets the post title, which is displayed prominently
+   * above the message body in channel posts.
    */
   async sendMessage(
     conversationId: string,
     content: string,
     format: MessageFormat = "markdown",
     amsReferences: string[] = [],
+    subject?: string,
   ): Promise<SentMessage> {
     return this.withTokenRefresh(async () => {
       const displayName = await this.getCurrentUserDisplayName();
@@ -1118,6 +1122,8 @@ export class TeamsClient {
         displayName,
         format,
         amsReferences,
+        undefined,
+        subject,
       );
     });
   }
@@ -1211,6 +1217,7 @@ export class TeamsClient {
     scheduleAt: Date,
     format: MessageFormat = "markdown",
     amsReferences: string[] = [],
+    subject?: string,
   ): Promise<ScheduledMessage> {
     return this.withTokenRefresh(async () => {
       const displayName = await this.getCurrentUserDisplayName();
@@ -1222,6 +1229,8 @@ export class TeamsClient {
         scheduleAt,
         format,
         amsReferences,
+        undefined,
+        subject,
       );
     });
   }
@@ -1284,6 +1293,7 @@ export class TeamsClient {
   async sendMessageWithImages(
     conversationId: string,
     contentParts: MessageContentPart[],
+    subject?: string,
   ): Promise<SentMessage> {
     return this.withTokenRefresh(async () => {
       const amsReferences: string[] = [];
@@ -1315,6 +1325,8 @@ export class TeamsClient {
         displayName,
         "html",
         amsReferences,
+        undefined,
+        subject,
       );
     });
   }
@@ -1348,6 +1360,7 @@ export class TeamsClient {
     conversationId: string,
     contentParts: MessageContentPart[],
     fileSharingScope: FileSharingScope = "chat",
+    subject?: string,
   ): Promise<SentMessage> {
     return this.withTokenRefresh(async () => {
       if (!this.userEmail) {
@@ -1418,6 +1431,7 @@ export class TeamsClient {
         "html",
         amsReferences,
         filesJson,
+        subject,
       );
     });
   }
