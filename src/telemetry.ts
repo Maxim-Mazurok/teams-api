@@ -20,7 +20,7 @@
  */
 
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import type { Platform } from "./platform.js";
@@ -85,9 +85,9 @@ function write(record: Record<string, unknown>): void {
   try {
     const filePath = getTelemetryPath();
     const dir = process.env.TEAMS_TELEMETRY_PATH
-      ? undefined
+      ? dirname(filePath)
       : getTelemetryDir();
-    if (dir && !existsSync(dir)) {
+    if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
     appendFileSync(

@@ -53,8 +53,15 @@ describe("getTelemetryDir", () => {
   });
 
   it("returns ~/.local/share on linux when XDG_DATA_HOME is not set", () => {
-    delete process.env.XDG_DATA_HOME;
-    expect(getTelemetryDir("linux")).toMatch(/\.local[/\\]share[/\\]teams-api$/);
+    const original = process.env.XDG_DATA_HOME;
+    try {
+      delete process.env.XDG_DATA_HOME;
+      expect(getTelemetryDir("linux")).toMatch(/\.local[/\\]share[/\\]teams-api$/);
+    } finally {
+      if (original !== undefined) {
+        process.env.XDG_DATA_HOME = original;
+      }
+    }
   });
 
   it("returns APPDATA path on windows when APPDATA is set", () => {

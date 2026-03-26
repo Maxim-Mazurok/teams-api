@@ -334,11 +334,21 @@ for (const action of actions) {
         const output = formatOutput(action, result, outputFormat);
         const durationMs = Date.now() - start;
 
+        // Redact binary data before recording telemetry — Buffer serialises as
+        // a large numeric array and would massively bloat telemetry.jsonl.
+        const telemetryResult =
+          action.name === "download-file" && Array.isArray(result)
+            ? (result as DownloadResult[]).map(({ data, ...rest }) => ({
+                ...rest,
+                byteLength: data.byteLength,
+              }))
+            : result;
+
         recordToolCall({
           tool: action.name,
           format: outputFormat,
           parameters: parameters as Record<string, unknown>,
-          result,
+          result: telemetryResult,
           output,
           durationMs,
         });

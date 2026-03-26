@@ -77,6 +77,12 @@
           "description": "Set to \"true\" to enable full debug telemetry logging (contributor use; logs all inputs and outputs locally)",
           "isRequired": false,
           "isSecret": false
+        },
+        {
+          "name": "TEAMS_TELEMETRY_PATH",
+          "description": "Override the telemetry output file path (default: platform-appropriate ~/Library/... or ~/.local/share/...)",
+          "isRequired": false,
+          "isSecret": false
         }
       ]
     }
