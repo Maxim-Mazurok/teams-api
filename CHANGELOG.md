@@ -1,3 +1,10 @@
+## [0.14.3](https://github.com/Maxim-Mazurok/teams-api/compare/v0.14.2...v0.14.3) (2026-03-26)
+
+
+### Bug Fixes
+
+* cache tokens without --email using default account key ([#8](https://github.com/Maxim-Mazurok/teams-api/issues/8)) ([7d17f60](https://github.com/Maxim-Mazurok/teams-api/commit/7d17f60a086f00d0e66ee019dba515ea57ab559d))
+
 ## [0.14.2](https://github.com/Maxim-Mazurok/teams-api/compare/v0.14.1...v0.14.2) (2026-03-26)
 
 
