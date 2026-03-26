@@ -1052,6 +1052,33 @@ describe("sendMessage", () => {
       undefined,
     );
   });
+
+  it("should forward subject to postMessage", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes" }),
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
+    );
+    mockedApi.postMessage.mockResolvedValue({
+      messageId: "msg-3",
+      arrivalTime: 1773000000000,
+    });
+
+    const client = TeamsClient.fromToken("token");
+    await client.sendMessage("conv-id", "Hello!", "markdown", [], "My Title");
+
+    expect(mockedApi.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ skypeToken: "token" }),
+      "conv-id",
+      "Hello!",
+      "Test User",
+      "markdown",
+      [],
+      undefined,
+      "My Title",
+    );
+  });
 });
 
 describe("scheduleMessage", () => {
@@ -1123,6 +1150,42 @@ describe("scheduleMessage", () => {
       [],
       undefined,
       undefined,
+    );
+  });
+
+  it("should forward subject to postScheduledMessage", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "48:notes" }),
+    ]);
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([makeMessage({ senderDisplayName: "Test User" })]),
+    );
+    mockedApi.postScheduledMessage.mockResolvedValue({
+      messageId: "msg-3",
+      arrivalTime: 1753021800000,
+      scheduledTime: "2025-07-20T14:30:00.000Z",
+    });
+
+    const client = TeamsClient.fromToken("token");
+    await client.scheduleMessage(
+      "conv-id",
+      "Hello later!",
+      new Date("2025-07-20T14:30:00.000Z"),
+      "markdown",
+      [],
+      "My Scheduled Title",
+    );
+
+    expect(mockedApi.postScheduledMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ skypeToken: "token" }),
+      "conv-id",
+      "Hello later!",
+      "Test User",
+      expect.any(Date),
+      "markdown",
+      [],
+      undefined,
+      "My Scheduled Title",
     );
   });
 });

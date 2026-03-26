@@ -896,6 +896,58 @@ describe("send-message", () => {
     );
   });
 
+  it("should forward --subject to sendMessage", async () => {
+    const sentMessage: SentMessage = {
+      messageId: "1773000000000",
+      arrivalTime: 1773000000000,
+    };
+    const client = createMockClient({
+      sendMessage: vi.fn().mockResolvedValue(sentMessage),
+    });
+
+    await action.execute(client, {
+      conversationId: "19:direct@thread.v2",
+      content: "Hello!",
+      subject: "My Post Title",
+    });
+
+    expect(client.sendMessage).toHaveBeenCalledWith(
+      "19:direct@thread.v2",
+      "Hello!",
+      "markdown",
+      [],
+      "My Post Title",
+    );
+  });
+
+  it("should forward --subject to scheduleMessage", async () => {
+    const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
+    const scheduledMessage: ScheduledMessage = {
+      messageId: "1753021800000",
+      arrivalTime: 1753021800000,
+      scheduledTime: futureDate,
+    };
+    const client = createMockClient({
+      scheduleMessage: vi.fn().mockResolvedValue(scheduledMessage),
+    });
+
+    await action.execute(client, {
+      conversationId: "19:direct@thread.v2",
+      content: "Future hello!",
+      scheduleAt: futureDate,
+      subject: "Scheduled Title",
+    });
+
+    expect(client.scheduleMessage).toHaveBeenCalledWith(
+      "19:direct@thread.v2",
+      "Future hello!",
+      expect.any(Date),
+      "markdown",
+      [],
+      "Scheduled Title",
+    );
+  });
+
   it("should resolve 1:1 conversation via --to", async () => {
     const searchResult: OneOnOneSearchResult = {
       conversationId: "19:one-on-one@unq.gbl.spaces",
