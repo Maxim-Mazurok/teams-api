@@ -169,7 +169,7 @@ Manual token usage, debug-session auth, and programmatic Node.js usage are cover
 | **Auto-login (FIDO2)** | Full support   | Not supported   |
 | **Debug session**      | Full support   | Full support    |
 | **Direct token**       | Full support   | Full support    |
-| **Token caching**      | macOS Keychain | Not available   |
+| **Token caching**      | macOS Keychain | Windows DPAPI / Linux secret-tool |
 | **CLI & MCP server**   | Full support   | Full support    |
 | **Programmatic API**   | Full support   | Full support    |
 
@@ -211,7 +211,7 @@ teams-api auth --login --email you@example.com
 ```
 
 > [!NOTE]
-> Interactive login uses Playwright's bundled Chromium. No system Chrome installation is required.
+> Interactive login prefers an installed browser (Edge or Chrome) when available, and falls back to Playwright's bundled Chromium.
 
 ### Advanced / manual methods
 
@@ -397,7 +397,6 @@ The Teams Chat Service URL varies by region. Login-based and debug-session auth 
 - Token lifetime is ~24 hours. After expiry, you must re-acquire.
 - The Teams Chat Service REST API is undocumented and may change without notice.
 - Auto-login requires macOS, system Chrome, a platform authenticator, and a FIDO2 passkey. On other platforms, use interactive login (`--login`) instead.
-- Token caching (macOS Keychain) is only available on macOS. On other platforms, pass the token directly or re-run interactive login each time.
 - The members API returns empty display names for 1:1 chat participants. Use `findOneOnOneConversation()` to resolve names from message history.
 - Reaction actor identities come from the `emotions` field in message payloads. Parsing handles both JSON-string and array formats.
 

@@ -1,3 +1,10 @@
+# [0.13.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.12.0...v0.13.0) (2026-03-26)
+
+
+### Features
+
+* cross-platform auth with smart login and secure credential storage ([#5](https://github.com/Maxim-Mazurok/teams-api/issues/5)) ([f7c996a](https://github.com/Maxim-Mazurok/teams-api/commit/f7c996a089d942fffb865f51690d5d3a5c110b48))
+
 # [0.12.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.11.0...v0.12.0) (2026-03-26)
 
 

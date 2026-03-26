@@ -66,6 +66,7 @@ async function getClient(toolEmail?: string): Promise<TeamsClient> {
   const email = process.env.TEAMS_EMAIL || toolEmail;
   const envAuto = process.env.TEAMS_AUTO === "true";
   const envLogin = process.env.TEAMS_LOGIN === "true";
+  const envDebug = process.env.TEAMS_DEBUG === "true";
   const envDebugPort = process.env.TEAMS_DEBUG_PORT
     ? Number(process.env.TEAMS_DEBUG_PORT)
     : 9222;
@@ -102,11 +103,21 @@ async function getClient(toolEmail?: string): Promise<TeamsClient> {
     if (email) {
       clientInstance.setEmail(email);
     }
-  } else {
+  } else if (envDebug) {
     clientInstance = await TeamsClient.fromDebugSession({
       debugPort: envDebugPort,
       region: envRegion,
     });
+  } else {
+    // Default: smart login (cross-platform, zero-config)
+    clientInstance = await TeamsClient.connect({
+      email,
+      region: envRegion,
+      verbose: false,
+    });
+    if (email) {
+      clientInstance.setEmail(email);
+    }
   }
 
   return clientInstance;

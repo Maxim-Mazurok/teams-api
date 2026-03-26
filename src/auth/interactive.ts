@@ -9,6 +9,7 @@
 import type { TeamsToken, InteractiveLoginOptions } from "../types.js";
 import { resolveTeamsRegion } from "../region.js";
 import { diagnosePageState } from "./page-diagnostics.js";
+import { launchInteractiveBrowser } from "../browser-runtime.js";
 import {
   captureTokensFromPage,
   TOKEN_INTERCEPT_TIMEOUT,
@@ -39,7 +40,7 @@ export async function acquireTokenViaInteractiveLogin(
     : () => {};
 
   log("Launching browser for interactive login...");
-  const browser = await chromium.launch({ headless: false });
+  const browser = await launchInteractiveBrowser(chromium, log);
   const context = await browser.newContext();
   const page = await context.newPage();
 
