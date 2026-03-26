@@ -1,3 +1,10 @@
+# [0.12.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.11.0...v0.12.0) (2026-03-26)
+
+
+### Features
+
+* implement file sharing link creation for uploaded files ([80ca06b](https://github.com/Maxim-Mazurok/teams-api/commit/80ca06b96f697ca122ed02c9f246e4ef3d38066e))
+
 # [0.11.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.10.2...v0.11.0) (2026-03-25)
 
 
