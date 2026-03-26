@@ -45,6 +45,23 @@ Live verification notes:
 - Group chats, meetings, channels/topics, and spaces all omitted a reliable member count in this feed.
 - `properties.lastimreceivedtime` was the stable field for the last message timestamp.
 
+**Create or get a 1:1 conversation:**
+
+```
+PUT /users/ME/conversations
+Content-Type: application/json
+
+{
+  "members": [{ "mri": "8:orgid:{uuid}", "role": "Admin" }]
+}
+```
+
+Creates a new 1:1 conversation with the given member, or returns the existing one if it already exists. Returns `{ "id": "19:{uuid1}_{uuid2}@unq.gbl.spaces" }`.
+
+- A 200 response means the conversation already existed; a 201 response means it was newly created. Some server versions may return 409 instead of 200 for the pre-existing case — both include the conversation ID in the body.
+- Only one `members` entry should be provided (the other participant). The authenticated user is automatically included.
+- The `role` field must be `"Admin"`.
+
 **Get messages (one page):**
 
 ```

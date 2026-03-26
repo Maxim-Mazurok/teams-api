@@ -564,6 +564,48 @@ export async function removeReaction(
 }
 
 /**
+ * Create a new 1:1 conversation with a given member, or return the existing one.
+ *
+ * Uses `PUT /users/ME/conversations` with a single member MRI.
+ * A 201 response means the conversation was created; a 200 response (or 409 on
+ * some server versions) means it already existed — both return the conversation ID.
+ */
+export async function createOneOnOneConversation(
+  token: TeamsToken,
+  memberMri: string,
+): Promise<{ id: string }> {
+  const url = `${chatServiceBase(token.region)}/users/ME/conversations`;
+  const response = await fetchWithRetry(url, {
+    method: "PUT",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      members: [{ mri: memberMri, role: "Admin" }],
+    }),
+  });
+
+  // 200 = already exists, 201 = newly created, 409 = conflict / already exists
+  if (!response.ok && response.status !== 409) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
+    throw new Error(
+      `Failed to create conversation: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const data = (await response.json()) as { id?: string };
+  if (!data.id) {
+    throw new Error("No conversation ID returned when creating 1:1 conversation");
+  }
+  return { id: data.id };
+}
+
+/**
  * Fetch user properties for the authenticated user.
  * Returns raw properties — display name may or may not be present.
  */
