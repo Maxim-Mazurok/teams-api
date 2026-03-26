@@ -1021,6 +1021,8 @@ describe("sendMessage", () => {
       "Test User",
       "markdown",
       [],
+      undefined,
+      undefined,
     );
   });
 
@@ -1046,6 +1048,8 @@ describe("sendMessage", () => {
       "Test User",
       "html",
       [],
+      undefined,
+      undefined,
     );
   });
 });
@@ -1083,6 +1087,8 @@ describe("scheduleMessage", () => {
       scheduleAt,
       "markdown",
       [],
+      undefined,
+      undefined,
     );
   });
 
@@ -1115,6 +1121,8 @@ describe("scheduleMessage", () => {
       expect.any(Date),
       "html",
       [],
+      undefined,
+      undefined,
     );
   });
 });
@@ -1891,6 +1899,7 @@ describe("sendMessageWithFiles", () => {
       "html",
       [],
       '[{"@type":"http://schema.skype.com/File"}]',
+      undefined,
     );
   });
 
@@ -1945,6 +1954,7 @@ describe("sendMessageWithFiles", () => {
       "html",
       [],
       expect.any(String),
+      undefined,
     );
   });
 

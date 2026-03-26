@@ -841,6 +841,8 @@ describe("send-message", () => {
       "19:chat@thread.v2",
       "Hello!",
       "markdown",
+      [],
+      undefined,
     );
     expect(result.messageId).toBe("1773000000000");
     expect(result.conversation).toBe("Design Review");
@@ -865,6 +867,8 @@ describe("send-message", () => {
       "19:direct@thread.v2",
       "plain text",
       "text",
+      [],
+      undefined,
     );
   });
 
@@ -887,6 +891,8 @@ describe("send-message", () => {
       "19:direct@thread.v2",
       "<b>Bold</b>",
       "html",
+      [],
+      undefined,
     );
   });
 
@@ -966,6 +972,8 @@ describe("send-message", () => {
       "Future hello!",
       expect.any(Date),
       "markdown",
+      [],
+      undefined,
     );
     expect(result.messageId).toBe("1753021800000");
     expect(result.scheduledTime).toBe(futureDate);
