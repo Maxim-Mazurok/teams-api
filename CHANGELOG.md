@@ -1,3 +1,10 @@
+# [0.15.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.14.3...v0.15.0) (2026-03-26)
+
+
+### Features
+
+* add reaction support with dynamic emoji resolution ([272e72b](https://github.com/Maxim-Mazurok/teams-api/commit/272e72b5f51a2be692b4b762cb2f06d30db11df9))
+
 ## [0.14.3](https://github.com/Maxim-Mazurok/teams-api/compare/v0.14.2...v0.14.3) (2026-03-26)
 
 
