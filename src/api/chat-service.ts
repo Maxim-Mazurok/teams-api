@@ -429,7 +429,6 @@ export async function postScheduledMessage(
       properties: {
         importance: "",
         subject: subject ?? "",
-        title: subject ?? "",
         cards: "[]",
         links: "[]",
         mentions: "[]",
