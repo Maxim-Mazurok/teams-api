@@ -35,6 +35,7 @@ import type {
   AutoLoginOptions,
   InteractiveLoginOptions,
   ManualTokenOptions,
+  SmartLoginOptions,
   Conversation,
   Message,
   MessageFormat,
@@ -85,17 +86,20 @@ import {
 import { acquireTokenViaAutoLogin } from "./auth/auto-login.js";
 import { acquireTokenViaInteractiveLogin } from "./auth/interactive.js";
 import { acquireTokenViaDebugSession } from "./auth/debug-session.js";
+import { acquireTokenViaSmartLogin } from "./smart-login.js";
 import { DEFAULT_TEAMS_REGION, resolveTeamsRegion } from "./region.js";
 import { saveToken, loadToken, clearToken } from "./token-store.js";
 
 export { acquireTokenViaAutoLogin } from "./auth/auto-login.js";
 export { acquireTokenViaInteractiveLogin } from "./auth/interactive.js";
 export { acquireTokenViaDebugSession } from "./auth/debug-session.js";
+export { acquireTokenViaSmartLogin } from "./smart-login.js";
 export type {
   TeamsToken,
   AutoLoginOptions,
   InteractiveLoginOptions,
   ManualTokenOptions,
+  SmartLoginOptions,
   Conversation,
   Message,
   MessageFormat,
@@ -220,6 +224,7 @@ function parseCurrentUserIdentity(
 export class TeamsClient {
   private token: TeamsToken;
   private autoLoginOptions: AutoLoginOptions | null = null;
+  private smartLoginOptions: SmartLoginOptions | null = null;
   private cachedDisplayName: string | null = null;
   private cachedUserPrincipalName: string | null = null;
   private userEmail: string | null = null;
@@ -297,6 +302,63 @@ export class TeamsClient {
   }
 
   /**
+   * Create a client with smart cross-platform login.
+   *
+   * Zero-config default: automatically picks the best auth strategy:
+   *   - macOS with Chrome + email: tries auto-login (FIDO2), falls back to interactive
+   *   - All other cases: interactive browser login (works everywhere)
+   *
+   * Tokens are cached in the platform credential store and reused
+   * until they expire (~23 hours).
+   */
+  static async connect(options?: SmartLoginOptions): Promise<TeamsClient> {
+    const log = options?.verbose ? console.error.bind(console) : () => {};
+
+    // Check for cached token if email is available
+    if (options?.email) {
+      const cachedToken = loadToken(options.email);
+      if (cachedToken) {
+        if (!cachedToken.skypeToken || !cachedToken.region) {
+          log(
+            "Cached token is missing required fields, re-authenticating...",
+          );
+          clearToken(options.email);
+        } else {
+          const region = resolveTeamsRegion(options.region, cachedToken.region);
+          const token =
+            region === cachedToken.region
+              ? cachedToken
+              : { ...cachedToken, region };
+          log("Using cached token from credential store");
+          if (token !== cachedToken) {
+            log(`Overriding cached region with explicit value: ${region}`);
+            saveToken(options.email, token);
+          }
+          const client = new TeamsClient(token);
+          client.smartLoginOptions = options;
+          client.userEmail = options.email;
+          return client;
+        }
+      }
+    }
+
+    log("Acquiring token via smart login...");
+    const token = await acquireTokenViaSmartLogin(options);
+
+    if (options?.email) {
+      saveToken(options.email, token);
+      log("Token saved to credential store");
+    }
+
+    const client = new TeamsClient(token);
+    client.smartLoginOptions = options ?? null;
+    if (options?.email) {
+      client.userEmail = options.email;
+    }
+    return client;
+  }
+
+  /**
    * Create a client by automatically logging in via FIDO2 passkey.
    *
    * Launches system Chrome with a fresh profile, completes the Microsoft
@@ -365,9 +427,9 @@ export class TeamsClient {
   }
 
   /**
-   * Clear a cached token from the macOS Keychain.
+   * Clear a cached token from the platform credential store.
    *
-   * Use this to force a fresh login on the next `create()` call.
+   * Use this to force a fresh login on the next `create()` or `connect()` call.
    */
   static clearCachedToken(email: string): void {
     clearToken(email);
@@ -1496,13 +1558,32 @@ export class TeamsClient {
   }
 
   /**
-   * Re-acquire the token via auto-login and update the cached version.
+   * Re-acquire the token and update the cached version.
    *
    * Called automatically by `withTokenRefresh` on 401 errors.
+   * Supports both auto-login and smart login paths.
    */
   private async refreshToken(): Promise<void> {
+    if (this.smartLoginOptions) {
+      if (this.smartLoginOptions.email) {
+        clearToken(this.smartLoginOptions.email);
+      }
+      const freshToken = await acquireTokenViaSmartLogin(
+        this.smartLoginOptions,
+      );
+      if (this.smartLoginOptions.email) {
+        saveToken(this.smartLoginOptions.email, freshToken);
+      }
+      this.token = freshToken;
+      this.cachedDisplayName = null;
+      this.cachedUserPrincipalName = null;
+      return;
+    }
+
     if (!this.autoLoginOptions) {
-      throw new Error("Cannot refresh token: no auto-login options configured");
+      throw new Error(
+        "Cannot refresh token: no auto-login or smart-login options configured",
+      );
     }
 
     clearToken(this.autoLoginOptions.email);
@@ -1516,15 +1597,18 @@ export class TeamsClient {
   /**
    * Wrap an operation with automatic token refresh on 401.
    *
-   * If the operation throws an `ApiAuthError` and auto-login options
-   * are configured, the token is re-acquired and the operation retried
-   * exactly once.
+   * If the operation throws an `ApiAuthError` and auto-login or
+   * smart-login options are configured, the token is re-acquired
+   * and the operation retried exactly once.
    */
   private async withTokenRefresh<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
     } catch (error) {
-      if (error instanceof ApiAuthError && this.autoLoginOptions) {
+      if (
+        error instanceof ApiAuthError &&
+        (this.autoLoginOptions || this.smartLoginOptions)
+      ) {
         await this.refreshToken();
         return await operation();
       }

@@ -64,6 +64,16 @@ export interface InteractiveLoginOptions {
   verbose?: boolean;
 }
 
+/** Options for smart login (zero-config default path). */
+export interface SmartLoginOptions {
+  /** Corporate email (optional — skips auto-login if not provided). */
+  email?: string;
+  /** Explicit API region override. Omit to auto-detect when possible. */
+  region?: string;
+  /** Emit progress messages to console (default: false). */
+  verbose?: boolean;
+}
+
 /** Options for manual token capture from a running Chrome debug session. */
 export interface ManualTokenOptions {
   /** Chrome DevTools Protocol debug port (default: 9222). */
