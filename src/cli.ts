@@ -38,6 +38,7 @@ program
 interface AuthFlags {
   auto?: boolean;
   login?: boolean;
+  debug?: boolean;
   email?: string;
   token?: string;
   bearerToken?: string;
@@ -52,6 +53,10 @@ function addAuthOptions(command: Command): Command {
     .option(
       "--login",
       "Interactive browser login (all platforms, no FIDO2 needed)",
+    )
+    .option(
+      "--debug",
+      "Use Chrome debug session for token capture",
     )
     .option(
       "--email <email>",
@@ -124,11 +129,24 @@ async function createClient(flags: AuthFlags): Promise<TeamsClient> {
     return client;
   }
 
-  const manualOptions: ManualTokenOptions = {
-    debugPort: Number(flags.debugPort),
+  if (flags.debug) {
+    const manualOptions: ManualTokenOptions = {
+      debugPort: Number(flags.debugPort),
+      region: flags.region,
+    };
+    return TeamsClient.fromDebugSession(manualOptions);
+  }
+
+  // Default: smart login (cross-platform, zero-config)
+  const client = await TeamsClient.connect({
+    email: flags.email,
     region: flags.region,
-  };
-  return TeamsClient.fromDebugSession(manualOptions);
+    verbose: true,
+  });
+  if (flags.email) {
+    client.setEmail(flags.email);
+  }
+  return client;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -274,7 +292,7 @@ addAuthOptions(
 
 program
   .command("logout")
-  .description("Clear cached token from the macOS Keychain")
+  .description("Clear cached token from the credential store")
   .requiredOption("--email <email>", "Email whose cached token to clear")
   .action((flags: { email: string }) => {
     TeamsClient.clearCachedToken(flags.email);

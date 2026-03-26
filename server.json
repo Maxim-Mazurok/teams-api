@@ -65,6 +65,12 @@
           "description": "Substrate bearer token for people/chat search",
           "isRequired": false,
           "isSecret": true
+        },
+        {
+          "name": "TEAMS_DEBUG",
+          "description": "Set to \"true\" to use Chrome debug session for token capture",
+          "isRequired": false,
+          "isSecret": false
         }
       ]
     }
