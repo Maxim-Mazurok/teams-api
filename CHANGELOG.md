@@ -1,3 +1,10 @@
+# [0.14.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.13.0...v0.14.0) (2026-03-26)
+
+
+### Features
+
+* add functionality to add and remove reactions on messages ([3f90611](https://github.com/Maxim-Mazurok/teams-api/commit/3f9061117b9973309bedb25a9866a0c5cf6dd6f1))
+
 # [0.13.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.12.0...v0.13.0) (2026-03-26)
 
 
