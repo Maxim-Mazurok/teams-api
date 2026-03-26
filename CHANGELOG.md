@@ -1,3 +1,10 @@
+## [0.14.1](https://github.com/Maxim-Mazurok/teams-api/compare/v0.14.0...v0.14.1) (2026-03-26)
+
+
+### Bug Fixes
+
+* cli hangs after auth with installed browser ([#6](https://github.com/Maxim-Mazurok/teams-api/issues/6)) ([d2f9a96](https://github.com/Maxim-Mazurok/teams-api/commit/d2f9a9619f1b27bcdd1419e2ed5e2994584ed1e4))
+
 # [0.14.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.13.0...v0.14.0) (2026-03-26)
 
 
