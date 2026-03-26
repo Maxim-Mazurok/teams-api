@@ -1,3 +1,10 @@
+# [0.16.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.15.0...v0.16.0) (2026-03-26)
+
+
+### Features
+
+* add subject parameter for channel post titles ([#10](https://github.com/Maxim-Mazurok/teams-api/issues/10)) ([8716e8e](https://github.com/Maxim-Mazurok/teams-api/commit/8716e8e1c9e9b68b3a9eacedd2d1ef4b6b5c24bd))
+
 # [0.15.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.14.3...v0.15.0) (2026-03-26)
 
 
