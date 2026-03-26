@@ -13,7 +13,10 @@
 export const serverInstructions = `
 teams-api: AI-native Microsoft Teams integration.
 
-All tools share a unified interface. Every tool accepts an optional "format" parameter (json, text, md, or toon). Default format is toon.
+All tools share a unified interface. Every tool accepts an optional "format" parameter ("concise" or "detailed"). Default format is "concise".
+
+- **concise** (default): Light Markdown with actionable IDs and key decision fields. Use this for most operations — it's human-readable and keeps follow-up actions possible (message IDs for reply/react/edit/delete, conversation IDs for subsequent calls). Nested collections may be summarized.
+- **detailed**: Full JSON output. Use when you need exact field values, programmatic processing, or want to inspect the complete data structure.
 
 ## Typical workflows
 

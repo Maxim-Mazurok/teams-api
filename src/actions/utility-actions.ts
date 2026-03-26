@@ -7,7 +7,6 @@
 import type { Member, TranscriptResult } from "../types.js";
 import {
   type ActionDefinition,
-  toonHeader,
   formatTimestamp,
   groupBySpeaker,
 } from "./formatters.js";
@@ -31,26 +30,7 @@ export const getMembers: ActionDefinition = {
     const { conversationId } = await resolveConversationId(client, parameters);
     return client.getMembers(conversationId);
   },
-  formatResult: (result) => {
-    const members = result as Member[];
-    const people = members.filter((member) => member.memberType === "person");
-    const bots = members.filter((member) => member.memberType === "bot");
-    const lines = [`\n${people.length} people, ${bots.length} bots:\n`];
-    for (const member of people) {
-      const name = member.displayName || "(unknown)";
-      lines.push(`  ${name} (${member.role}) — ${member.id}`);
-    }
-    if (bots.length > 0) {
-      lines.push("");
-      lines.push("  Bots/Apps:");
-      for (const bot of bots) {
-        const name = bot.displayName || "(unnamed bot)";
-        lines.push(`  ${name} — ${bot.id}`);
-      }
-    }
-    return lines.join("\n");
-  },
-  formatMarkdown: (result) => {
+  formatConcise: (result) => {
     const members = result as Member[];
     const people = members.filter((member) => member.memberType === "person");
     const bots = members.filter((member) => member.memberType === "bot");
@@ -59,11 +39,11 @@ export const getMembers: ActionDefinition = {
       "",
     ];
     if (people.length > 0) {
-      lines.push("| Name | Role | ID |");
-      lines.push("|------|------|----|");
+      lines.push("| Name | Role | Type | ID |");
+      lines.push("|------|------|------|----|");
       for (const member of people) {
         const name = member.displayName || "(unknown)";
-        lines.push(`| ${name} | ${member.role} | ${member.id} |`);
+        lines.push(`| ${name} | ${member.role} | ${member.memberType} | ${member.id} |`);
       }
     }
     if (bots.length > 0) {
@@ -73,29 +53,6 @@ export const getMembers: ActionDefinition = {
       for (const bot of bots) {
         const name = bot.displayName || "(unnamed bot)";
         lines.push(`| ${name} | ${bot.id} |`);
-      }
-    }
-    return lines.join("\n");
-  },
-  formatToon: (result) => {
-    const members = result as Member[];
-    const people = members.filter((member) => member.memberType === "person");
-    const bots = members.filter((member) => member.memberType === "bot");
-    const lines = [
-      toonHeader("👥", `${people.length} People, ${bots.length} Bots`),
-    ];
-    for (const member of people) {
-      const name = member.displayName || "(unknown)";
-      lines.push("");
-      lines.push(`  👤 ${name} · ${member.role}`);
-      lines.push(`     ${member.id}`);
-    }
-    if (bots.length > 0) {
-      lines.push("");
-      lines.push("  🤖 Bots/Apps:");
-      for (const bot of bots) {
-        const name = bot.displayName || "(unnamed bot)";
-        lines.push(`     🤖 ${name} — ${bot.id}`);
       }
     }
     return lines.join("\n");
@@ -113,26 +70,12 @@ export const whoami: ActionDefinition = {
     const token = client.getToken();
     return { displayName, region: token.region };
   },
-  formatResult: (result) => {
-    const { displayName, region } = result as {
-      displayName: string;
-      region: string;
-    };
-    return `${displayName} (region: ${region})`;
-  },
-  formatMarkdown: (result) => {
+  formatConcise: (result) => {
     const { displayName, region } = result as {
       displayName: string;
       region: string;
     };
     return [`## ${displayName}`, "", `- **Region:** ${region}`].join("\n");
-  },
-  formatToon: (result) => {
-    const { displayName, region } = result as {
-      displayName: string;
-      region: string;
-    };
-    return [toonHeader("🙋", displayName), `  📍 region: ${region}`].join("\n");
   },
 };
 
@@ -167,28 +110,7 @@ export const getTranscript: ActionDefinition = {
 
     return transcriptResult;
   },
-  formatResult: (result) => {
-    const data = result as TranscriptResult | { rawVtt: string; format: "vtt" };
-
-    if ("format" in data && data.format === "vtt") {
-      return data.rawVtt;
-    }
-
-    const transcript = data as TranscriptResult;
-    const groups = groupBySpeaker(transcript.entries);
-    const lines = [
-      `\nTranscript: ${transcript.meetingTitle} (${transcript.entries.length} segments)\n`,
-    ];
-
-    for (const group of groups) {
-      const time = formatTimestamp(group.startTime);
-      lines.push(`  [${time}] ${group.speaker}:`);
-      lines.push(`    ${group.segments.join(" ")}`);
-    }
-
-    return lines.join("\n");
-  },
-  formatMarkdown: (result) => {
+  formatConcise: (result) => {
     const data = result as TranscriptResult | { rawVtt: string; format: "vtt" };
 
     if ("format" in data && data.format === "vtt") {
@@ -208,31 +130,6 @@ export const getTranscript: ActionDefinition = {
       const time = formatTimestamp(group.startTime);
       lines.push(`**${group.speaker}** *(${time})*`, "");
       lines.push(group.segments.join(" "), "");
-    }
-
-    return lines.join("\n");
-  },
-  formatToon: (result) => {
-    const data = result as TranscriptResult | { rawVtt: string; format: "vtt" };
-
-    if ("format" in data && data.format === "vtt") {
-      return data.rawVtt;
-    }
-
-    const transcript = data as TranscriptResult;
-    const groups = groupBySpeaker(transcript.entries);
-    const lines = [
-      toonHeader(
-        "🎙️",
-        `Transcript: ${transcript.meetingTitle} (${transcript.entries.length} segments)`,
-      ),
-    ];
-
-    for (const group of groups) {
-      const time = formatTimestamp(group.startTime);
-      lines.push("");
-      lines.push(`  🗣️  ${group.speaker} · ${time}`);
-      lines.push(`      ${group.segments.join(" ")}`);
     }
 
     return lines.join("\n");

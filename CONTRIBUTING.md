@@ -2,6 +2,14 @@
 
 Development guide for the teams-api project. For user-facing documentation (installation, CLI usage, MCP setup), see [README.md](README.md).
 
+### Documentation hierarchy
+
+- **[README.md](README.md)** — user-facing: installation, CLI usage, MCP setup, API quick start.
+- **CONTRIBUTING.md** (this file) — developer-facing: architecture, testing, code style, release process.
+- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** — AI agent behavior: tool calling, MCP workflows, reverse engineering, domain knowledge that only AI agents need.
+
+Keep each file focused on its audience. Do not duplicate content across files.
+
 ## Getting started
 
 ```bash
@@ -168,6 +176,53 @@ TEAMS_EMAIL=you@example.com npm run test:e2e
 - Named exports only
 - ESM syntax in `.ts` files, CommonJS in `package.json`
 
+### Output format system
+
+All actions support two output formats via the `format` parameter:
+
+| Format       | Default | Description |
+| ------------ | ------- | ----------- |
+| `concise`    | Yes     | Light Markdown optimized for actionability. Includes identifiers and decision-critical fields. Nested collections may be summarized with counts/previews. |
+| `detailed`   | No      | Full JSON — the raw result object via `JSON.stringify`. |
+
+Each `ActionDefinition` implements a single `formatConcise(result)` method that renders the result as Markdown. The `detailed` format is handled generically by `formatOutput()` — no per-action code needed.
+
+**Concise format rules:**
+- Preserve next-action capability without requiring `detailed`.
+- Include stable identifiers that enable follow-up operations (message IDs, conversation IDs, MRI/object IDs when relevant).
+- Include decision-critical fields for the operation, but avoid low-value noise.
+- Nested collections may be summarized (counts, matched subsets, attachment summaries) unless full expansion is required for the immediate next action.
+- Avoid arbitrary truncation of fields you choose to display.
+- Omit empty/null fields rather than showing placeholders.
+- Use Markdown tables for list data and bullet lists for single-item results.
+
+**Detailed format rule:**
+- Always return full JSON with complete structure and values.
+
+### Concise output contracts by action
+
+Use this table as the review checklist for formatter changes.
+
+| Action | Concise must include | Concise may summarize |
+| ------ | -------------------- | --------------------- |
+| `list-conversations` | Conversation ID, topic, thread type, last-message indicator | Ancillary conversation metadata not needed for selecting a target conversation |
+| `find-conversation` | Conversation ID, thread type, topic | Optional timestamps/nullable fields |
+| `find-one-on-one` | Conversation ID, matched member display name | Search diagnostics |
+| `find-people` | Display name, email, MRI, object ID (if present) | Optional profile attributes |
+| `find-chats` | Thread ID, thread type, member count, match-relevant members | Full member roster |
+| `get-messages` | Message ID, sender, timestamp, message body, quoted message reference IDs | Reactions/followers/mentions as counts or compact lists; attachment internals |
+| `send-message` | Target conversation label, message ID, send/schedule timestamp | Transport-level details |
+| `edit-message` | Conversation label, message ID, edit timestamp | Transport-level details |
+| `delete-message` | Conversation label, message ID | Transport-level details |
+| `add-reaction` | Conversation label, message ID, resolved reaction key | Transport-level details |
+| `remove-reaction` | Conversation label, message ID, resolved reaction key | Transport-level details |
+| `get-members` | Member ID, name, role, member type | Non-actionable profile enrichment |
+| `whoami` | Display name, region | Internal auth metadata |
+| `get-transcript` | Meeting title and readable transcript content | Raw VTT structure unless `rawVtt` is requested |
+| `download-file` | File name, file type, size, content type, saved location | Binary payload internals in Markdown text (binary is returned in content blocks) |
+
+This design follows [Anthropic's tool design guidance](https://docs.anthropic.com/en/docs/build-with-claude/tool-use/best-practices) — a `response_format` enum with concise (~1/3 tokens) and detailed (full data) modes.
+
 ### Releases
 
 Releases are fully automated on every push to `main`. After the CI matrix passes, GitHub Actions runs `semantic-release` to:
@@ -200,3 +255,23 @@ The `properties.emotions` field in message payloads has inconsistent formatting 
 ### System stream filtering
 
 Teams returns several system streams alongside real conversations (annotations, notifications, mentions, threads, notes). `listConversations` filters these out by default. The full list of filtered types is in the `SYSTEM_STREAM_TYPES` constant in `types.ts`.
+
+## Debug telemetry
+
+`src/telemetry.ts` provides a local debug logging facility for contributors investigating tool behavior.
+
+**Off by default.** Enable with `TEAMS_TELEMETRY=true`.
+
+When enabled, every tool call is appended as a JSON line to a local JSONL file:
+
+| Platform | Path |
+| --- | --- |
+| macOS | `~/Library/Application Support/teams-api/telemetry.jsonl` |
+| Linux | `$XDG_DATA_HOME/teams-api/telemetry.jsonl` (default: `~/.local/share/teams-api/telemetry.jsonl`) |
+| Windows | `%APPDATA%\teams-api\telemetry.jsonl` |
+
+Each record contains: tool name, format, full input parameters, raw API result, formatted output string, duration (ms), and timestamp. Auth events and errors (with full stack traces) are also recorded.
+
+**This is internal tooling only.** It is not mentioned in the user-facing README and should not be presented as a feature to end users. The telemetry file grows unboundedly — clear it manually with `> /path/to/telemetry.jsonl` when no longer needed.
+
+To enable for your local MCP server in VS Code, add `"TEAMS_TELEMETRY": "true"` to the `env` block of the `teams` server in your MCP config.

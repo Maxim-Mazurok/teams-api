@@ -16,7 +16,6 @@ import type {
 import { isTextMessageType } from "../constants.js";
 import {
   type ActionDefinition,
-  toonHeader,
   extractQuote,
   buildSenderLookup,
 } from "./formatters.js";
@@ -188,37 +187,7 @@ export const getMessages: ActionDefinition = {
 
     return messages;
   },
-  formatResult: (result) => {
-    const messages = result as Message[];
-    const senderLookup = buildSenderLookup(messages);
-    const lines = [`\n${messages.length} messages:\n`];
-    for (const message of messages) {
-      const time = message.originalArrivalTime.slice(0, 19).replace("T", " ");
-      const sender = message.senderDisplayName || "(system)";
-      const { quote, body } = extractQuote(message.content);
-
-      if (quote && message.quotedMessageId) {
-        const quotedSender =
-          senderLookup.get(message.quotedMessageId) ?? "unknown";
-        lines.push(`  [${time}] ${sender}:`);
-        lines.push(
-          `    > [replying to ${quotedSender}]: ${quote.slice(0, 80)}`,
-        );
-        lines.push(`    ${body.slice(0, 120)}`);
-      } else {
-        lines.push(`  [${time}] ${sender}: ${body.slice(0, 120)}`);
-      }
-      if (message.followers.length > 0) {
-        lines.push(`    [${message.followers.length} follower(s)]`);
-      }
-      const attachmentSummary = formatAttachmentSummary(message);
-      if (attachmentSummary) {
-        lines.push(`    ${attachmentSummary}`);
-      }
-    }
-    return lines.join("\n");
-  },
-  formatMarkdown: (result) => {
+  formatConcise: (result) => {
     const messages = result as Message[];
     const senderLookup = buildSenderLookup(messages);
     const lines = [`## Messages (${messages.length})`, ""];
@@ -229,62 +198,49 @@ export const getMessages: ActionDefinition = {
       const { quote, body } = extractQuote(message.content);
 
       if (sender === previousSender) {
-        lines.push(`*${time}*`, "");
+        lines.push(`*${time}* [ID: ${message.id}]`, "");
       } else {
-        lines.push(`### ${sender} — ${time}`, "");
+        lines.push(`### ${sender} — ${time} [ID: ${message.id}]`, "");
         previousSender = sender;
       }
 
       if (quote && message.quotedMessageId) {
         const quotedSender =
           senderLookup.get(message.quotedMessageId) ?? "unknown";
-        lines.push(`> **[replying to ${quotedSender}]:** ${quote}`, "");
+        lines.push(`> **[replying to ${quotedSender} (${message.quotedMessageId})]:** ${quote}`, "");
       }
 
       lines.push(body, "");
 
+      if (message.subject) {
+        lines.push(`**Subject:** ${message.subject}`, "");
+      }
+
+      const metadata: string[] = [];
+      if (message.reactions.length > 0) {
+        const reactionSummary = message.reactions
+          .map((reaction) => `${reaction.key} (${reaction.users.length})`)
+          .join(", ");
+        metadata.push(`Reactions: ${reactionSummary}`);
+      }
+      if (message.mentions.length > 0) {
+        const mentionNames = message.mentions
+          .map((mention) => mention.displayName)
+          .join(", ");
+        metadata.push(`Mentions: ${mentionNames}`);
+      }
       if (message.followers.length > 0) {
-        lines.push(`*${message.followers.length} follower(s)*`, "");
+        metadata.push(`${message.followers.length} follower(s)`);
       }
       const attachmentSummary = formatAttachmentSummary(message);
       if (attachmentSummary) {
-        lines.push(attachmentSummary, "");
+        metadata.push(attachmentSummary);
       }
-    }
-    return lines.join("\n");
-  },
-  formatToon: (result) => {
-    const messages = result as Message[];
-    const senderLookup = buildSenderLookup(messages);
-    const lines = [toonHeader("💬", `${messages.length} Messages`)];
-    let previousSender = "";
-    for (const message of messages) {
-      const time = message.originalArrivalTime.slice(0, 19).replace("T", " ");
-      const sender = message.senderDisplayName || "(system)";
-      const { quote, body } = extractQuote(message.content);
-
-      lines.push("");
-      if (sender === previousSender) {
-        lines.push(`      ${time}`);
-      } else {
-        lines.push(`  🗣️  ${sender} · ${time}`);
-        previousSender = sender;
+      if (message.editTime) {
+        metadata.push(`Edited: ${message.editTime.slice(0, 19).replace("T", " ")}`);
       }
-
-      if (quote && message.quotedMessageId) {
-        const quotedSender =
-          senderLookup.get(message.quotedMessageId) ?? "unknown";
-        lines.push(
-          `      > [replying to ${quotedSender}]: ${quote.slice(0, 80)}`,
-        );
-      }
-      lines.push(`      ${body.slice(0, 120)}`);
-      if (message.followers.length > 0) {
-        lines.push(`      👥 ${message.followers.length} follower(s)`);
-      }
-      const attachmentSummary = formatAttachmentSummary(message);
-      if (attachmentSummary) {
-        lines.push(`      ${attachmentSummary}`);
+      if (metadata.length > 0) {
+        lines.push(metadata.join(" | "), "");
       }
     }
     return lines.join("\n");
@@ -447,29 +403,7 @@ export const sendMessage: ActionDefinition = {
     );
     return { ...result, conversation: label };
   },
-  formatResult: (result) => {
-    const { messageId, arrivalTime, conversation, scheduled, scheduledTime } =
-      result as {
-        messageId: string;
-        arrivalTime: number;
-        conversation: string;
-        scheduled?: boolean;
-        scheduledTime?: string;
-      };
-    if (scheduled) {
-      return [
-        `Message scheduled for "${conversation}"`,
-        `  Message ID: ${messageId}`,
-        `  Scheduled for: ${scheduledTime}`,
-      ].join("\n");
-    }
-    return [
-      `Message sent to "${conversation}"`,
-      `  Message ID: ${messageId}`,
-      `  Arrival time: ${arrivalTime}`,
-    ].join("\n");
-  },
-  formatMarkdown: (result) => {
+  formatConcise: (result) => {
     const { messageId, arrivalTime, conversation, scheduled, scheduledTime } =
       result as {
         messageId: string;
@@ -493,30 +427,6 @@ export const sendMessage: ActionDefinition = {
       `- **To:** ${conversation}`,
       `- **Message ID:** ${messageId}`,
       `- **Arrival time:** ${arrivalTime}`,
-    ].join("\n");
-  },
-  formatToon: (result) => {
-    const { messageId, arrivalTime, conversation, scheduled, scheduledTime } =
-      result as {
-        messageId: string;
-        arrivalTime: number;
-        conversation: string;
-        scheduled?: boolean;
-        scheduledTime?: string;
-      };
-    if (scheduled) {
-      return [
-        toonHeader("📅", "Message Scheduled!"),
-        `  📨 To: "${conversation}"`,
-        `  🆔 ${messageId}`,
-        `  ⏰ Scheduled for: ${scheduledTime}`,
-      ].join("\n");
-    }
-    return [
-      toonHeader("✅", "Message Sent!"),
-      `  📨 To: "${conversation}"`,
-      `  🆔 ${messageId}`,
-      `  ⏰ ${arrivalTime}`,
     ].join("\n");
   },
 };
@@ -571,19 +481,7 @@ export const editMessageAction: ActionDefinition = {
     );
     return { ...result, conversation: label };
   },
-  formatResult: (result) => {
-    const { messageId, editTime, conversation } = result as {
-      messageId: string;
-      editTime: string;
-      conversation: string;
-    };
-    return [
-      `Message edited in "${conversation}"`,
-      `  Message ID: ${messageId}`,
-      `  Edit time: ${editTime}`,
-    ].join("\n");
-  },
-  formatMarkdown: (result) => {
+  formatConcise: (result) => {
     const { messageId, editTime, conversation } = result as {
       messageId: string;
       editTime: string;
@@ -595,19 +493,6 @@ export const editMessageAction: ActionDefinition = {
       `- **In:** ${conversation}`,
       `- **Message ID:** ${messageId}`,
       `- **Edit time:** ${editTime}`,
-    ].join("\n");
-  },
-  formatToon: (result) => {
-    const { messageId, editTime, conversation } = result as {
-      messageId: string;
-      editTime: string;
-      conversation: string;
-    };
-    return [
-      toonHeader("✏️", "Message Edited!"),
-      `  💬 In: "${conversation}"`,
-      `  🆔 ${messageId}`,
-      `  ⏰ ${editTime}`,
     ].join("\n");
   },
 };
@@ -639,17 +524,7 @@ export const deleteMessageAction: ActionDefinition = {
     const result = await client.deleteMessage(conversationId, messageId);
     return { ...result, conversation: label };
   },
-  formatResult: (result) => {
-    const { messageId, conversation } = result as {
-      messageId: string;
-      conversation: string;
-    };
-    return [
-      `Message deleted from "${conversation}"`,
-      `  Message ID: ${messageId}`,
-    ].join("\n");
-  },
-  formatMarkdown: (result) => {
+  formatConcise: (result) => {
     const { messageId, conversation } = result as {
       messageId: string;
       conversation: string;
@@ -659,17 +534,6 @@ export const deleteMessageAction: ActionDefinition = {
       "",
       `- **From:** ${conversation}`,
       `- **Message ID:** ${messageId}`,
-    ].join("\n");
-  },
-  formatToon: (result) => {
-    const { messageId, conversation } = result as {
-      messageId: string;
-      conversation: string;
-    };
-    return [
-      toonHeader("🗑️", "Message Deleted!"),
-      `  💬 From: "${conversation}"`,
-      `  🆔 ${messageId}`,
     ].join("\n");
   },
 };
@@ -716,18 +580,7 @@ export const addReactionAction: ActionDefinition = {
     );
     return { ...result, conversation: label };
   },
-  formatResult: (result) => {
-    const { messageId, reactionKey, conversation } = result as {
-      messageId: string;
-      reactionKey: string;
-      conversation: string;
-    };
-    return [
-      `Reaction "${reactionKey}" added in "${conversation}"`,
-      `  Message ID: ${messageId}`,
-    ].join("\n");
-  },
-  formatMarkdown: (result) => {
+  formatConcise: (result) => {
     const { messageId, reactionKey, conversation } = result as {
       messageId: string;
       reactionKey: string;
@@ -739,26 +592,6 @@ export const addReactionAction: ActionDefinition = {
       `- **In:** ${conversation}`,
       `- **Message ID:** ${messageId}`,
       `- **Reaction:** ${reactionKey}`,
-    ].join("\n");
-  },
-  formatToon: (result) => {
-    const { messageId, reactionKey, conversation } = result as {
-      messageId: string;
-      reactionKey: string;
-      conversation: string;
-    };
-    const emojiMap: Record<string, string> = {
-      like: "👍",
-      heart: "❤️",
-      laugh: "😆",
-      surprised: "😮",
-    };
-    const emoji = emojiMap[reactionKey] ?? "🎭";
-    return [
-      toonHeader(emoji, "Reaction Added!"),
-      `  💬 In: "${conversation}"`,
-      `  🆔 ${messageId}`,
-      `  ${emoji} ${reactionKey}`,
     ].join("\n");
   },
 };
@@ -804,18 +637,7 @@ export const removeReactionAction: ActionDefinition = {
     );
     return { ...result, conversation: label };
   },
-  formatResult: (result) => {
-    const { messageId, reactionKey, conversation } = result as {
-      messageId: string;
-      reactionKey: string;
-      conversation: string;
-    };
-    return [
-      `Reaction "${reactionKey}" removed from "${conversation}"`,
-      `  Message ID: ${messageId}`,
-    ].join("\n");
-  },
-  formatMarkdown: (result) => {
+  formatConcise: (result) => {
     const { messageId, reactionKey, conversation } = result as {
       messageId: string;
       reactionKey: string;
@@ -827,26 +649,6 @@ export const removeReactionAction: ActionDefinition = {
       `- **From:** ${conversation}`,
       `- **Message ID:** ${messageId}`,
       `- **Reaction:** ${reactionKey}`,
-    ].join("\n");
-  },
-  formatToon: (result) => {
-    const { messageId, reactionKey, conversation } = result as {
-      messageId: string;
-      reactionKey: string;
-      conversation: string;
-    };
-    const emojiMap: Record<string, string> = {
-      like: "👍",
-      heart: "❤️",
-      laugh: "😆",
-      surprised: "😮",
-    };
-    const emoji = emojiMap[reactionKey] ?? "🎭";
-    return [
-      toonHeader(emoji, "Reaction Removed!"),
-      `  💬 From: "${conversation}"`,
-      `  🆔 ${messageId}`,
-      `  ${emoji} ${reactionKey}`,
     ].join("\n");
   },
 };

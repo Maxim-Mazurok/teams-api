@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   formatOutput,
-  toonHeader,
   cleanContent,
   extractQuote,
   buildSenderLookup,
@@ -46,32 +45,10 @@ function makeMockAction(
     description: "A mock action for testing",
     parameters: [],
     execute: async () => ({}),
-    formatResult: (result) => `text:${JSON.stringify(result)}`,
-    formatMarkdown: (result) => `md:${JSON.stringify(result)}`,
-    formatToon: (result) => `toon:${JSON.stringify(result)}`,
+    formatConcise: (result) => `concise:${JSON.stringify(result)}`,
     ...overrides,
   };
 }
-
-// ── toonHeader ───────────────────────────────────────────────────────
-
-describe("toonHeader", () => {
-  it("produces emoji + text + separator line", () => {
-    const result = toonHeader("📨", "Messages");
-    expect(result).toContain("📨");
-    expect(result).toContain("Messages");
-    expect(result).toContain("─".repeat(40));
-  });
-
-  it("formats with leading newline and indentation", () => {
-    const result = toonHeader("🔍", "Search");
-    const lines = result.split("\n");
-    // First element is empty (leading newline), then indented emoji+text, then separator
-    expect(lines[0]).toBe("");
-    expect(lines[1]).toBe("  🔍 Search");
-    expect(lines[2]).toBe(`  ${"─".repeat(40)}`);
-  });
-});
 
 // ── cleanContent ─────────────────────────────────────────────────────
 
@@ -303,28 +280,18 @@ describe("formatOutput", () => {
   const action = makeMockAction();
   const testData = { key: "value" };
 
-  it("defaults to json format", () => {
+  it("defaults to concise format", () => {
     const result = formatOutput(action, testData);
+    expect(result).toBe(`concise:${JSON.stringify(testData)}`);
+  });
+
+  it("dispatches to concise formatter", () => {
+    const result = formatOutput(action, testData, "concise");
+    expect(result).toBe(`concise:${JSON.stringify(testData)}`);
+  });
+
+  it("dispatches to detailed formatter (JSON)", () => {
+    const result = formatOutput(action, testData, "detailed");
     expect(result).toBe(JSON.stringify(testData, null, 2));
-  });
-
-  it("dispatches to json formatter", () => {
-    const result = formatOutput(action, testData, "json");
-    expect(result).toBe(JSON.stringify(testData, null, 2));
-  });
-
-  it("dispatches to text formatter", () => {
-    const result = formatOutput(action, testData, "text");
-    expect(result).toBe(`text:${JSON.stringify(testData)}`);
-  });
-
-  it("dispatches to md formatter", () => {
-    const result = formatOutput(action, testData, "md");
-    expect(result).toBe(`md:${JSON.stringify(testData)}`);
-  });
-
-  it("dispatches to toon formatter", () => {
-    const result = formatOutput(action, testData, "toon");
-    expect(result).toBe(`toon:${JSON.stringify(testData)}`);
   });
 });

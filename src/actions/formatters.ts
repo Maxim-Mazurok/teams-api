@@ -37,15 +37,11 @@ export interface ActionDefinition {
     client: import("../teams-client.js").TeamsClient,
     parameters: Record<string, unknown>,
   ) => Promise<unknown>;
-  /** Format result as human-readable text (CLI output without --json). */
-  formatResult: (result: unknown) => string;
-  /** Format result as Markdown. */
-  formatMarkdown: (result: unknown) => string;
-  /** Format result as fun ASCII art with emojis. */
-  formatToon: (result: unknown) => string;
+  /** Format result as concise Markdown — human-readable, action-complete, with actionable IDs. */
+  formatConcise: (result: unknown) => string;
 }
 
-export type OutputFormat = "json" | "text" | "md" | "toon";
+export type OutputFormat = "concise" | "detailed";
 export type MessageOrder = "newest-first" | "oldest-first";
 
 // ── Output format dispatch ───────────────────────────────────────────
@@ -54,27 +50,17 @@ export type MessageOrder = "newest-first" | "oldest-first";
 export function formatOutput(
   action: ActionDefinition,
   result: unknown,
-  format: OutputFormat = "json",
+  format: OutputFormat = "concise",
 ): string {
   switch (format) {
-    case "json":
+    case "detailed":
       return JSON.stringify(result, null, 2);
-    case "text":
-      return action.formatResult(result);
-    case "md":
-      return action.formatMarkdown(result);
-    case "toon":
-      return action.formatToon(result);
+    case "concise":
+      return action.formatConcise(result);
   }
 }
 
 // ── Shared formatting helpers ────────────────────────────────────────
-
-export function toonHeader(emoji: string, text: string): string {
-  const separator = "─".repeat(40);
-  return `\n  ${emoji} ${text}\n  ${separator}`;
-}
-
 /** Strip HTML tags and decode entities from message content. */
 export function cleanContent(content: string): string {
   return decodeHtmlEntities(content.replace(/<[^>]*>/g, "")).trim();

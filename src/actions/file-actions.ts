@@ -8,7 +8,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
-import { type ActionDefinition, toonHeader } from "./formatters.js";
+import { type ActionDefinition } from "./formatters.js";
 import {
   conversationParameters,
   resolveConversationId,
@@ -118,36 +118,14 @@ export const downloadFileAction: ActionDefinition = {
 
     return results;
   },
-  formatResult: (result) => {
-    const downloads = result as DownloadResult[];
-    const lines = [`Downloaded ${downloads.length} file(s):`];
-    for (const download of downloads) {
-      lines.push(
-        `  ${download.fileName} (${download.fileType}, ${download.size} bytes)`,
-      );
-      lines.push(`    Saved to: ${download.savedTo}`);
-    }
-    return lines.join("\n");
-  },
-  formatMarkdown: (result) => {
+  formatConcise: (result) => {
     const downloads = result as DownloadResult[];
     const lines = [`## Downloaded ${downloads.length} file(s)`, ""];
     for (const download of downloads) {
       lines.push(
-        `- **${download.fileName}** (${download.fileType}, ${download.size} bytes)`,
+        `- **${download.fileName}** (${download.fileType}, ${download.size} bytes, ${download.contentType})`,
       );
       lines.push(`  - Saved to: \`${download.savedTo}\``);
-    }
-    return lines.join("\n");
-  },
-  formatToon: (result) => {
-    const downloads = result as DownloadResult[];
-    const lines = [toonHeader("📥", `${downloads.length} File(s) Downloaded`)];
-    for (const download of downloads) {
-      lines.push("");
-      lines.push(`  📄 ${download.fileName}`);
-      lines.push(`     ${download.fileType} · ${download.size} bytes`);
-      lines.push(`     💾 ${download.savedTo}`);
     }
     return lines.join("\n");
   },
