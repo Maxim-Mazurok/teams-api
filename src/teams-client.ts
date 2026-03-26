@@ -93,6 +93,25 @@ import { acquireTokenViaSmartLogin } from "./smart-login.js";
 import { DEFAULT_TEAMS_REGION, resolveTeamsRegion } from "./region.js";
 import { saveToken, loadToken, clearToken } from "./token-store.js";
 
+const DEFAULT_ACCOUNT = "_default";
+
+/**
+ * Extract the user's email (UPN) from a bearer token JWT payload.
+ * Returns undefined if the token is missing or malformed.
+ */
+function extractEmailFromToken(token: TeamsToken): string | undefined {
+  const jwt = token.bearerToken;
+  if (!jwt) return undefined;
+  try {
+    const payload = JSON.parse(
+      Buffer.from(jwt.split(".")[1], "base64").toString("utf-8"),
+    ) as { upn?: string };
+    return payload.upn ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export { acquireTokenViaAutoLogin } from "./auth/auto-login.js";
 export { acquireTokenViaInteractiveLogin } from "./auth/interactive.js";
 export { acquireTokenViaDebugSession } from "./auth/debug-session.js";
@@ -318,46 +337,51 @@ export class TeamsClient {
   static async connect(options?: SmartLoginOptions): Promise<TeamsClient> {
     const log = options?.verbose ? console.error.bind(console) : () => {};
 
-    // Check for cached token if email is available
-    if (options?.email) {
-      const cachedToken = loadToken(options.email);
-      if (cachedToken) {
-        if (!cachedToken.skypeToken || !cachedToken.region) {
-          log(
-            "Cached token is missing required fields, re-authenticating...",
-          );
-          clearToken(options.email);
-        } else {
-          const region = resolveTeamsRegion(options.region, cachedToken.region);
-          const token =
-            region === cachedToken.region
-              ? cachedToken
-              : { ...cachedToken, region };
-          log("Using cached token from credential store");
-          if (token !== cachedToken) {
-            log(`Overriding cached region with explicit value: ${region}`);
-            saveToken(options.email, token);
-          }
-          const client = new TeamsClient(token);
-          client.smartLoginOptions = options;
-          client.userEmail = options.email;
-          return client;
+    // Check for cached token — use email if provided, otherwise try the default account
+    const cacheKey = options?.email ?? DEFAULT_ACCOUNT;
+    const cachedToken = loadToken(cacheKey);
+    if (cachedToken) {
+      if (!cachedToken.skypeToken || !cachedToken.region) {
+        log("Cached token is missing required fields, re-authenticating...");
+        clearToken(cacheKey);
+      } else {
+        const region = resolveTeamsRegion(options?.region, cachedToken.region);
+        const token =
+          region === cachedToken.region
+            ? cachedToken
+            : { ...cachedToken, region };
+        log("Using cached token from credential store");
+        if (token !== cachedToken) {
+          log(`Overriding cached region with explicit value: ${region}`);
+          saveToken(cacheKey, token);
         }
+        const client = new TeamsClient(token);
+        client.smartLoginOptions = options ?? null;
+        client.userEmail = options?.email ?? null;
+        return client;
       }
     }
 
     log("Acquiring token via smart login...");
     const token = await acquireTokenViaSmartLogin(options);
 
-    if (options?.email) {
-      saveToken(options.email, token);
-      log("Token saved to credential store");
+    // Determine the email for caching: use provided email, or extract from bearer token
+    const email = options?.email ?? extractEmailFromToken(token);
+
+    // Always save under the cache key (email or default account)
+    const saveKey = email ?? DEFAULT_ACCOUNT;
+    saveToken(saveKey, token);
+    // Also save under default account if we used an email key, so
+    // subsequent runs without --email still find the cached token
+    if (email && saveKey !== DEFAULT_ACCOUNT) {
+      saveToken(DEFAULT_ACCOUNT, token);
     }
+    log("Token saved to credential store");
 
     const client = new TeamsClient(token);
     client.smartLoginOptions = options ?? null;
-    if (options?.email) {
-      client.userEmail = options.email;
+    if (email) {
+      client.userEmail = email;
     }
     return client;
   }
@@ -1599,14 +1623,17 @@ export class TeamsClient {
    */
   private async refreshToken(): Promise<void> {
     if (this.smartLoginOptions) {
-      if (this.smartLoginOptions.email) {
-        clearToken(this.smartLoginOptions.email);
-      }
+      const cacheKey = this.smartLoginOptions.email ?? DEFAULT_ACCOUNT;
+      clearToken(cacheKey);
       const freshToken = await acquireTokenViaSmartLogin(
         this.smartLoginOptions,
       );
-      if (this.smartLoginOptions.email) {
-        saveToken(this.smartLoginOptions.email, freshToken);
+      const email =
+        this.smartLoginOptions.email ?? extractEmailFromToken(freshToken);
+      const saveKey = email ?? DEFAULT_ACCOUNT;
+      saveToken(saveKey, freshToken);
+      if (email && saveKey !== DEFAULT_ACCOUNT) {
+        saveToken(DEFAULT_ACCOUNT, freshToken);
       }
       this.token = freshToken;
       this.cachedDisplayName = null;
