@@ -574,6 +574,12 @@ export async function createOneOnOneConversation(
   token: TeamsToken,
   memberMri: string,
 ): Promise<{ id: string }> {
+  if (!memberMri || !/^8:orgid:[0-9a-f-]+$/i.test(memberMri)) {
+    throw new Error(
+      `Invalid member MRI for 1:1 conversation creation: "${memberMri}". Expected format: 8:orgid:{uuid}`,
+    );
+  }
+
   const url = `${chatServiceBase(token.region)}/users/ME/conversations`;
   const response = await fetchWithRetry(url, {
     method: "PUT",

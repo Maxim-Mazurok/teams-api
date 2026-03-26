@@ -854,8 +854,13 @@ export class TeamsClient {
             };
           }
 
-          // Person identified but no existing chat — remember them for conversation creation
-          matchedPersonForCreation = matchedPerson;
+          // Person identified but no existing chat — remember them for conversation creation.
+          // Only proceed if the MRI is well-formed; an empty/invalid MRI would produce a
+          // malformed API request and also causes the UUID-based match above to spuriously
+          // succeed when personUuid is "" (matches every conversation ID).
+          if (/^8:orgid:[0-9a-f-]+$/i.test(matchedPerson.mri)) {
+            matchedPersonForCreation = matchedPerson;
+          }
         }
       } catch (error) {
         if (error instanceof ApiAuthError) {

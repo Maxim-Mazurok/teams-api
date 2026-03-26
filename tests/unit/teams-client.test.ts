@@ -519,11 +519,11 @@ describe("findOneOnOneConversation", () => {
     mockedApi.searchPeople.mockResolvedValue([
       {
         displayName: "Alice Smith",
-        mri: "8:orgid:alice-uuid",
+        mri: "8:orgid:a1b2c3d4-e5f6-0000-0000-000000000000",
         email: "alice@example.com",
         jobTitle: "Engineer",
         department: "Dev",
-        objectId: "alice-uuid",
+        objectId: "a1b2c3d4-e5f6-0000-0000-000000000000",
       },
     ]);
 
@@ -532,7 +532,7 @@ describe("findOneOnOneConversation", () => {
 
     // Create conversation returns a new ID
     mockedApi.createOneOnOneConversation.mockResolvedValue({
-      id: "19:my-uuid_alice-uuid@unq.gbl.spaces",
+      id: "19:00000000-0000-0000-0000-000000000000_a1b2c3d4-e5f6-0000-0000-000000000000@unq.gbl.spaces",
     });
 
     const client = TeamsClient.fromToken(
@@ -544,11 +544,13 @@ describe("findOneOnOneConversation", () => {
     const result = await client.findOneOnOneConversation("Alice");
 
     expect(result).not.toBeNull();
-    expect(result!.conversationId).toBe("19:my-uuid_alice-uuid@unq.gbl.spaces");
+    expect(result!.conversationId).toBe(
+      "19:00000000-0000-0000-0000-000000000000_a1b2c3d4-e5f6-0000-0000-000000000000@unq.gbl.spaces",
+    );
     expect(result!.memberDisplayName).toBe("Alice Smith");
     expect(mockedApi.createOneOnOneConversation).toHaveBeenCalledWith(
       expect.anything(),
-      "8:orgid:alice-uuid",
+      "8:orgid:a1b2c3d4-e5f6-0000-0000-000000000000",
     );
   });
 
