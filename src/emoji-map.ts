@@ -18,8 +18,19 @@
 const EMOJI_CDN_BASE =
   "https://statics.teams.cdn.office.net/evergreen-assets/personal-expressions/v1/metadata/";
 
-/** Known emoji catalog version hashes, newest first. */
-const KNOWN_VERSIONS = [
+/**
+ * Teams ECS (Experimentation and Configuration Service) endpoint.
+ * Returns a large JSON config (~1 MB) that includes `emoticonAssetVersion`,
+ * the current emoji catalog version hash. No authentication required.
+ */
+const TEAMS_ECS_CONFIG_URL =
+  "https://config.teams.microsoft.com/config/v1/MicrosoftTeams/1415_1.0.0.0?environment=prod&audienceGroup=general&teamsRing=general";
+
+/**
+ * Fallback version hashes if the ECS endpoint is unreachable.
+ * These are known-good versions, newest first.
+ */
+const FALLBACK_VERSIONS = [
   "ec4576179210cde40ce5494513213583",
   "0f52465a47bf42f299c74a639443f33e",
 ];
@@ -71,13 +82,58 @@ function buildShortcutMap(catalog: EmojiCatalog): Record<string, string> {
 }
 
 /**
+ * Fetch the current emoji catalog version hash from the Teams ECS config.
+ *
+ * Returns null if the ECS endpoint is unreachable or doesn't contain the version.
+ */
+async function fetchCurrentVersion(): Promise<string | null> {
+  try {
+    const response = await fetch(TEAMS_ECS_CONFIG_URL);
+    if (!response.ok) {
+      console.warn(
+        `[emoji-map] ECS config returned ${String(response.status)}, will use fallback versions`,
+      );
+      return null;
+    }
+    const text = await response.text();
+    const match = /"emoticonAssetVersion":"([^"]+)"/.exec(text);
+    if (!match) {
+      console.warn(
+        "[emoji-map] emoticonAssetVersion not found in ECS config, will use fallback versions",
+      );
+      return null;
+    }
+    const version = match[1];
+    // Validate: must be a 32-char lowercase hex hash to avoid malformed URLs
+    if (!/^[0-9a-f]{32}$/.test(version)) {
+      console.warn(
+        `[emoji-map] Unexpected emoticonAssetVersion format "${version}", will use fallback versions`,
+      );
+      return null;
+    }
+    return version;
+  } catch (error) {
+    console.warn(
+      "[emoji-map] Failed to fetch ECS config:",
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+}
+
+/**
  * Fetch the emoji catalog from the Teams CDN.
  *
- * Tries known version hashes in order (newest first).
- * Returns null if all versions fail.
+ * Tries the current version from ECS first, then falls back to known
+ * version hashes. Returns null if all attempts fail.
  */
 async function fetchEmojiCatalog(): Promise<EmojiCatalog | null> {
-  for (const version of KNOWN_VERSIONS) {
+  const currentVersion = await fetchCurrentVersion();
+  const versionsToTry = currentVersion
+    ? [currentVersion, ...FALLBACK_VERSIONS.filter((v) => v !== currentVersion)]
+    : FALLBACK_VERSIONS;
+
+  for (const version of versionsToTry) {
     const url = `${EMOJI_CDN_BASE}${version}/${EMOJI_LOCALE}.json`;
     try {
       const response = await fetch(url);
@@ -95,7 +151,7 @@ async function fetchEmojiCatalog(): Promise<EmojiCatalog | null> {
     }
   }
   console.warn(
-    "[emoji-map] Failed to fetch emoji catalog from all known versions. " +
+    "[emoji-map] Failed to fetch emoji catalog from all versions. " +
       "Non-standard emoji shortcuts (e.g. 'horse') will not resolve to Teams emoji IDs.",
   );
   return null;
