@@ -130,15 +130,18 @@ export async function captureTokensFromPage(
   if (skypeToken && !substrateToken) {
     log("Waiting for substrate token...");
     await new Promise<void>((resolve) => {
-      const extraTimeout = setTimeout(resolve, 5_000);
       const checkInterval = setInterval(() => {
         if (substrateToken) {
-          clearTimeout(extraTimeout);
           clearInterval(checkInterval);
           resolve();
         }
       }, 200);
+      const extraTimeout = setTimeout(() => {
+        clearInterval(checkInterval);
+        resolve();
+      }, 5_000);
       extraTimeout.unref?.();
+      checkInterval.unref?.();
     });
   }
 
