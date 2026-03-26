@@ -1,3 +1,10 @@
+# [0.18.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.17.0...v0.18.0) (2026-03-26)
+
+
+### Features
+
+* create new 1:1 conversation when no existing chat found ([#13](https://github.com/Maxim-Mazurok/teams-api/issues/13)) ([ffb8487](https://github.com/Maxim-Mazurok/teams-api/commit/ffb8487c30d9b41948270ad83acfc2e7d48ea8b1))
+
 # [0.17.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.16.0...v0.17.0) (2026-03-26)
 
 
