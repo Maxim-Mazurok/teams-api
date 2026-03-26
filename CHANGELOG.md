@@ -1,3 +1,10 @@
+# [0.19.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.18.0...v0.19.0) (2026-03-26)
+
+
+### Features
+
+* replace toon/text/md/json formats with concise/detailed output system and add debug telemetry ([#14](https://github.com/Maxim-Mazurok/teams-api/issues/14)) ([c277798](https://github.com/Maxim-Mazurok/teams-api/commit/c2777984ecc9869119ad7198ac6ed65134e2e645))
+
 # [0.18.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.17.0...v0.18.0) (2026-03-26)
 
 
