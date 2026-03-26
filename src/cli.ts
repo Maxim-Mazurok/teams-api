@@ -310,7 +310,10 @@ program
     console.log(serverInstructions);
   });
 
-program.parseAsync().catch((error: Error) => {
-  console.error("Fatal error:", error.message);
-  process.exit(1);
-});
+program.parseAsync().then(
+  () => process.exit(0),
+  (error: Error) => {
+    console.error("Fatal error:", error.message);
+    process.exit(1);
+  },
+);
