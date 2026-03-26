@@ -18,6 +18,7 @@ import type {
   SentMessage,
   EditedMessage,
   DeletedMessage,
+  ReactionResult,
   ScheduledMessage,
 } from "../types.js";
 import { fetchWithRetry, ApiAuthError } from "./common.js";
@@ -478,6 +479,90 @@ export async function postScheduledMessage(
 }
 
 /**
+ * Add a reaction (emotion) to a message.
+ *
+ * Uses the Chat Service emotions property endpoint.
+ * The `reactionKey` is the emotion name (e.g. "like", "heart", "laugh", "surprised").
+ */
+export async function addReaction(
+  token: TeamsToken,
+  conversationId: string,
+  messageId: string,
+  reactionKey: string,
+): Promise<ReactionResult> {
+  const url = `${chatServiceBase(token.region)}/users/ME/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/properties?name=emotions`;
+
+  const body = {
+    emotions: { key: reactionKey, value: messageId },
+  };
+
+  const response = await fetchWithRetry(url, {
+    method: "PUT",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
+    const errorText = await response.text();
+    throw new Error(
+      `Failed to add reaction: ${response.status} ${response.statusText} — ${errorText}`,
+    );
+  }
+
+  return { messageId, reactionKey };
+}
+
+/**
+ * Remove a reaction (emotion) from a message.
+ *
+ * Uses the Chat Service emotions property endpoint with DELETE method.
+ * Only removes the current user's reaction of the specified type.
+ */
+export async function removeReaction(
+  token: TeamsToken,
+  conversationId: string,
+  messageId: string,
+  reactionKey: string,
+): Promise<ReactionResult> {
+  const url = `${chatServiceBase(token.region)}/users/ME/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/properties?name=emotions`;
+
+  const body = {
+    emotions: { key: reactionKey, value: messageId },
+  };
+
+  const response = await fetchWithRetry(url, {
+    method: "DELETE",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new ApiAuthError(
+        `Authentication failed: ${response.status} ${response.statusText}`,
+      );
+    }
+    const errorText = await response.text();
+    throw new Error(
+      `Failed to remove reaction: ${response.status} ${response.statusText} — ${errorText}`,
+    );
+  }
+
+  return { messageId, reactionKey };
+}
+
+/**
  * Fetch user properties for the authenticated user.
  * Returns raw properties — display name may or may not be present.
  */
@@ -508,7 +593,9 @@ export function parseRawMessage(raw: Record<string, unknown>): Message {
   const properties = (raw.properties ?? {}) as Record<string, unknown>;
 
   const allEmotions = parseEmotions(properties.emotions);
-  const reactions = allEmotions.filter((emotion) => emotion.key !== "follow");
+  const reactions = allEmotions.filter(
+    (emotion) => emotion.key !== "follow" && emotion.users.length > 0,
+  );
   const followEntry = allEmotions.find((emotion) => emotion.key === "follow");
   const followers = (followEntry?.users ?? [])
     .filter((user) => String(user.value) === "0")

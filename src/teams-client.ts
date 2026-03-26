@@ -42,6 +42,7 @@ import type {
   SentMessage,
   EditedMessage,
   DeletedMessage,
+  ReactionResult,
   ScheduledMessage,
   GetMessagesOptions,
   ListConversationsOptions,
@@ -65,6 +66,8 @@ import {
   postMessage,
   editMessage,
   deleteMessage,
+  addReaction,
+  removeReaction,
   postScheduledMessage,
   fetchUserProperties,
 } from "./api/chat-service.js";
@@ -103,6 +106,7 @@ export type {
   SentMessage,
   EditedMessage,
   DeletedMessage,
+  ReactionResult,
   GetMessagesOptions,
   ListConversationsOptions,
   OneOnOneSearchResult,
@@ -1056,6 +1060,36 @@ export class TeamsClient {
   ): Promise<DeletedMessage> {
     return this.withTokenRefresh(async () => {
       return deleteMessage(this.token, conversationId, messageId);
+    });
+  }
+
+  /**
+   * Add a reaction (emotion) to a message.
+   *
+   * Common reaction keys: "like", "heart", "laugh", "surprised".
+   */
+  async addReaction(
+    conversationId: string,
+    messageId: string,
+    reactionKey: string,
+  ): Promise<ReactionResult> {
+    return this.withTokenRefresh(async () => {
+      return addReaction(this.token, conversationId, messageId, reactionKey);
+    });
+  }
+
+  /**
+   * Remove a reaction (emotion) from a message.
+   *
+   * Only removes the current user's reaction of the specified type.
+   */
+  async removeReaction(
+    conversationId: string,
+    messageId: string,
+    reactionKey: string,
+  ): Promise<ReactionResult> {
+    return this.withTokenRefresh(async () => {
+      return removeReaction(this.token, conversationId, messageId, reactionKey);
     });
   }
 

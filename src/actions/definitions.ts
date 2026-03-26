@@ -17,6 +17,8 @@ import {
   sendMessage,
   editMessageAction,
   deleteMessageAction,
+  addReactionAction,
+  removeReactionAction,
 } from "./message-actions.js";
 import { findPeopleAction, findChatsAction } from "./search-actions.js";
 import { getMembers, whoami, getTranscript } from "./utility-actions.js";
@@ -39,6 +41,8 @@ const actionRegistry = new Map<string, ActionDefinition>([
   ["send-message", sendMessage],
   ["edit-message", editMessageAction],
   ["delete-message", deleteMessageAction],
+  ["add-reaction", addReactionAction],
+  ["remove-reaction", removeReactionAction],
   ["get-members", getMembers],
   ["whoami", whoami],
   ["get-transcript", getTranscript],

@@ -107,6 +107,30 @@ DELETE /users/ME/conversations/{conversationId}/messages/{messageId}
 
 Returns empty body on success. Only the message author can delete a message. The message is soft-deleted (marked with `deletetime` in the message metadata) rather than physically removed.
 
+**Add reaction:**
+
+```
+PUT /users/ME/conversations/{conversationId}/messages/{messageId}/properties?name=emotions
+```
+
+Body:
+
+```json
+{ "emotions": { "key": "<reactionKey>", "value": "<messageId>" } }
+```
+
+Known reaction keys: `like`, `heart`, `laugh`, `surprised`, `angry`, `sad`.
+
+Returns `200` on success. Multiple reactions can coexist on the same message (e.g. both `like` and `heart`). Adding the same reaction twice is idempotent.
+
+**Remove reaction:**
+
+```
+DELETE /users/ME/conversations/{conversationId}/messages/{messageId}/properties?name=emotions
+```
+
+Same body format as add. Returns `200` on success. Removing a reaction that doesn't exist is a no-op. After removal, the reaction key may still appear in the message's `emotions` property with an empty `users` array — the parser filters these out.
+
 **Get members:**
 
 ```

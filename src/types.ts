@@ -285,6 +285,14 @@ export interface DeletedMessage {
   messageId: string;
 }
 
+/** Result of adding or removing a reaction on a message. */
+export interface ReactionResult {
+  /** The ID of the message that was reacted to. */
+  messageId: string;
+  /** The reaction key (e.g. "like", "heart", "laugh", "surprised"). */
+  reactionKey: string;
+}
+
 /** Result of scheduling a message (creating a scheduled draft). */
 export interface ScheduledMessage {
   /** Server-assigned message ID (OriginalArrivalTime). */

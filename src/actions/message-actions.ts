@@ -659,3 +659,175 @@ export const deleteMessageAction: ActionDefinition = {
     ].join("\n");
   },
 };
+
+export const addReactionAction: ActionDefinition = {
+  name: "add-reaction",
+  title: "Add Reaction",
+  description:
+    "Add a reaction (emoji) to a message. " +
+    "Identify the conversation by topic name (--chat), " +
+    "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
+    "At least one identifier is required. " +
+    'Common reaction keys: "like", "heart", "laugh", "surprised".',
+  parameters: [
+    ...conversationParameters,
+    {
+      name: "messageId",
+      type: "string",
+      description: "ID of the message to react to",
+      required: true,
+    },
+    {
+      name: "reactionKey",
+      type: "string",
+      description:
+        'Reaction type to add (e.g. "like", "heart", "laugh", "surprised")',
+      required: true,
+    },
+  ],
+  execute: async (client, parameters) => {
+    const { conversationId, label } = await resolveConversationId(
+      client,
+      parameters,
+    );
+    const messageId = parameters.messageId as string;
+    const reactionKey = parameters.reactionKey as string;
+    const result = await client.addReaction(
+      conversationId,
+      messageId,
+      reactionKey,
+    );
+    return { ...result, conversation: label };
+  },
+  formatResult: (result) => {
+    const { messageId, reactionKey, conversation } = result as {
+      messageId: string;
+      reactionKey: string;
+      conversation: string;
+    };
+    return [
+      `Reaction "${reactionKey}" added in "${conversation}"`,
+      `  Message ID: ${messageId}`,
+    ].join("\n");
+  },
+  formatMarkdown: (result) => {
+    const { messageId, reactionKey, conversation } = result as {
+      messageId: string;
+      reactionKey: string;
+      conversation: string;
+    };
+    return [
+      "## Reaction Added",
+      "",
+      `- **In:** ${conversation}`,
+      `- **Message ID:** ${messageId}`,
+      `- **Reaction:** ${reactionKey}`,
+    ].join("\n");
+  },
+  formatToon: (result) => {
+    const { messageId, reactionKey, conversation } = result as {
+      messageId: string;
+      reactionKey: string;
+      conversation: string;
+    };
+    const emojiMap: Record<string, string> = {
+      like: "👍",
+      heart: "❤️",
+      laugh: "😆",
+      surprised: "😮",
+    };
+    const emoji = emojiMap[reactionKey] ?? "🎭";
+    return [
+      toonHeader(emoji, "Reaction Added!"),
+      `  💬 In: "${conversation}"`,
+      `  🆔 ${messageId}`,
+      `  ${emoji} ${reactionKey}`,
+    ].join("\n");
+  },
+};
+
+export const removeReactionAction: ActionDefinition = {
+  name: "remove-reaction",
+  title: "Remove Reaction",
+  description:
+    "Remove a reaction (emoji) from a message. " +
+    "Identify the conversation by topic name (--chat), " +
+    "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
+    "At least one identifier is required. " +
+    "Only removes the current user's reaction of the specified type.",
+  parameters: [
+    ...conversationParameters,
+    {
+      name: "messageId",
+      type: "string",
+      description: "ID of the message to remove the reaction from",
+      required: true,
+    },
+    {
+      name: "reactionKey",
+      type: "string",
+      description:
+        'Reaction type to remove (e.g. "like", "heart", "laugh", "surprised")',
+      required: true,
+    },
+  ],
+  execute: async (client, parameters) => {
+    const { conversationId, label } = await resolveConversationId(
+      client,
+      parameters,
+    );
+    const messageId = parameters.messageId as string;
+    const reactionKey = parameters.reactionKey as string;
+    const result = await client.removeReaction(
+      conversationId,
+      messageId,
+      reactionKey,
+    );
+    return { ...result, conversation: label };
+  },
+  formatResult: (result) => {
+    const { messageId, reactionKey, conversation } = result as {
+      messageId: string;
+      reactionKey: string;
+      conversation: string;
+    };
+    return [
+      `Reaction "${reactionKey}" removed from "${conversation}"`,
+      `  Message ID: ${messageId}`,
+    ].join("\n");
+  },
+  formatMarkdown: (result) => {
+    const { messageId, reactionKey, conversation } = result as {
+      messageId: string;
+      reactionKey: string;
+      conversation: string;
+    };
+    return [
+      "## Reaction Removed",
+      "",
+      `- **From:** ${conversation}`,
+      `- **Message ID:** ${messageId}`,
+      `- **Reaction:** ${reactionKey}`,
+    ].join("\n");
+  },
+  formatToon: (result) => {
+    const { messageId, reactionKey, conversation } = result as {
+      messageId: string;
+      reactionKey: string;
+      conversation: string;
+    };
+    const emojiMap: Record<string, string> = {
+      like: "👍",
+      heart: "❤️",
+      laugh: "😆",
+      surprised: "😮",
+    };
+    const emoji = emojiMap[reactionKey] ?? "🎭";
+    return [
+      toonHeader(emoji, "Reaction Removed!"),
+      `  💬 From: "${conversation}"`,
+      `  🆔 ${messageId}`,
+      `  ${emoji} ${reactionKey}`,
+    ].join("\n");
+  },
+};

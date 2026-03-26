@@ -148,4 +148,62 @@ describe.skipIf(!shouldRun)("Full E2E flow", { timeout: 120_000 }, () => {
     }
     console.log("[e2e] Members test passed");
   });
+
+  it("should add and remove a reaction on a message", async () => {
+    if (!email) throw new Error("TEAMS_EMAIL is required");
+
+    console.log("[e2e] Starting auto-login for reaction test...");
+    const client = await TeamsClient.fromAutoLogin({ email, verbose: true });
+    const displayName = await client.getCurrentUserDisplayName();
+
+    const selfChat = await client.findOneOnOneConversation(displayName);
+    expect(selfChat).not.toBeNull();
+
+    // Send a message to react to
+    const uniqueContent = `E2E reaction test ${Date.now()}`;
+    const sentResult = await client.sendMessage(
+      selfChat!.conversationId,
+      uniqueContent,
+    );
+    console.log(`[e2e] Sent message: ${sentResult.messageId}`);
+
+    // Add a reaction
+    const addResult = await client.addReaction(
+      selfChat!.conversationId,
+      sentResult.messageId,
+      "like",
+    );
+    expect(addResult.messageId).toBe(sentResult.messageId);
+    expect(addResult.reactionKey).toBe("like");
+    console.log("[e2e] Added 'like' reaction");
+
+    // Verify reaction appears on the message
+    const messagesAfterAdd = await client.getMessages(
+      selfChat!.conversationId,
+      { maxPages: 1, pageSize: 10 },
+    );
+    const reactedMessage = messagesAfterAdd.find(
+      (message) => message.id === sentResult.messageId,
+    );
+    expect(reactedMessage).toBeDefined();
+    expect(reactedMessage!.reactions.length).toBeGreaterThan(0);
+    expect(
+      reactedMessage!.reactions.some((reaction) => reaction.key === "like"),
+    ).toBe(true);
+    console.log("[e2e] Verified reaction on message");
+
+    // Remove the reaction
+    const removeResult = await client.removeReaction(
+      selfChat!.conversationId,
+      sentResult.messageId,
+      "like",
+    );
+    expect(removeResult.messageId).toBe(sentResult.messageId);
+    expect(removeResult.reactionKey).toBe("like");
+    console.log("[e2e] Removed 'like' reaction");
+
+    // Cleanup: delete the test message
+    await client.deleteMessage(selfChat!.conversationId, sentResult.messageId);
+    console.log("[e2e] Reaction test passed");
+  });
 });

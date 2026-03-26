@@ -13,6 +13,8 @@ import {
   postMessage,
   editMessage,
   deleteMessage,
+  addReaction,
+  removeReaction,
   postScheduledMessage,
   fetchUserProperties,
   parseRawMessage,
@@ -676,6 +678,119 @@ describe("deleteMessage", () => {
 
     await expect(
       deleteMessage(testToken, "conv-id", "msg-123"),
+    ).rejects.toBeInstanceOf(ApiAuthError);
+  });
+});
+
+describe("addReaction", () => {
+  it("should send PUT to correct URL with emotion body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      text: () => Promise.resolve("200"),
+      headers: new Headers(),
+    });
+
+    const result = await addReaction(testToken, "conv-id", "msg-123", "like");
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "/users/ME/conversations/conv-id/messages/msg-123/properties?name=emotions",
+      ),
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          emotions: { key: "like", value: "msg-123" },
+        }),
+      }),
+    );
+    expect(result.messageId).toBe("msg-123");
+    expect(result.reactionKey).toBe("like");
+  });
+
+  it("should throw on failure with error body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      text: () => Promise.resolve("Invalid format"),
+    });
+
+    await expect(
+      addReaction(testToken, "conv-id", "msg-123", "like"),
+    ).rejects.toThrow("Failed to add reaction: 400 Bad Request");
+  });
+
+  it("should throw ApiAuthError on 401", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      text: () => Promise.resolve("Token expired"),
+    });
+
+    await expect(
+      addReaction(testToken, "conv-id", "msg-123", "like"),
+    ).rejects.toBeInstanceOf(ApiAuthError);
+  });
+});
+
+describe("removeReaction", () => {
+  it("should send DELETE to correct URL with emotion body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      text: () => Promise.resolve("null"),
+      headers: new Headers(),
+    });
+
+    const result = await removeReaction(
+      testToken,
+      "conv-id",
+      "msg-123",
+      "heart",
+    );
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "/users/ME/conversations/conv-id/messages/msg-123/properties?name=emotions",
+      ),
+      expect.objectContaining({
+        method: "DELETE",
+        body: JSON.stringify({
+          emotions: { key: "heart", value: "msg-123" },
+        }),
+      }),
+    );
+    expect(result.messageId).toBe("msg-123");
+    expect(result.reactionKey).toBe("heart");
+  });
+
+  it("should throw on failure with error body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      text: () => Promise.resolve("Request body does not contain 'emotions' key"),
+    });
+
+    await expect(
+      removeReaction(testToken, "conv-id", "msg-123", "like"),
+    ).rejects.toThrow("Failed to remove reaction: 400 Bad Request");
+  });
+
+  it("should throw ApiAuthError on 401", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      text: () => Promise.resolve("Token expired"),
+    });
+
+    await expect(
+      removeReaction(testToken, "conv-id", "msg-123", "like"),
     ).rejects.toBeInstanceOf(ApiAuthError);
   });
 });

@@ -25,6 +25,7 @@ import type {
   SentMessage,
   EditedMessage,
   DeletedMessage,
+  ReactionResult,
   ScheduledMessage,
 } from "../../src/types.js";
 
@@ -46,6 +47,8 @@ function createMockClient(
     sendMessageWithFiles: vi.fn(),
     editMessage: vi.fn(),
     deleteMessage: vi.fn(),
+    addReaction: vi.fn(),
+    removeReaction: vi.fn(),
     scheduleMessage: vi.fn(),
     getMembers: vi.fn(),
     getCurrentUserDisplayName: vi.fn(),
@@ -112,8 +115,8 @@ beforeEach(() => {
 // ── Registry tests ───────────────────────────────────────────────────
 
 describe("action registry", () => {
-  it("should contain all 13 actions", () => {
-    expect(actions).toHaveLength(13);
+  it("should contain all 15 actions", () => {
+    expect(actions).toHaveLength(15);
   });
 
   it("should have unique names", () => {
@@ -1307,6 +1310,222 @@ describe("delete-message", () => {
   });
 });
 
+// ── add-reaction ─────────────────────────────────────────────────────
+
+describe("add-reaction", () => {
+  const action = getAction("add-reaction");
+
+  it("should resolve conversation and add reaction", async () => {
+    const conversation = makeConversation({
+      id: "19:chat@thread.v2",
+      topic: "Design Review",
+    });
+    const reactionResult: ReactionResult = {
+      messageId: "msg-123",
+      reactionKey: "like",
+    };
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(conversation),
+      addReaction: vi.fn().mockResolvedValue(reactionResult),
+    });
+
+    const result = (await action.execute(client, {
+      chat: "Design Review",
+      messageId: "msg-123",
+      reactionKey: "like",
+    })) as ReactionResult & { conversation: string };
+
+    expect(client.addReaction).toHaveBeenCalledWith(
+      "19:chat@thread.v2",
+      "msg-123",
+      "like",
+    );
+    expect(result.messageId).toBe("msg-123");
+    expect(result.reactionKey).toBe("like");
+    expect(result.conversation).toBe("Design Review");
+  });
+
+  it("should resolve 1:1 conversation via --to", async () => {
+    const searchResult: OneOnOneSearchResult = {
+      conversationId: "19:one-on-one@unq.gbl.spaces",
+      memberDisplayName: "Luke Prior",
+    };
+    const reactionResult: ReactionResult = {
+      messageId: "msg-456",
+      reactionKey: "heart",
+    };
+    const client = createMockClient({
+      findOneOnOneConversation: vi.fn().mockResolvedValue(searchResult),
+      addReaction: vi.fn().mockResolvedValue(reactionResult),
+    });
+
+    const result = (await action.execute(client, {
+      to: "Luke",
+      messageId: "msg-456",
+      reactionKey: "heart",
+    })) as ReactionResult & { conversation: string };
+
+    expect(result.conversation).toBe("Luke Prior");
+  });
+
+  it("should error when no conversation identifier provided", async () => {
+    const client = createMockClient();
+
+    await expect(
+      action.execute(client, { messageId: "msg-1", reactionKey: "like" }),
+    ).rejects.toThrow("One of --conversation-id, --chat, or --to is required.");
+  });
+
+  it("should format result correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      reactionKey: "like",
+      conversation: "Design Review",
+    };
+
+    const output = action.formatResult(result);
+
+    expect(output).toContain('Reaction "like" added in "Design Review"');
+    expect(output).toContain("Message ID: msg-123");
+  });
+
+  it("should format markdown correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      reactionKey: "heart",
+      conversation: "Design Review",
+    };
+
+    const output = formatOutput(action, result, "md");
+
+    expect(output).toContain("## Reaction Added");
+    expect(output).toContain("**In:** Design Review");
+    expect(output).toContain("**Reaction:** heart");
+  });
+
+  it("should format toon correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      reactionKey: "like",
+      conversation: "Design Review",
+    };
+
+    const output = formatOutput(action, result, "toon");
+
+    expect(output).toContain("Reaction Added!");
+    expect(output).toContain("Design Review");
+    expect(output).toContain("👍");
+  });
+});
+
+// ── remove-reaction ──────────────────────────────────────────────────
+
+describe("remove-reaction", () => {
+  const action = getAction("remove-reaction");
+
+  it("should resolve conversation and remove reaction", async () => {
+    const conversation = makeConversation({
+      id: "19:chat@thread.v2",
+      topic: "Design Review",
+    });
+    const reactionResult: ReactionResult = {
+      messageId: "msg-123",
+      reactionKey: "like",
+    };
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(conversation),
+      removeReaction: vi.fn().mockResolvedValue(reactionResult),
+    });
+
+    const result = (await action.execute(client, {
+      chat: "Design Review",
+      messageId: "msg-123",
+      reactionKey: "like",
+    })) as ReactionResult & { conversation: string };
+
+    expect(client.removeReaction).toHaveBeenCalledWith(
+      "19:chat@thread.v2",
+      "msg-123",
+      "like",
+    );
+    expect(result.messageId).toBe("msg-123");
+    expect(result.reactionKey).toBe("like");
+    expect(result.conversation).toBe("Design Review");
+  });
+
+  it("should resolve 1:1 conversation via --to", async () => {
+    const searchResult: OneOnOneSearchResult = {
+      conversationId: "19:one-on-one@unq.gbl.spaces",
+      memberDisplayName: "Luke Prior",
+    };
+    const reactionResult: ReactionResult = {
+      messageId: "msg-456",
+      reactionKey: "heart",
+    };
+    const client = createMockClient({
+      findOneOnOneConversation: vi.fn().mockResolvedValue(searchResult),
+      removeReaction: vi.fn().mockResolvedValue(reactionResult),
+    });
+
+    const result = (await action.execute(client, {
+      to: "Luke",
+      messageId: "msg-456",
+      reactionKey: "heart",
+    })) as ReactionResult & { conversation: string };
+
+    expect(result.conversation).toBe("Luke Prior");
+  });
+
+  it("should error when no conversation identifier provided", async () => {
+    const client = createMockClient();
+
+    await expect(
+      action.execute(client, { messageId: "msg-1", reactionKey: "like" }),
+    ).rejects.toThrow("One of --conversation-id, --chat, or --to is required.");
+  });
+
+  it("should format result correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      reactionKey: "like",
+      conversation: "Design Review",
+    };
+
+    const output = action.formatResult(result);
+
+    expect(output).toContain('Reaction "like" removed from "Design Review"');
+    expect(output).toContain("Message ID: msg-123");
+  });
+
+  it("should format markdown correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      reactionKey: "heart",
+      conversation: "Design Review",
+    };
+
+    const output = formatOutput(action, result, "md");
+
+    expect(output).toContain("## Reaction Removed");
+    expect(output).toContain("**From:** Design Review");
+    expect(output).toContain("**Reaction:** heart");
+  });
+
+  it("should format toon correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      reactionKey: "like",
+      conversation: "Design Review",
+    };
+
+    const output = formatOutput(action, result, "toon");
+
+    expect(output).toContain("Reaction Removed!");
+    expect(output).toContain("Design Review");
+    expect(output).toContain("👍");
+  });
+});
+
 // ── get-members ──────────────────────────────────────────────────────
 
 describe("get-members", () => {
@@ -2284,6 +2503,8 @@ describe("action registry (parametrized)", () => {
     "send-message",
     "edit-message",
     "delete-message",
+    "add-reaction",
+    "remove-reaction",
     "get-members",
     "whoami",
     "get-transcript",
