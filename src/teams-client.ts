@@ -822,12 +822,30 @@ export class TeamsClient {
         );
 
         if (matchedPerson) {
-          const chats = await searchChats(this.token, personName, 10);
+          // Validate MRI early — an invalid/empty MRI would cause both the UUID
+          // match below and createOneOnOneConversation to misbehave.
+          if (/^8:orgid:[0-9a-f-]+$/i.test(matchedPerson.mri)) {
+            // Tentatively mark this person for conversation creation.  This is
+            // set before the chat search so that a searchChats failure (5xx /
+            // network error) doesn't silently prevent us from falling back to
+            // the idempotent create call further below.
+            matchedPersonForCreation = matchedPerson;
+          }
 
-          // Look for a 1:1 chat (Chat type, exactly 2 members)
-          for (const chat of chats) {
+          // Try to find an existing chat via Substrate search.
+          let chatSearchResults: Awaited<ReturnType<typeof searchChats>> = [];
+          try {
+            chatSearchResults = await searchChats(this.token, personName, 10);
+          } catch {
+            // searchChats is best-effort; proceed to UUID match and creation fallback.
+          }
+
+          // Look for a 1:1 chat returned by the chat search.
+          // threadType is compared case-insensitively — the substrate API has
+          // returned both "Chat" and "chat" for 1:1 threads.
+          for (const chat of chatSearchResults) {
             if (
-              chat.threadType === "Chat" &&
+              chat.threadType.toLowerCase() === "chat" &&
               chat.totalMemberCount === 2 &&
               chat.matchingMembers.some(
                 (member) => member.mri === matchedPerson.mri,
@@ -840,7 +858,9 @@ export class TeamsClient {
             }
           }
 
-          // Check if any conversation ID contains the person's UUID
+          // Check if any conversation ID contains the person's UUID.
+          // This only covers the 100 most-recent conversations; old 1:1 chats
+          // that no longer appear here are handled by createOneOnOneConversation.
           const personUuid = matchedPerson.mri.replace("8:orgid:", "");
           const matchingConversation = conversations.find(
             (conversation) =>
@@ -852,14 +872,6 @@ export class TeamsClient {
               conversationId: matchingConversation.id,
               memberDisplayName: matchedPerson.displayName,
             };
-          }
-
-          // Person identified but no existing chat — remember them for conversation creation.
-          // Only proceed if the MRI is well-formed; an empty/invalid MRI would produce a
-          // malformed API request and also causes the UUID-based match above to spuriously
-          // succeed when personUuid is "" (matches every conversation ID).
-          if (/^8:orgid:[0-9a-f-]+$/i.test(matchedPerson.mri)) {
-            matchedPersonForCreation = matchedPerson;
           }
         }
       } catch (error) {

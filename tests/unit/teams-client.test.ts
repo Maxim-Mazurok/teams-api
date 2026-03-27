@@ -554,6 +554,92 @@ describe("findOneOnOneConversation", () => {
     );
   });
 
+  it("should still create conversation when searchChats throws a non-auth error", async () => {
+    // This covers the case where an old 1:1 chat is not in the top 100 conversations
+    // AND the chat search API returns a 5xx error. Previously, the 5xx exception
+    // would abort the if(matchedPerson) block before matchedPersonForCreation was
+    // set, causing findOneOnOneConversation to return null instead of creating the chat.
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({ id: "19:some-group@thread.v2", threadType: "meeting" }),
+    ]);
+
+    mockedApi.searchPeople.mockResolvedValue([
+      {
+        displayName: "Alice Smith",
+        mri: "8:orgid:a1b2c3d4-e5f6-0000-0000-000000000000",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Dev",
+        objectId: "a1b2c3d4-e5f6-0000-0000-000000000000",
+      },
+    ]);
+
+    // searchChats throws a server error (5xx)
+    mockedApi.searchChats.mockRejectedValue(new Error("Server error: 503"));
+
+    mockedApi.createOneOnOneConversation.mockResolvedValue({
+      id: "19:00000000-0000-0000-0000-000000000000_a1b2c3d4-e5f6-0000-0000-000000000000@unq.gbl.spaces",
+    });
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findOneOnOneConversation("Alice");
+
+    expect(result).not.toBeNull();
+    expect(result!.conversationId).toBe(
+      "19:00000000-0000-0000-0000-000000000000_a1b2c3d4-e5f6-0000-0000-000000000000@unq.gbl.spaces",
+    );
+    expect(mockedApi.createOneOnOneConversation).toHaveBeenCalled();
+  });
+
+  it("should find existing 1:1 chat when searchChats returns lowercase threadType", async () => {
+    // Teams substrate API has returned both "Chat" and "chat" for threadType.
+    // Previously the condition was strict === "Chat" so lowercase would be missed.
+    mockedApi.fetchConversations.mockResolvedValue([]);
+
+    mockedApi.searchPeople.mockResolvedValue([
+      {
+        displayName: "Alice Smith",
+        mri: "8:orgid:alice-uuid",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Dev",
+        objectId: "alice-uuid",
+      },
+    ]);
+
+    mockedApi.searchChats.mockResolvedValue([
+      {
+        name: "",
+        threadId: "19:alice-chat@unq.gbl.spaces",
+        threadType: "chat", // lowercase — was previously missed
+        matchingMembers: [
+          { displayName: "Alice Smith", mri: "8:orgid:alice-uuid" },
+        ],
+        chatMembers: [],
+        totalMemberCount: 2,
+      },
+    ]);
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findOneOnOneConversation("Alice");
+
+    expect(result).not.toBeNull();
+    expect(result!.conversationId).toBe("19:alice-chat@unq.gbl.spaces");
+    expect(result!.memberDisplayName).toBe("Alice Smith");
+    expect(mockedApi.createOneOnOneConversation).not.toHaveBeenCalled();
+  });
+
+
   it("should fall back to profile-based matching when substrate search returns empty", async () => {
     mockedApi.fetchConversations.mockResolvedValue([
       makeConversation({
