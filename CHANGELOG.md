@@ -1,3 +1,10 @@
+## [0.19.1](https://github.com/Maxim-Mazurok/teams-api/compare/v0.19.0...v0.19.1) (2026-03-27)
+
+
+### Bug Fixes
+
+* find old 1:1 conversations when searchChats fails or returns unexpected threadType ([c568142](https://github.com/Maxim-Mazurok/teams-api/commit/c568142609e96902e40fdd7bef458900edba9a85))
+
 # [0.19.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.18.0...v0.19.0) (2026-03-26)
 
 
