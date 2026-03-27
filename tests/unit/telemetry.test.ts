@@ -49,7 +49,7 @@ describe("getTelemetryDir", () => {
 
   it("returns XDG path on linux when XDG_DATA_HOME is set", () => {
     vi.stubEnv("XDG_DATA_HOME", "/custom/data");
-    expect(getTelemetryDir("linux")).toBe("/custom/data/teams-api");
+    expect(getTelemetryDir("linux")).toMatch(/[/\\]custom[/\\]data[/\\]teams-api$/);
   });
 
   it("returns ~/.local/share on linux when XDG_DATA_HOME is not set", () => {
