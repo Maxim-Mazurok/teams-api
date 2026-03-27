@@ -50,6 +50,7 @@ export async function captureTokensFromPage(
   let region: string | null = null;
   let bearerToken: string | null = null;
   let substrateToken: string | null = null;
+  let resolved = false;
 
   await cdpSession.send("Fetch.enable", {
     patterns: [
@@ -107,7 +108,8 @@ export async function captureTokensFromPage(
           // Request may have already been handled
         }
 
-        if (skypeToken) {
+        if (skypeToken && !resolved) {
+          resolved = true;
           log("Skype token captured from request headers");
           clearTimeout(timeout);
           resolve();
