@@ -7,7 +7,7 @@
  * | Platform | Mechanism                                              |
  * |----------|--------------------------------------------------------|
  * | macOS    | System Keychain via `security` CLI                     |
- * | Windows  | DPAPI encryption → file in %APPDATA%/teams-api/        |
+ * | Windows  | Windows Credential Manager via keytar (native wincred) |
  * | Linux    | `secret-tool` (libsecret) if available, else file with |
  * |          | 0o600 perms at ~/.config/teams-api/                    |
  */
@@ -32,7 +32,7 @@ export interface CredentialStore {
 
 // ── macOS: System Keychain ────────────────────────────────────────────
 
-const KEYCHAIN_SERVICE = "teams-api";
+const CREDENTIAL_SERVICE = "teams-api";
 
 class KeychainStore implements CredentialStore {
   save(account: string, data: string): void {
@@ -41,7 +41,7 @@ class KeychainStore implements CredentialStore {
       "-a",
       account,
       "-s",
-      KEYCHAIN_SERVICE,
+      CREDENTIAL_SERVICE,
       "-w",
       data,
       "-U",
@@ -52,7 +52,7 @@ class KeychainStore implements CredentialStore {
     try {
       return execFileSync(
         "security",
-        ["find-generic-password", "-a", account, "-s", KEYCHAIN_SERVICE, "-w"],
+        ["find-generic-password", "-a", account, "-s", CREDENTIAL_SERVICE, "-w"],
         { encoding: "utf-8" },
       ).trim();
     } catch {
@@ -67,7 +67,7 @@ class KeychainStore implements CredentialStore {
         "-a",
         account,
         "-s",
-        KEYCHAIN_SERVICE,
+        CREDENTIAL_SERVICE,
       ]);
     } catch {
       // Entry may not exist, that's fine
@@ -75,13 +75,17 @@ class KeychainStore implements CredentialStore {
   }
 }
 
-// ── Windows: DPAPI encryption → file ─────────────────────────────────
+// ── Windows: Windows Credential Manager via keytar ───────────────────
+//
+// The previous implementation spawned PowerShell with an inline script that
+// loaded System.Security.Cryptography.ProtectedData to call DPAPI.
+// That pattern (PowerShell + Add-Type + Protect/Unprotect on binary data) is
+// a textbook ransomware behavioral signature and is reliably flagged by
+// Windows Defender. keytar calls the native wincred API directly from C++,
+// with no PowerShell or inline scripting involved.
 
-function getWindowsStorePath(): string {
-  const appData =
-    process.env.APPDATA ??
-    join(process.env.USERPROFILE ?? homedir(), "AppData", "Roaming");
-  return join(appData, "teams-api");
+function accountKey(account: string): string {
+  return createHash("sha256").update(account).digest("hex");
 }
 
 function accountToFileName(account: string): string {
@@ -89,75 +93,47 @@ function accountToFileName(account: string): string {
 }
 
 class WinCredStore implements CredentialStore {
-  private getFilePath(account: string): string {
-    const dir = getWindowsStorePath();
-    return join(dir, accountToFileName(account));
-  }
-
-  private ensureDir(): void {
-    const dir = getWindowsStorePath();
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
-  }
-
   save(account: string, data: string): void {
-    this.ensureDir();
-    const base64Input = Buffer.from(data, "utf-8").toString("base64");
-
-    // Use DPAPI to encrypt data tied to the current Windows user account
-    const encrypted = execFileSync(
-      "powershell",
+    // keytar is async; run it in a child Node process so the sync interface
+    // is preserved without requiring top-level async.
+    execFileSync(
+      process.execPath,
       [
-        "-NoProfile",
-        "-Command",
-        `Add-Type -AssemblyName System.Security; ` +
-          `$bytes = [System.Convert]::FromBase64String('${base64Input}'); ` +
-          `$encrypted = [System.Security.Cryptography.ProtectedData]::Protect($bytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser); ` +
-          `[System.Convert]::ToBase64String($encrypted)`,
+        "-e",
+        `const k = require("keytar"); k.setPassword(${JSON.stringify(CREDENTIAL_SERVICE)}, ${JSON.stringify(accountKey(account))}, ${JSON.stringify(data)}).catch(e => { process.stderr.write(e.message); process.exit(1); });`,
       ],
-      { encoding: "utf-8" },
-    ).trim();
-
-    writeFileSync(this.getFilePath(account), encrypted, { encoding: "utf-8" });
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+    );
   }
 
   load(account: string): string | null {
-    const filePath = this.getFilePath(account);
-    if (!existsSync(filePath)) {
-      return null;
-    }
-
     try {
-      const encrypted = readFileSync(filePath, { encoding: "utf-8" }).trim();
-
-      const decrypted = execFileSync(
-        "powershell",
+      const result = execFileSync(
+        process.execPath,
         [
-          "-NoProfile",
-          "-Command",
-          `Add-Type -AssemblyName System.Security; ` +
-            `$encrypted = [System.Convert]::FromBase64String('${encrypted}'); ` +
-            `$bytes = [System.Security.Cryptography.ProtectedData]::Unprotect($encrypted, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser); ` +
-            `[System.Text.Encoding]::UTF8.GetString($bytes)`,
+          "-e",
+          `const k = require("keytar"); k.getPassword(${JSON.stringify(CREDENTIAL_SERVICE)}, ${JSON.stringify(accountKey(account))}).then(v => { if (v !== null) process.stdout.write(v); }).catch(e => { process.stderr.write(e.message); process.exit(1); });`,
         ],
-        { encoding: "utf-8" },
+        { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
       ).trim();
-
-      return decrypted;
+      return result === "" ? null : result;
     } catch {
-      // Encrypted data may be corrupted or from a different user
-      this.clear(account);
       return null;
     }
   }
 
   clear(account: string): void {
-    const filePath = this.getFilePath(account);
     try {
-      unlinkSync(filePath);
+      execFileSync(
+        process.execPath,
+        [
+          "-e",
+          `const k = require("keytar"); k.deletePassword(${JSON.stringify(CREDENTIAL_SERVICE)}, ${JSON.stringify(accountKey(account))}).catch(e => { process.stderr.write(e.message); process.exit(1); });`,
+        ],
+        { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+      );
     } catch {
-      // File may not exist, that's fine
+      // Entry may not exist
     }
   }
 }
@@ -208,7 +184,7 @@ class LinuxStore implements CredentialStore {
             "--label",
             "teams-api",
             "service",
-            KEYCHAIN_SERVICE,
+            CREDENTIAL_SERVICE,
             "account",
             account,
           ],
@@ -233,7 +209,7 @@ class LinuxStore implements CredentialStore {
       try {
         return execFileSync(
           "secret-tool",
-          ["lookup", "service", KEYCHAIN_SERVICE, "account", account],
+          ["lookup", "service", CREDENTIAL_SERVICE, "account", account],
           { encoding: "utf-8" },
         ).trim();
       } catch {
@@ -260,7 +236,7 @@ class LinuxStore implements CredentialStore {
         execFileSync("secret-tool", [
           "clear",
           "service",
-          KEYCHAIN_SERVICE,
+          CREDENTIAL_SERVICE,
           "account",
           account,
         ]);
