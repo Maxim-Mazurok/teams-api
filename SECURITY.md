@@ -20,7 +20,7 @@ This is one of the most reliable behavioral signatures in Windows Defender's heu
 
 ### What we do instead
 
-Tokens are now stored using [keytar](https://github.com/atom/keytar), which calls the native **Windows Credential Manager** (`wincred`) API directly from C++. No PowerShell is spawned, no inline scripts are executed, no crypto assembly is loaded. Stored credentials appear in **Control Panel → Credential Manager → Windows Credentials** under the service name `teams-api`.
+Tokens are now stored using [keytar](https://github.com/atom/node-keytar), which calls the native **Windows Credential Manager** (`wincred`) API directly from C++. No PowerShell is spawned, no inline scripts are executed, no crypto assembly is loaded. Stored credentials appear in **Control Panel → Credential Manager → Windows Credentials** under the service name `teams-api`.
 
 ### Token storage by platform
 
