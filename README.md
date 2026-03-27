@@ -180,6 +180,9 @@ Manual token usage, debug-session auth, and programmatic Node.js usage are cover
 | **CLI & MCP server**   | Full support   | Full support    |
 | **Programmatic API**   | Full support   | Full support    |
 
+> [!NOTE]
+> **Windows Defender / endpoint security:** The authentication flow uses browser automation and CDP network interception to capture tokens. Some endpoint security tools flag these techniques. See [SECURITY.md](./SECURITY.md) for a full explanation and exclusion guidance.
+
 ## Authentication
 
 Most users do not need to manage tokens manually.
