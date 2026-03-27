@@ -52,16 +52,9 @@ export async function captureTokensFromPage(
   let substrateToken: string | null = null;
   let resolved = false;
 
-  // Intercept only the specific API hosts that carry authentication headers.
-  // Using broad wildcard patterns (e.g. "*teams*") triggers behavioral heuristics
-  // in endpoint security tools; narrowing to known hosts reduces that surface.
   await cdpSession.send("Fetch.enable", {
     patterns: [
-      // Chat Service — carries x-skypetoken and regional bearer tokens
-      { urlPattern: "*ng.msg.teams.microsoft.com*", requestStage: "Request" },
-      // Middle-tier — carries Authorization: Bearer for /api/mt/ endpoints
-      { urlPattern: "*teams.cloud.microsoft/api/mt/*", requestStage: "Request" },
-      // Substrate — carries Authorization: Bearer for search / presence
+      { urlPattern: "*teams*", requestStage: "Request" },
       { urlPattern: "*substrate.office.com*", requestStage: "Request" },
     ],
   });

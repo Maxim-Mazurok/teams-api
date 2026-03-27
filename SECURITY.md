@@ -6,69 +6,30 @@ If you discover a security vulnerability in this project, please open a GitHub i
 
 ---
 
-## Why endpoint security tools may flag this package
+## Windows Defender false positive
 
-`teams-api` uses several techniques during authentication that can match behavioral heuristics used by endpoint security tools (e.g. Windows Defender, CrowdStrike, SentinelOne). This page explains each behavior and why it is safe.
+### What triggers it
 
-### Chrome DevTools Protocol (CDP) network interception
+On Windows, the previous token storage implementation spawned a PowerShell process with an inline `-Command` script that loaded `System.Security.Cryptography.ProtectedData` and called `Protect`/`Unprotect` on binary data:
 
-During the login flow, the package opens a browser and uses the [Chrome DevTools Protocol `Fetch` domain](https://chromedevtools.github.io/devtools-protocol/tot/Fetch/) to intercept outbound requests to specific known Microsoft API hosts and extract authentication headers (`x-skypetoken`, `Authorization: Bearer`).
+```
+powershell -Command "Add-Type -AssemblyName System.Security; ... ProtectedData::Protect(...) ..."
+```
 
-**Why it is safe:** Interception is scoped to a controlled set of Teams/Microsoft API hostnames. Requests are always continued unmodified — no data is altered or redirected. The browser is launched only during the explicit `teams-api auth --login` command.
+This is one of the most reliable behavioral signatures in Windows Defender's heuristics for ransomware and credential-theft malware — spawning PowerShell, loading a crypto assembly, and encrypting arbitrary binary data inline. Defender flags the *behavior*, not the intent.
 
-**Why it may be flagged:** Network request interception via CDP resembles proxy/sniffer tooling.
+### What we do instead
 
-### Browser automation
+Tokens are now stored using [keytar](https://github.com/atom/keytar), which calls the native **Windows Credential Manager** (`wincred`) API directly from C++. No PowerShell is spawned, no inline scripts are executed, no crypto assembly is loaded. Stored credentials appear in **Control Panel → Credential Manager → Windows Credentials** under the service name `teams-api`.
 
-The package launches an Edge or Chrome browser process via [Playwright](https://playwright.dev/) to present the Teams login page.
-
-**Why it is safe:** The browser is launched only when you run `teams-api auth --login` or `teams-api auth --auto-login`. No browser is launched during normal CLI/MCP operation after tokens are cached.
-
-**Why it may be flagged:** Unattended browser spawning is a known indicator for fraud automation and credential theft tools.
-
-### `localStorage` access
-
-After the login page completes, the package reads the browser's `localStorage` to extract MSAL-cached tokens for additional Microsoft API scopes (SharePoint, image upload service).
-
-**Why it is safe:** Access is scoped to the Teams web app origin. Only bearer tokens for Microsoft 365 services are read — no passwords, secrets, or personal data.
-
-**Why it may be flagged:** Direct `localStorage` access via `page.evaluate()` matches patterns used by some in-browser credential theft scripts.
-
-### Token storage
-
-Captured tokens are stored in the operating-system credential store:
+### Token storage by platform
 
 | Platform | Storage |
 |----------|---------|
-| macOS    | Keychain |
-| Windows  | DPAPI-encrypted file at `%APPDATA%\teams-api\` |
-| Linux    | `secret-tool` (libsecret) |
+| macOS    | Keychain (via `security` CLI) |
+| Windows  | Windows Credential Manager (via keytar / wincred) |
+| Linux    | `secret-tool` (libsecret) or `~/.config/teams-api/` with 0o600 perms |
 
-Tokens are short-lived (≤ 24 hours) and scoped only to the Microsoft 365 tenant you authenticated against.
+### Migrating from the old DPAPI storage
 
----
-
-## Windows Defender exclusion guidance
-
-If Windows Defender or Defender for Endpoint quarantines or blocks `teams-api`, you can add exclusions to allow it.
-
-### Option 1 — Exclusion via Windows Security settings
-
-1. Open **Windows Security → Virus & threat protection**.
-2. Under **Virus & threat protection settings**, click **Manage settings**.
-3. Scroll to **Exclusions** and click **Add or remove exclusions**.
-4. Add a **Folder** exclusion for:
-   - `%APPDATA%\teams-api\`
-5. Add a **Process** exclusion for `node.exe` (if you are using a global npm install and Defender is blocking the Node.js process itself).
-
-### Option 2 — Submit as false positive
-
-If you believe the detection is incorrect, submit the file to Microsoft for review:
-
-- [Microsoft Security Intelligence — Submit a file](https://www.microsoft.com/en-us/wdsi/filesubmission)
-
-Reference the open-source repository URL when submitting so the analyst can verify the code.
-
-### Option 3 — Enterprise policy (Defender for Endpoint)
-
-In a managed environment, your IT/security team can add the npm package scope or process path to the allow-list via Intune or Group Policy. Reference this `SECURITY.md` and the repository URL when requesting approval.
+If you used an older version of `teams-api` on Windows, your tokens were stored as DPAPI-encrypted `.dat` files in `%APPDATA%\teams-api\`. These are no longer read. Run `teams-api auth --login` once to re-authenticate and store tokens in the new location. You can safely delete the old `%APPDATA%\teams-api\` directory.
