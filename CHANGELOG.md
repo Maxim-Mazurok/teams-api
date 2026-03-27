@@ -1,3 +1,10 @@
+## [0.19.4](https://github.com/Maxim-Mazurok/teams-api/compare/v0.19.3...v0.19.4) (2026-03-27)
+
+
+### Bug Fixes
+
+* replace PowerShell DPAPI with keytar for Windows credential storage ([#22](https://github.com/Maxim-Mazurok/teams-api/issues/22)) ([59da801](https://github.com/Maxim-Mazurok/teams-api/commit/59da80182263b7d3856e5f7c922358ca7d70066f)), closes [#21](https://github.com/Maxim-Mazurok/teams-api/issues/21)
+
 ## [0.19.3](https://github.com/Maxim-Mazurok/teams-api/compare/v0.19.2...v0.19.3) (2026-03-27)
 
 
