@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/Maxim-Mazurok/teams-api/compare/v1.0.0...v1.0.1) (2026-03-27)
+
+
+### Bug Fixes
+
+* move keytar to optionalDependencies since it is only needed on Windows ([22d171c](https://github.com/Maxim-Mazurok/teams-api/commit/22d171c213b1fdd554239ddb2025e87b4dc669df))
+
 # [1.0.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.19.4...v1.0.0) (2026-03-27)
 
 
