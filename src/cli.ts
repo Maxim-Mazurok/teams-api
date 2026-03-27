@@ -292,8 +292,8 @@ program
   .command("logout")
   .description("Clear cached token from the credential store")
   .requiredOption("--email <email>", "Email whose cached token to clear")
-  .action((flags: { email: string }) => {
-    TeamsClient.clearCachedToken(flags.email);
+  .action(async (flags: { email: string }) => {
+    await TeamsClient.clearCachedToken(flags.email);
     console.log(`Cached token for ${flags.email} cleared.`);
   });
 

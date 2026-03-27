@@ -281,7 +281,7 @@ export class TeamsClient {
   static async create(options: AutoLoginOptions): Promise<TeamsClient> {
     const log = options.verbose ? console.error.bind(console) : () => {};
 
-    const cachedToken = loadToken(options.email);
+    const cachedToken = await loadToken(options.email);
     if (cachedToken) {
       // Re-authenticate if the cached token is missing substrate or bearer
       // tokens — these are required for people/chat search and profile
@@ -295,9 +295,9 @@ export class TeamsClient {
         log(
           "Cached token is missing substrate, bearer, AMS token, or SharePoint host, re-authenticating...",
         );
-        clearToken(options.email);
+        await clearToken(options.email);
         const freshToken = await acquireTokenViaAutoLogin(options);
-        saveToken(options.email, freshToken);
+        await saveToken(options.email, freshToken);
         log("Fresh token saved to Keychain");
 
         const client = new TeamsClient(freshToken);
@@ -315,7 +315,7 @@ export class TeamsClient {
       log("Using cached token from Keychain");
       if (token !== cachedToken) {
         log(`Overriding cached region with explicit value: ${region}`);
-        saveToken(options.email, token);
+        await saveToken(options.email, token);
       }
 
       const client = new TeamsClient(token);
@@ -326,7 +326,7 @@ export class TeamsClient {
 
     log("No cached token found, acquiring via auto-login...");
     const token = await acquireTokenViaAutoLogin(options);
-    saveToken(options.email, token);
+    await saveToken(options.email, token);
     log("Token saved to Keychain");
 
     const client = new TeamsClient(token);
@@ -350,11 +350,11 @@ export class TeamsClient {
 
     // Check for cached token — use email if provided, otherwise try the default account
     const cacheKey = options?.email ?? DEFAULT_ACCOUNT;
-    const cachedToken = loadToken(cacheKey);
+    const cachedToken = await loadToken(cacheKey);
     if (cachedToken) {
       if (!cachedToken.skypeToken || !cachedToken.region) {
         log("Cached token is missing required fields, re-authenticating...");
-        clearToken(cacheKey);
+        await clearToken(cacheKey);
       } else {
         const region = resolveTeamsRegion(options?.region, cachedToken.region);
         const token =
@@ -364,7 +364,7 @@ export class TeamsClient {
         log("Using cached token from credential store");
         if (token !== cachedToken) {
           log(`Overriding cached region with explicit value: ${region}`);
-          saveToken(cacheKey, token);
+          await saveToken(cacheKey, token);
         }
         const client = new TeamsClient(token);
         client.smartLoginOptions = options ?? null;
@@ -381,11 +381,11 @@ export class TeamsClient {
 
     // Always save under the cache key (email or default account)
     const saveKey = email ?? DEFAULT_ACCOUNT;
-    saveToken(saveKey, token);
+    await saveToken(saveKey, token);
     // Also save under default account if we used an email key, so
     // subsequent runs without --email still find the cached token
     if (email && saveKey !== DEFAULT_ACCOUNT) {
-      saveToken(DEFAULT_ACCOUNT, token);
+      await saveToken(DEFAULT_ACCOUNT, token);
     }
     log("Token saved to credential store");
 
@@ -470,8 +470,8 @@ export class TeamsClient {
    *
    * Use this to force a fresh login on the next `create()` or `connect()` call.
    */
-  static clearCachedToken(email: string): void {
-    clearToken(email);
+  static async clearCachedToken(email: string): Promise<void> {
+    await clearToken(email);
   }
 
   /** Get the underlying token (for persistence or debugging). */
@@ -1727,16 +1727,16 @@ export class TeamsClient {
   private async refreshToken(): Promise<void> {
     if (this.smartLoginOptions) {
       const cacheKey = this.smartLoginOptions.email ?? DEFAULT_ACCOUNT;
-      clearToken(cacheKey);
+      await clearToken(cacheKey);
       const freshToken = await acquireTokenViaSmartLogin(
         this.smartLoginOptions,
       );
       const email =
         this.smartLoginOptions.email ?? extractEmailFromToken(freshToken);
       const saveKey = email ?? DEFAULT_ACCOUNT;
-      saveToken(saveKey, freshToken);
+      await saveToken(saveKey, freshToken);
       if (email && saveKey !== DEFAULT_ACCOUNT) {
-        saveToken(DEFAULT_ACCOUNT, freshToken);
+        await saveToken(DEFAULT_ACCOUNT, freshToken);
       }
       this.token = freshToken;
       this.cachedDisplayName = null;
@@ -1750,9 +1750,9 @@ export class TeamsClient {
       );
     }
 
-    clearToken(this.autoLoginOptions.email);
+    await clearToken(this.autoLoginOptions.email);
     const freshToken = await acquireTokenViaAutoLogin(this.autoLoginOptions);
-    saveToken(this.autoLoginOptions.email, freshToken);
+    await saveToken(this.autoLoginOptions.email, freshToken);
     this.token = freshToken;
     this.cachedDisplayName = null;
     this.cachedUserPrincipalName = null;

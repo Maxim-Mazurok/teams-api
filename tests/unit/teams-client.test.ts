@@ -1850,7 +1850,7 @@ describe("TeamsClient.create", () => {
       amsToken: "ams-token",
       sharePointHost: "company-my.sharepoint.com",
     };
-    mockedTokenStore.loadToken.mockReturnValue(cachedToken);
+    mockedTokenStore.loadToken.mockResolvedValue(cachedToken);
 
     const client = await TeamsClient.create({
       email: "user@company.com",
@@ -1870,7 +1870,7 @@ describe("TeamsClient.create", () => {
       amsToken: "ams-token",
       sharePointHost: "company-my.sharepoint.com",
     };
-    mockedTokenStore.loadToken.mockReturnValue(cachedToken);
+    mockedTokenStore.loadToken.mockResolvedValue(cachedToken);
 
     const client = await TeamsClient.create({
       email: "user@company.com",
@@ -1890,7 +1890,7 @@ describe("TeamsClient.create", () => {
 
   it("should auto-login and save token when no cache exists", async () => {
     const freshToken = { skypeToken: "fresh-token", region: "apac" };
-    mockedTokenStore.loadToken.mockReturnValue(null);
+    mockedTokenStore.loadToken.mockResolvedValue(null);
     mockedAuth.acquireTokenViaAutoLogin.mockResolvedValue(freshToken);
 
     const client = await TeamsClient.create({
@@ -1916,7 +1916,7 @@ describe("TeamsClient.create", () => {
       bearerToken: "bearer-token",
       amsToken: "ams-token",
     };
-    mockedTokenStore.loadToken.mockReturnValue(incompleteToken);
+    mockedTokenStore.loadToken.mockResolvedValue(incompleteToken);
     mockedAuth.acquireTokenViaAutoLogin.mockResolvedValue(freshToken);
 
     const client = await TeamsClient.create({
@@ -1949,7 +1949,7 @@ describe("TeamsClient.create", () => {
       bearerToken: "bearer-token",
       amsToken: "ams-token",
     };
-    mockedTokenStore.loadToken.mockReturnValue(incompleteToken);
+    mockedTokenStore.loadToken.mockResolvedValue(incompleteToken);
     mockedAuth.acquireTokenViaAutoLogin.mockResolvedValue(freshToken);
 
     const client = await TeamsClient.create({
@@ -1965,8 +1965,8 @@ describe("TeamsClient.create", () => {
 });
 
 describe("TeamsClient.clearCachedToken", () => {
-  it("should delegate to token store", () => {
-    TeamsClient.clearCachedToken("user@company.com");
+  it("should delegate to token store", async () => {
+    await TeamsClient.clearCachedToken("user@company.com");
 
     expect(mockedTokenStore.clearToken).toHaveBeenCalledWith(
       "user@company.com",
@@ -1984,7 +1984,7 @@ describe("withTokenRefresh (automatic 401 retry)", () => {
       amsToken: "ams-token",
     };
     const refreshedToken = { skypeToken: "new-token", region: "apac" };
-    mockedTokenStore.loadToken.mockReturnValue(initialToken);
+    mockedTokenStore.loadToken.mockResolvedValue(initialToken);
 
     const client = await TeamsClient.create({
       email: "user@company.com",
@@ -2014,7 +2014,7 @@ describe("withTokenRefresh (automatic 401 retry)", () => {
   });
 
   it("should not retry on non-auth errors", async () => {
-    mockedTokenStore.loadToken.mockReturnValue({
+    mockedTokenStore.loadToken.mockResolvedValue({
       skypeToken: "token",
       region: "apac",
       substrateToken: "substrate-token",
@@ -2060,7 +2060,7 @@ describe("withTokenRefresh (automatic 401 retry)", () => {
       bearerToken: "bearer-token",
     };
     const refreshedToken = { skypeToken: "new-token", region: "apac" };
-    mockedTokenStore.loadToken.mockReturnValue(initialToken);
+    mockedTokenStore.loadToken.mockResolvedValue(initialToken);
 
     const client = await TeamsClient.create({
       email: "user@company.com",
@@ -2402,7 +2402,7 @@ describe("reaction emoji resolution", () => {
   };
 
   beforeEach(() => {
-    mockedTokenStore.loadToken.mockReturnValue(cachedToken);
+    mockedTokenStore.loadToken.mockResolvedValue(cachedToken);
     mockedApi.addReaction.mockResolvedValue({
       messageId: "123",
       reactionKey: "1f40e_horse",

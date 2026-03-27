@@ -25,9 +25,9 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 
 export interface CredentialStore {
-  save(account: string, data: string): void;
-  load(account: string): string | null;
-  clear(account: string): void;
+  save(account: string, data: string): Promise<void>;
+  load(account: string): Promise<string | null>;
+  clear(account: string): Promise<void>;
 }
 
 // ── macOS: System Keychain ────────────────────────────────────────────
@@ -35,7 +35,7 @@ export interface CredentialStore {
 const CREDENTIAL_SERVICE = "teams-api";
 
 class KeychainStore implements CredentialStore {
-  save(account: string, data: string): void {
+  async save(account: string, data: string): Promise<void> {
     execFileSync("security", [
       "add-generic-password",
       "-a",
@@ -48,7 +48,7 @@ class KeychainStore implements CredentialStore {
     ]);
   }
 
-  load(account: string): string | null {
+  async load(account: string): Promise<string | null> {
     try {
       return execFileSync(
         "security",
@@ -60,7 +60,7 @@ class KeychainStore implements CredentialStore {
     }
   }
 
-  clear(account: string): void {
+  async clear(account: string): Promise<void> {
     try {
       execFileSync("security", [
         "delete-generic-password",
@@ -84,6 +84,9 @@ class KeychainStore implements CredentialStore {
 // Windows Defender. keytar calls the native wincred API directly from C++,
 // with no PowerShell or inline scripting involved.
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const keytar = require("keytar") as typeof import("keytar");
+
 function accountKey(account: string): string {
   return createHash("sha256").update(account).digest("hex");
 }
@@ -93,45 +96,17 @@ function accountToFileName(account: string): string {
 }
 
 class WinCredStore implements CredentialStore {
-  save(account: string, data: string): void {
-    // keytar is async; run it in a child Node process so the sync interface
-    // is preserved without requiring top-level async.
-    execFileSync(
-      process.execPath,
-      [
-        "-e",
-        `const k = require("keytar"); k.setPassword(${JSON.stringify(CREDENTIAL_SERVICE)}, ${JSON.stringify(accountKey(account))}, ${JSON.stringify(data)}).catch(e => { process.stderr.write(e.message); process.exit(1); });`,
-      ],
-      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-    );
+  async save(account: string, data: string): Promise<void> {
+    await keytar.setPassword(CREDENTIAL_SERVICE, accountKey(account), data);
   }
 
-  load(account: string): string | null {
-    try {
-      const result = execFileSync(
-        process.execPath,
-        [
-          "-e",
-          `const k = require("keytar"); k.getPassword(${JSON.stringify(CREDENTIAL_SERVICE)}, ${JSON.stringify(accountKey(account))}).then(v => { if (v !== null) process.stdout.write(v); }).catch(e => { process.stderr.write(e.message); process.exit(1); });`,
-        ],
-        { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-      ).trim();
-      return result === "" ? null : result;
-    } catch {
-      return null;
-    }
+  async load(account: string): Promise<string | null> {
+    return keytar.getPassword(CREDENTIAL_SERVICE, accountKey(account));
   }
 
-  clear(account: string): void {
+  async clear(account: string): Promise<void> {
     try {
-      execFileSync(
-        process.execPath,
-        [
-          "-e",
-          `const k = require("keytar"); k.deletePassword(${JSON.stringify(CREDENTIAL_SERVICE)}, ${JSON.stringify(accountKey(account))}).catch(e => { process.stderr.write(e.message); process.exit(1); });`,
-        ],
-        { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-      );
+      await keytar.deletePassword(CREDENTIAL_SERVICE, accountKey(account));
     } catch {
       // Entry may not exist
     }
@@ -174,7 +149,7 @@ class LinuxStore implements CredentialStore {
     }
   }
 
-  save(account: string, data: string): void {
+  async save(account: string, data: string): Promise<void> {
     if (this.useSecretTool) {
       try {
         execFileSync(
@@ -204,7 +179,7 @@ class LinuxStore implements CredentialStore {
     });
   }
 
-  load(account: string): string | null {
+  async load(account: string): Promise<string | null> {
     if (this.useSecretTool) {
       try {
         return execFileSync(
@@ -230,7 +205,7 @@ class LinuxStore implements CredentialStore {
     }
   }
 
-  clear(account: string): void {
+  async clear(account: string): Promise<void> {
     if (this.useSecretTool) {
       try {
         execFileSync("secret-tool", [

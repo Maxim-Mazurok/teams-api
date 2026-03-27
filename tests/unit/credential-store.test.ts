@@ -66,7 +66,7 @@ describe.runIf(process.platform === "win32")(
       try {
         const { createCredentialStore } =
           await import("../../src/credential-store.js");
-        createCredentialStore().clear(testAccount);
+        await createCredentialStore().clear(testAccount);
       } catch {
         // ignore
       }
@@ -77,8 +77,8 @@ describe.runIf(process.platform === "win32")(
         await import("../../src/credential-store.js");
       const store = createCredentialStore();
 
-      store.save(testAccount, "test-secret-value");
-      const loaded = store.load(testAccount);
+      await store.save(testAccount, "test-secret-value");
+      const loaded = await store.load(testAccount);
 
       expect(loaded).toBe("test-secret-value");
     });
@@ -88,7 +88,7 @@ describe.runIf(process.platform === "win32")(
         await import("../../src/credential-store.js");
       const store = createCredentialStore();
 
-      const loaded = store.load("teams-api-nonexistent-account-xyz");
+      const loaded = await store.load("teams-api-nonexistent-account-xyz");
 
       expect(loaded).toBeNull();
     });
@@ -98,9 +98,9 @@ describe.runIf(process.platform === "win32")(
         await import("../../src/credential-store.js");
       const store = createCredentialStore();
 
-      store.save(testAccount, "to-be-deleted");
-      store.clear(testAccount);
-      const loaded = store.load(testAccount);
+      await store.save(testAccount, "to-be-deleted");
+      await store.clear(testAccount);
+      const loaded = await store.load(testAccount);
 
       expect(loaded).toBeNull();
     });
@@ -110,9 +110,9 @@ describe.runIf(process.platform === "win32")(
         await import("../../src/credential-store.js");
       const store = createCredentialStore();
 
-      store.save(testAccount, "first-value");
-      store.save(testAccount, "second-value");
-      const loaded = store.load(testAccount);
+      await store.save(testAccount, "first-value");
+      await store.save(testAccount, "second-value");
+      const loaded = await store.load(testAccount);
 
       expect(loaded).toBe("second-value");
     });
@@ -123,8 +123,8 @@ describe.runIf(process.platform === "win32")(
       const store = createCredentialStore();
 
       const specialData = 'quotes"and\'backslash\\newline\ntab\t${}`template`';
-      store.save(testAccount, specialData);
-      const loaded = store.load(testAccount);
+      await store.save(testAccount, specialData);
+      const loaded = await store.load(testAccount);
 
       expect(loaded).toBe(specialData);
     });

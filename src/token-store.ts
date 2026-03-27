@@ -25,7 +25,7 @@ interface StoredToken {
 
 const store = createCredentialStore();
 
-export function saveToken(email: string, token: TeamsToken): void {
+export async function saveToken(email: string, token: TeamsToken): Promise<void> {
   const storedToken: StoredToken = {
     skypeToken: token.skypeToken,
     region: token.region,
@@ -38,11 +38,11 @@ export function saveToken(email: string, token: TeamsToken): void {
   };
   const encoded = Buffer.from(JSON.stringify(storedToken)).toString("base64");
 
-  store.save(email, encoded);
+  await store.save(email, encoded);
 }
 
-export function loadToken(email: string): TeamsToken | null {
-  const encoded = store.load(email);
+export async function loadToken(email: string): Promise<TeamsToken | null> {
+  const encoded = await store.load(email);
   if (!encoded) {
     return null;
   }
@@ -53,12 +53,12 @@ export function loadToken(email: string): TeamsToken | null {
       Buffer.from(encoded, "base64").toString("utf-8"),
     ) as StoredToken;
   } catch {
-    clearToken(email);
+    await clearToken(email);
     return null;
   }
 
   if (Date.now() - storedToken.acquiredAt > TOKEN_LIFETIME) {
-    clearToken(email);
+    await clearToken(email);
     return null;
   }
 
@@ -73,6 +73,6 @@ export function loadToken(email: string): TeamsToken | null {
   };
 }
 
-export function clearToken(email: string): void {
-  store.clear(email);
+export async function clearToken(email: string): Promise<void> {
+  await store.clear(email);
 }

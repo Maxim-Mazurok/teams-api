@@ -56,8 +56,8 @@ function makeStoredTokenBase64(
 }
 
 describe("saveToken", () => {
-  it("should call credential store save with correct arguments", () => {
-    saveToken(testEmail, testToken);
+  it("should call credential store save with correct arguments", async () => {
+    await saveToken(testEmail, testToken);
 
     expect(mockStore.save).toHaveBeenCalledTimes(1);
     expect(mockStore.save).toHaveBeenCalledWith(
@@ -66,8 +66,8 @@ describe("saveToken", () => {
     );
   });
 
-  it("should store base64-encoded JSON with acquiredAt timestamp", () => {
-    saveToken(testEmail, testToken);
+  it("should store base64-encoded JSON with acquiredAt timestamp", async () => {
+    await saveToken(testEmail, testToken);
 
     const encodedValue = mockStore.save.mock.calls[0][1] as string;
     const decoded = JSON.parse(
@@ -85,8 +85,8 @@ describe("saveToken", () => {
     );
   });
 
-  it("should persist optional bearer and substrate tokens", () => {
-    saveToken(testEmail, testTokenWithAuxiliaryTokens);
+  it("should persist optional bearer and substrate tokens", async () => {
+    await saveToken(testEmail, testTokenWithAuxiliaryTokens);
 
     const encodedValue = mockStore.save.mock.calls[0][1] as string;
     const decoded = JSON.parse(
@@ -105,17 +105,17 @@ describe("saveToken", () => {
 });
 
 describe("loadToken", () => {
-  it("should return token when cached and not expired", () => {
+  it("should return token when cached and not expired", async () => {
     const encoded = makeStoredTokenBase64();
-    mockStore.load.mockReturnValueOnce(encoded);
+    mockStore.load.mockResolvedValueOnce(encoded);
 
-    const result = loadToken(testEmail);
+    const result = await loadToken(testEmail);
 
     expect(result).toEqual(testToken);
     expect(mockStore.load).toHaveBeenCalledWith(testEmail);
   });
 
-  it("should restore optional bearer and substrate tokens", () => {
+  it("should restore optional bearer and substrate tokens", async () => {
     const encoded = Buffer.from(
       JSON.stringify({
         skypeToken: testTokenWithAuxiliaryTokens.skypeToken,
@@ -125,50 +125,50 @@ describe("loadToken", () => {
         acquiredAt: new Date("2026-03-17T12:00:00.000Z").getTime(),
       }),
     ).toString("base64");
-    mockStore.load.mockReturnValueOnce(encoded);
+    mockStore.load.mockResolvedValueOnce(encoded);
 
-    const result = loadToken(testEmail);
+    const result = await loadToken(testEmail);
 
     expect(result).toEqual(testTokenWithAuxiliaryTokens);
   });
 
-  it("should return null when no token exists in credential store", () => {
-    mockStore.load.mockReturnValueOnce(null);
+  it("should return null when no token exists in credential store", async () => {
+    mockStore.load.mockResolvedValueOnce(null);
 
-    const result = loadToken(testEmail);
+    const result = await loadToken(testEmail);
 
     expect(result).toBeNull();
   });
 
-  it("should return null and clear token when expired (older than 23 hours)", () => {
+  it("should return null and clear token when expired (older than 23 hours)", async () => {
     const twentyFourHoursAgo =
       new Date("2026-03-17T12:00:00.000Z").getTime() - 24 * 60 * 60 * 1_000;
     const encoded = makeStoredTokenBase64({ acquiredAt: twentyFourHoursAgo });
-    mockStore.load.mockReturnValueOnce(encoded);
+    mockStore.load.mockResolvedValueOnce(encoded);
 
-    const result = loadToken(testEmail);
+    const result = await loadToken(testEmail);
 
     expect(result).toBeNull();
     expect(mockStore.clear).toHaveBeenCalledWith(testEmail);
   });
 
-  it("should return token when acquired exactly 22 hours ago", () => {
+  it("should return token when acquired exactly 22 hours ago", async () => {
     const twentyTwoHoursAgo =
       new Date("2026-03-17T12:00:00.000Z").getTime() - 22 * 60 * 60 * 1_000;
     const encoded = makeStoredTokenBase64({
       acquiredAt: twentyTwoHoursAgo,
     });
-    mockStore.load.mockReturnValueOnce(encoded);
+    mockStore.load.mockResolvedValueOnce(encoded);
 
-    const result = loadToken(testEmail);
+    const result = await loadToken(testEmail);
 
     expect(result).toEqual(testToken);
   });
 
-  it("should return null and clear token when data is corrupted", () => {
-    mockStore.load.mockReturnValueOnce("not-valid-base64!!!");
+  it("should return null and clear token when data is corrupted", async () => {
+    mockStore.load.mockResolvedValueOnce("not-valid-base64!!!");
 
-    const result = loadToken(testEmail);
+    const result = await loadToken(testEmail);
 
     expect(result).toBeNull();
     expect(mockStore.clear).toHaveBeenCalledWith(testEmail);
@@ -176,17 +176,17 @@ describe("loadToken", () => {
 });
 
 describe("clearToken", () => {
-  it("should call credential store clear", () => {
-    clearToken(testEmail);
+  it("should call credential store clear", async () => {
+    await clearToken(testEmail);
 
     expect(mockStore.clear).toHaveBeenCalledWith(testEmail);
   });
 
-  it("should not throw when token does not exist in credential store", () => {
+  it("should not throw when token does not exist in credential store", async () => {
     mockStore.clear.mockImplementation(() => {
       // no-op, simulating non-existent entry
     });
 
-    expect(() => clearToken(testEmail)).not.toThrow();
+    await expect(clearToken(testEmail)).resolves.not.toThrow();
   });
 });
