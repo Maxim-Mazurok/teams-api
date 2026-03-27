@@ -1,3 +1,10 @@
+## [0.19.2](https://github.com/Maxim-Mazurok/teams-api/compare/v0.19.1...v0.19.2) (2026-03-27)
+
+
+### Bug Fixes
+
+* log skype token capture only once during CDP interception ([828aee5](https://github.com/Maxim-Mazurok/teams-api/commit/828aee5b850871c7066e3061c9e22f74ccb7830e))
+
 ## [0.19.1](https://github.com/Maxim-Mazurok/teams-api/compare/v0.19.0...v0.19.1) (2026-03-27)
 
 
