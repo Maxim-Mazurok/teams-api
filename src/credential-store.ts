@@ -84,8 +84,10 @@ class KeychainStore implements CredentialStore {
 // Windows Defender. keytar calls the native wincred API directly from C++,
 // with no PowerShell or inline scripting involved.
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const keytar = require("keytar") as typeof import("keytar");
+function getKeytar(): typeof import("keytar") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("keytar") as typeof import("keytar");
+}
 
 function accountKey(account: string): string {
   return createHash("sha256").update(account).digest("hex");
@@ -97,16 +99,16 @@ function accountToFileName(account: string): string {
 
 class WinCredStore implements CredentialStore {
   async save(account: string, data: string): Promise<void> {
-    await keytar.setPassword(CREDENTIAL_SERVICE, accountKey(account), data);
+    await getKeytar().setPassword(CREDENTIAL_SERVICE, accountKey(account), data);
   }
 
   async load(account: string): Promise<string | null> {
-    return keytar.getPassword(CREDENTIAL_SERVICE, accountKey(account));
+    return getKeytar().getPassword(CREDENTIAL_SERVICE, accountKey(account));
   }
 
   async clear(account: string): Promise<void> {
     try {
-      await keytar.deletePassword(CREDENTIAL_SERVICE, accountKey(account));
+      await getKeytar().deletePassword(CREDENTIAL_SERVICE, accountKey(account));
     } catch {
       // Entry may not exist
     }
