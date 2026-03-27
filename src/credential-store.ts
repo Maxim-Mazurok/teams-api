@@ -85,8 +85,15 @@ class KeychainStore implements CredentialStore {
 // with no PowerShell or inline scripting involved.
 
 function getKeytar(): typeof import("keytar") {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("keytar") as typeof import("keytar");
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("keytar") as typeof import("keytar");
+  } catch {
+    throw new Error(
+      "keytar is required on Windows for credential storage. " +
+        "Install it with: npm install keytar",
+    );
+  }
 }
 
 function accountKey(account: string): string {
