@@ -1,3 +1,20 @@
+# [1.0.0](https://github.com/Maxim-Mazurok/teams-api/compare/v0.19.4...v1.0.0) (2026-03-27)
+
+
+* refactor!: make credential store async and call keytar directly ([7dfa290](https://github.com/Maxim-Mazurok/teams-api/commit/7dfa290574b7101f30f545acf0c0874fb0f7fe61))
+
+
+### Bug Fixes
+
+* lazy-load keytar to avoid libsecret dependency on Linux CI ([e2282ff](https://github.com/Maxim-Mazurok/teams-api/commit/e2282ffa626ef8b763c9af446a0b55d219b5cd4a))
+
+
+### BREAKING CHANGES
+
+* saveToken, loadToken, and clearToken now return
+promises. Callers must await these functions. TeamsClient.clearCachedToken
+is now async.
+
 ## [0.19.4](https://github.com/Maxim-Mazurok/teams-api/compare/v0.19.3...v0.19.4) (2026-03-27)
 
 
