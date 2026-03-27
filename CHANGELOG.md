@@ -1,3 +1,10 @@
+## [0.19.3](https://github.com/Maxim-Mazurok/teams-api/compare/v0.19.2...v0.19.3) (2026-03-27)
+
+
+### Bug Fixes
+
+* resolve display names for untitled group chats ([#24](https://github.com/Maxim-Mazurok/teams-api/issues/24)) ([b24045b](https://github.com/Maxim-Mazurok/teams-api/commit/b24045bc4fa260b00eadcf28fff1d17214cc6d2a))
+
 ## [0.19.2](https://github.com/Maxim-Mazurok/teams-api/compare/v0.19.1...v0.19.2) (2026-03-27)
 
 
