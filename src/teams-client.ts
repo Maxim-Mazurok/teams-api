@@ -514,19 +514,30 @@ export class TeamsClient {
           )
         : conversations;
 
-      // Resolve display names for untitled 1:1 chats.
-      await this.resolveOneOnOneDisplayNames(filtered);
+      // Resolve display names for untitled chats (1:1 and group).
+      await this.resolveUntitledDisplayNames(filtered);
 
       return filtered;
     });
   }
 
   /**
-   * Enrich untitled 1:1 conversations with the other member's display name.
+   * Enrich untitled conversations with display names derived from members.
+   *
+   * - 1:1 chats → other member's display name (e.g. "Alice Smith")
+   * - Group chats → comma-separated member names excluding the current user
+   *   (e.g. "Alice, Bob"), matching the Teams UI behavior
    */
-  private async resolveOneOnOneDisplayNames(
+  private async resolveUntitledDisplayNames(
     conversations: Conversation[],
   ): Promise<void> {
+    const untitledGroupChats = conversations.filter(
+      (conversation) =>
+        !conversation.topic &&
+        conversation.id.includes("@thread.v2") &&
+        !conversation.id.startsWith("48:"),
+    );
+
     const untitledOneOnOnes = conversations.filter(
       (conversation) =>
         !conversation.topic &&
@@ -534,11 +545,36 @@ export class TeamsClient {
         !conversation.id.startsWith("48:"),
     );
 
-    if (untitledOneOnOnes.length === 0) return;
+    if (untitledOneOnOnes.length === 0 && untitledGroupChats.length === 0) {
+      return;
+    }
+
     const currentUserIdentity = await this.resolveCurrentUserIdentity({
       allowSelfChatFallback: false,
     });
-    const currentUserDisplayName = currentUserIdentity.displayName.toLowerCase();
+    const currentUserDisplayName =
+      currentUserIdentity.displayName.toLowerCase();
+
+    // Resolve untitled group chats by fetching members and joining names.
+    for (const chat of untitledGroupChats) {
+      try {
+        const members = await this.getMembers(chat.id);
+        const otherMemberNames = members
+          .filter(
+            (member) =>
+              member.displayName &&
+              member.displayName.toLowerCase() !== currentUserDisplayName,
+          )
+          .map((member) => member.displayName);
+        if (otherMemberNames.length > 0) {
+          chat.topic = otherMemberNames.join(", ");
+        }
+      } catch {
+        // Member fetch failed — leave topic empty.
+      }
+    }
+
+    if (untitledOneOnOnes.length === 0) return;
 
     for (const chat of untitledOneOnOnes) {
       try {

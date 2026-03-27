@@ -245,6 +245,63 @@ describe("listConversations", () => {
     expect(conversations[0].topic).toBe("Bob Jones");
   });
 
+  it("should resolve untitled group chats using member names", async () => {
+    mockedApi.fetchConversations.mockResolvedValueOnce([
+      makeConversation({
+        id: "19:abc123def456@thread.v2",
+        topic: "",
+        threadType: "chat",
+      }),
+    ]);
+    mockedApi.fetchUserProperties.mockResolvedValueOnce({
+      userDetails: JSON.stringify({ name: "Alice Smith" }),
+    });
+    mockedApi.fetchMembers.mockResolvedValueOnce([
+      {
+        id: "8:orgid:self",
+        displayName: "Alice Smith",
+        role: "Admin",
+        memberType: "person",
+      },
+      {
+        id: "8:orgid:other1",
+        displayName: "Bob Jones",
+        role: "Admin",
+        memberType: "person",
+      },
+      {
+        id: "8:orgid:other2",
+        displayName: "Charlie Brown",
+        role: "Admin",
+        memberType: "person",
+      },
+    ]);
+
+    const client = TeamsClient.fromToken("token");
+    const conversations = await client.listConversations();
+
+    expect(conversations[0].topic).toBe("Bob Jones, Charlie Brown");
+  });
+
+  it("should leave untitled group chat topic empty when member fetch fails", async () => {
+    mockedApi.fetchConversations.mockResolvedValueOnce([
+      makeConversation({
+        id: "19:abc123def456@thread.v2",
+        topic: "",
+        threadType: "chat",
+      }),
+    ]);
+    mockedApi.fetchUserProperties.mockResolvedValueOnce({
+      userDetails: JSON.stringify({ name: "Alice Smith" }),
+    });
+    mockedApi.fetchMembers.mockRejectedValueOnce(new Error("Network error"));
+
+    const client = TeamsClient.fromToken("token");
+    const conversations = await client.listConversations();
+
+    expect(conversations[0].topic).toBe("");
+  });
+
   it("should include system streams when excludeSystemStreams is false", async () => {
     mockedApi.fetchConversations.mockResolvedValueOnce([
       makeConversation({ threadType: "chat" }),
