@@ -88,6 +88,10 @@ function accountKey(account: string): string {
   return createHash("sha256").update(account).digest("hex");
 }
 
+function accountToFileName(account: string): string {
+  return createHash("sha256").update(account).digest("hex") + ".dat";
+}
+
 class WinCredStore implements CredentialStore {
   save(account: string, data: string): void {
     // keytar is async; run it in a child Node process so the sync interface
@@ -95,10 +99,8 @@ class WinCredStore implements CredentialStore {
     execFileSync(
       process.execPath,
       [
-        "--input-type=module",
-        "--eval",
-        `import keytar from 'keytar';
-         await keytar.setPassword(${JSON.stringify(CREDENTIAL_SERVICE)}, ${JSON.stringify(accountKey(account))}, ${JSON.stringify(data)});`,
+        "-e",
+        `const k = require("keytar"); k.setPassword(${JSON.stringify(CREDENTIAL_SERVICE)}, ${JSON.stringify(accountKey(account))}, ${JSON.stringify(data)}).catch(e => { process.stderr.write(e.message); process.exit(1); });`,
       ],
       { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     );
@@ -109,11 +111,8 @@ class WinCredStore implements CredentialStore {
       const result = execFileSync(
         process.execPath,
         [
-          "--input-type=module",
-          "--eval",
-          `import keytar from 'keytar';
-           const v = await keytar.getPassword(${JSON.stringify(CREDENTIAL_SERVICE)}, ${JSON.stringify(accountKey(account))});
-           if (v !== null) process.stdout.write(v);`,
+          "-e",
+          `const k = require("keytar"); k.getPassword(${JSON.stringify(CREDENTIAL_SERVICE)}, ${JSON.stringify(accountKey(account))}).then(v => { if (v !== null) process.stdout.write(v); }).catch(e => { process.stderr.write(e.message); process.exit(1); });`,
         ],
         { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
       ).trim();
@@ -128,10 +127,8 @@ class WinCredStore implements CredentialStore {
       execFileSync(
         process.execPath,
         [
-          "--input-type=module",
-          "--eval",
-          `import keytar from 'keytar';
-           await keytar.deletePassword(${JSON.stringify(CREDENTIAL_SERVICE)}, ${JSON.stringify(accountKey(account))});`,
+          "-e",
+          `const k = require("keytar"); k.deletePassword(${JSON.stringify(CREDENTIAL_SERVICE)}, ${JSON.stringify(accountKey(account))}).catch(e => { process.stderr.write(e.message); process.exit(1); });`,
         ],
         { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
       );

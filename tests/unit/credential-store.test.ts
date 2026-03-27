@@ -2,8 +2,7 @@
  * Unit tests for the credential store factory (src/credential-store.ts).
  *
  * Tests the factory function and verifies platform selection logic.
- * Individual store implementations are tested via the token-store tests
- * and integration tests on each platform.
+ * On Windows, also runs live tests against Windows Credential Manager.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -57,3 +56,77 @@ describe("createCredentialStore", () => {
     expect(store.clear).toBeTypeOf("function");
   });
 });
+
+describe.runIf(process.platform === "win32")(
+  "WinCredStore (live Windows Credential Manager)",
+  () => {
+    const testAccount = "teams-api-unit-test-account";
+
+    afterEach(async () => {
+      try {
+        const { createCredentialStore } =
+          await import("../../src/credential-store.js");
+        createCredentialStore().clear(testAccount);
+      } catch {
+        // ignore
+      }
+    });
+
+    it("should save and load a credential", async () => {
+      const { createCredentialStore } =
+        await import("../../src/credential-store.js");
+      const store = createCredentialStore();
+
+      store.save(testAccount, "test-secret-value");
+      const loaded = store.load(testAccount);
+
+      expect(loaded).toBe("test-secret-value");
+    });
+
+    it("should return null for a non-existent credential", async () => {
+      const { createCredentialStore } =
+        await import("../../src/credential-store.js");
+      const store = createCredentialStore();
+
+      const loaded = store.load("teams-api-nonexistent-account-xyz");
+
+      expect(loaded).toBeNull();
+    });
+
+    it("should clear a credential", async () => {
+      const { createCredentialStore } =
+        await import("../../src/credential-store.js");
+      const store = createCredentialStore();
+
+      store.save(testAccount, "to-be-deleted");
+      store.clear(testAccount);
+      const loaded = store.load(testAccount);
+
+      expect(loaded).toBeNull();
+    });
+
+    it("should overwrite an existing credential", async () => {
+      const { createCredentialStore } =
+        await import("../../src/credential-store.js");
+      const store = createCredentialStore();
+
+      store.save(testAccount, "first-value");
+      store.save(testAccount, "second-value");
+      const loaded = store.load(testAccount);
+
+      expect(loaded).toBe("second-value");
+    });
+
+    it("should handle special characters in data", async () => {
+      const { createCredentialStore } =
+        await import("../../src/credential-store.js");
+      const store = createCredentialStore();
+
+      const specialData = 'quotes"and\'backslash\\newline\ntab\t${}`template`';
+      store.save(testAccount, specialData);
+      const loaded = store.load(testAccount);
+
+      expect(loaded).toBe(specialData);
+    });
+  },
+);

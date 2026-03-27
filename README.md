@@ -181,7 +181,7 @@ Manual token usage, debug-session auth, and programmatic Node.js usage are cover
 | **Programmatic API**   | Full support   | Full support    |
 
 > [!NOTE]
-> **Windows Defender false positive:** Older versions of this package used inline PowerShell to call the Windows DPAPI — a pattern that Windows Defender flags as ransomware-like behavior. This has been replaced with native Windows Credential Manager storage via [keytar](https://github.com/atom/keytar). If you hit issues on an older version, upgrade and re-run `teams-api auth --login`. See [SECURITY.md](./SECURITY.md) for details.
+> **Windows Defender false positive:** Older versions of this package used inline PowerShell to call the Windows DPAPI — a pattern that Windows Defender flags as ransomware-like behavior. This has been replaced with native Windows Credential Manager storage via [keytar](https://github.com/atom/node-keytar). If you hit issues on an older version, upgrade and re-run `teams-api auth --login`. See [SECURITY.md](./SECURITY.md) for details.
 
 ## Authentication
 
