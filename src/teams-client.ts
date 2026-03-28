@@ -1024,6 +1024,7 @@ export class TeamsClient {
    *
    * Follows pagination links to fetch message history.
    * Use `limit` to cap the total number of messages returned.
+   * Use `since` to only return messages created after a given timestamp.
    * Use `maxPages` and `pageSize` to fine-tune pagination behaviour.
    */
   async getMessages(
@@ -1032,6 +1033,7 @@ export class TeamsClient {
   ): Promise<Message[]> {
     return this.withTokenRefresh(async () => {
       const limit = options?.limit;
+      const since = options?.since;
       const maxPages = options?.maxPages ?? 100;
       const pageSize = options?.pageSize ?? 200;
       const allMessages: Message[] = [];
@@ -1044,11 +1046,28 @@ export class TeamsClient {
           pageSize,
           backwardLink,
         );
-        allMessages.push(...result.messages);
+
+        let pageMessages = result.messages;
+        let reachedSinceCutoff = false;
+
+        if (since !== undefined) {
+          pageMessages = pageMessages.filter(
+            (message) => message.originalArrivalTime > since,
+          );
+          // The API returns messages newest-first. If any message on this
+          // page was at or before the cutoff, all subsequent pages will be
+          // older — stop paginating.
+          if (pageMessages.length < result.messages.length) {
+            reachedSinceCutoff = true;
+          }
+        }
+
+        allMessages.push(...pageMessages);
 
         options?.onProgress?.(allMessages.length);
 
         if (limit !== undefined && allMessages.length >= limit) break;
+        if (reachedSinceCutoff) break;
         if (!result.backwardLink) break;
         backwardLink = result.backwardLink;
       }

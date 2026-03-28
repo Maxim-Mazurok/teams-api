@@ -446,6 +446,7 @@ describe("get-messages", () => {
 
     expect(client.getMessages).toHaveBeenCalledWith("19:direct@thread.v2", {
       limit: undefined,
+      since: undefined,
       onProgress: undefined,
     });
     expect(result).toEqual(messages);
@@ -613,6 +614,7 @@ describe("get-messages", () => {
 
     expect(client.getMessages).toHaveBeenCalledWith("19:test@thread.v2", {
       limit: 50,
+      since: undefined,
       onProgress: undefined,
     });
   });
@@ -630,7 +632,25 @@ describe("get-messages", () => {
 
     expect(client.getMessages).toHaveBeenCalledWith("19:test@thread.v2", {
       limit: undefined,
+      since: undefined,
       onProgress,
+    });
+  });
+
+  it("should pass since option to client", async () => {
+    const client = createMockClient({
+      getMessages: vi.fn().mockResolvedValue([]),
+    });
+
+    await action.execute(client, {
+      conversationId: "19:test@thread.v2",
+      since: "2026-03-26T00:00:00Z",
+    });
+
+    expect(client.getMessages).toHaveBeenCalledWith("19:test@thread.v2", {
+      limit: undefined,
+      since: "2026-03-26T00:00:00Z",
+      onProgress: undefined,
     });
   });
 
