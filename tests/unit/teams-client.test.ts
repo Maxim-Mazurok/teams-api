@@ -15,6 +15,8 @@ import * as attachments from "../../src/api/attachments.js";
 import { ApiAuthError } from "../../src/api/common.js";
 import * as tokenStore from "../../src/token-store.js";
 import * as autoLogin from "../../src/auth/auto-login.js";
+import * as interactiveLogin from "../../src/auth/interactive.js";
+import * as debugSession from "../../src/auth/debug-session.js";
 import * as emojiMap from "../../src/emoji-map.js";
 import type {
   Conversation,
@@ -60,6 +62,8 @@ vi.mock("../../src/api/substrate.js", async (importOriginal) => {
 });
 vi.mock("../../src/token-store.js");
 vi.mock("../../src/auth/auto-login.js");
+vi.mock("../../src/auth/interactive.js");
+vi.mock("../../src/auth/debug-session.js");
 vi.mock("../../src/emoji-map.js", () => {
   return {
     initializeEmojiMap: vi.fn().mockResolvedValue(undefined),
@@ -93,6 +97,8 @@ const mockedAttachments = vi.mocked(attachments);
 const mockedTokenStore = vi.mocked(tokenStore);
 const mockedAuth = {
   ...vi.mocked(autoLogin),
+  ...vi.mocked(interactiveLogin),
+  ...vi.mocked(debugSession),
 };
 
 function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
@@ -2458,6 +2464,122 @@ describe("reaction emoji resolution", () => {
       "conv-1",
       "123",
       "1f40e_horse",
+    );
+  });
+});
+
+describe("TeamsClient.fromInteractiveLogin", () => {
+  const testToken = {
+    skypeToken: "skype-token",
+    region: "amer",
+    bearerToken: "eyJhbGciOiJSUzI1NiJ9.eyJ1cG4iOiJhbGljZUBjb250b3NvLmNvbSJ9.sig",
+    substrateToken: "substrate-token",
+  };
+
+  it("should cache the token under email and _default", async () => {
+    mockedAuth.acquireTokenViaInteractiveLogin.mockResolvedValue(testToken);
+
+    await TeamsClient.fromInteractiveLogin({ email: "alice@contoso.com" });
+
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "alice@contoso.com",
+      testToken,
+    );
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "_default",
+      testToken,
+    );
+  });
+
+  it("should extract email from bearer token when not provided", async () => {
+    mockedAuth.acquireTokenViaInteractiveLogin.mockResolvedValue(testToken);
+
+    const client = await TeamsClient.fromInteractiveLogin();
+
+    // UPN from the JWT payload: alice@contoso.com
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "alice@contoso.com",
+      testToken,
+    );
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "_default",
+      testToken,
+    );
+    expect(client.getToken().skypeToken).toBe("skype-token");
+  });
+
+  it("should save under _default when no email available", async () => {
+    const tokenWithoutBearer = { skypeToken: "sk", region: "amer" };
+    mockedAuth.acquireTokenViaInteractiveLogin.mockResolvedValue(tokenWithoutBearer);
+
+    await TeamsClient.fromInteractiveLogin();
+
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledTimes(1);
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "_default",
+      tokenWithoutBearer,
+    );
+  });
+});
+
+describe("TeamsClient.fromAutoLogin", () => {
+  const testToken = {
+    skypeToken: "skype-token",
+    region: "amer",
+    bearerToken: "bearer",
+  };
+
+  it("should cache the token under email and _default", async () => {
+    mockedAuth.acquireTokenViaAutoLogin.mockResolvedValue(testToken);
+
+    await TeamsClient.fromAutoLogin({
+      email: "alice@contoso.com",
+      headless: true,
+    });
+
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "alice@contoso.com",
+      testToken,
+    );
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "_default",
+      testToken,
+    );
+  });
+});
+
+describe("TeamsClient.fromDebugSession", () => {
+  const testToken = {
+    skypeToken: "skype-token",
+    region: "amer",
+    bearerToken: "eyJhbGciOiJSUzI1NiJ9.eyJ1cG4iOiJib2JAY29udG9zby5jb20ifQ.sig",
+  };
+
+  it("should cache the token under extracted email and _default", async () => {
+    mockedAuth.acquireTokenViaDebugSession.mockResolvedValue(testToken);
+
+    await TeamsClient.fromDebugSession();
+
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "bob@contoso.com",
+      testToken,
+    );
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "_default",
+      testToken,
+    );
+  });
+
+  it("should save under _default when no email extractable", async () => {
+    const tokenWithoutBearer = { skypeToken: "sk", region: "amer" };
+    mockedAuth.acquireTokenViaDebugSession.mockResolvedValue(tokenWithoutBearer);
+
+    await TeamsClient.fromDebugSession();
+
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledTimes(1);
+    expect(mockedTokenStore.saveToken).toHaveBeenCalledWith(
+      "_default",
+      tokenWithoutBearer,
     );
   });
 });

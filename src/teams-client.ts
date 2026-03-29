@@ -403,9 +403,13 @@ export class TeamsClient {
    * Launches system Chrome with a fresh profile, completes the Microsoft
    * Entra ID FIDO2 login flow using a platform authenticator, and
    * captures the skype token. Zero user interaction required.
+   *
+   * Tokens are cached in the platform credential store.
    */
   static async fromAutoLogin(options: AutoLoginOptions): Promise<TeamsClient> {
     const token = await acquireTokenViaAutoLogin(options);
+    await saveToken(options.email, token);
+    await saveToken(DEFAULT_ACCOUNT, token);
     const client = new TeamsClient(token);
     client.userEmail = options.email;
     return client;
@@ -416,12 +420,24 @@ export class TeamsClient {
    *
    * Requires Chrome started with --remote-debugging-port and Teams
    * already open and authenticated.
+   *
+   * Tokens are cached in the platform credential store.
    */
   static async fromDebugSession(
     options?: ManualTokenOptions,
   ): Promise<TeamsClient> {
     const token = await acquireTokenViaDebugSession(options);
-    return new TeamsClient(token);
+    const email = extractEmailFromToken(token);
+    const saveKey = email ?? DEFAULT_ACCOUNT;
+    await saveToken(saveKey, token);
+    if (email && saveKey !== DEFAULT_ACCOUNT) {
+      await saveToken(DEFAULT_ACCOUNT, token);
+    }
+    const client = new TeamsClient(token);
+    if (email) {
+      client.userEmail = email;
+    }
+    return client;
   }
 
   /**
@@ -430,12 +446,24 @@ export class TeamsClient {
    * Opens a visible Chromium window where the user manually logs into
    * Teams. Works on all platforms (macOS, Windows, Linux) without
    * requiring FIDO2 passkeys or system Chrome.
+   *
+   * Tokens are cached in the platform credential store.
    */
   static async fromInteractiveLogin(
     options?: InteractiveLoginOptions,
   ): Promise<TeamsClient> {
     const token = await acquireTokenViaInteractiveLogin(options);
-    return new TeamsClient(token);
+    const email = options?.email ?? extractEmailFromToken(token);
+    const saveKey = email ?? DEFAULT_ACCOUNT;
+    await saveToken(saveKey, token);
+    if (email && saveKey !== DEFAULT_ACCOUNT) {
+      await saveToken(DEFAULT_ACCOUNT, token);
+    }
+    const client = new TeamsClient(token);
+    if (email) {
+      client.userEmail = email;
+    }
+    return client;
   }
 
   /**
