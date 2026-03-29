@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/Maxim-Mazurok/teams-api/compare/v1.0.3...v1.0.4) (2026-03-29)
+
+
+### Bug Fixes
+
+* cache tokens in all auth strategies ([f90b06e](https://github.com/Maxim-Mazurok/teams-api/commit/f90b06ec58a1275687ff3c8fc58cce00a1290af4))
+
 ## [1.0.3](https://github.com/Maxim-Mazurok/teams-api/compare/v1.0.2...v1.0.3) (2026-03-29)
 
 
