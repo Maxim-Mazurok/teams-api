@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.0.4...v1.1.0) (2026-03-29)
+
+
+### Features
+
+* persist browser profile across interactive logins ([c98b47c](https://github.com/Maxim-Mazurok/teams-api/commit/c98b47cd970bac1aa313ce031d01c6984fa724b1))
+
 ## [1.0.4](https://github.com/Maxim-Mazurok/teams-api/compare/v1.0.3...v1.0.4) (2026-03-29)
 
 
