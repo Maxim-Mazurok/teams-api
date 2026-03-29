@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.1.2...v1.2.0) (2026-03-29)
+
+
+### Features
+
+* add messageId parameter for channel thread access ([444639e](https://github.com/Maxim-Mazurok/teams-api/commit/444639ed20c568d1b888191cfd9b2870da2978a5))
+
 ## [1.1.2](https://github.com/Maxim-Mazurok/teams-api/compare/v1.1.1...v1.1.2) (2026-03-29)
 
 
