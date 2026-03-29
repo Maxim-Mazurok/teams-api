@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/Maxim-Mazurok/teams-api/compare/v1.0.1...v1.0.2) (2026-03-29)
+
+
+### Bug Fixes
+
+* use cross-platform rmSync instead of shell rm -rf ([21bd748](https://github.com/Maxim-Mazurok/teams-api/commit/21bd748b291dc49e50b5ff338ff43ef578f3663a))
+
 ## [1.0.1](https://github.com/Maxim-Mazurok/teams-api/compare/v1.0.0...v1.0.1) (2026-03-27)
 
 
