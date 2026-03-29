@@ -8,8 +8,9 @@
 
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import type { Browser } from "playwright";
+import type { Browser, BrowserContext } from "playwright";
 
 const requireFromHere = createRequire(__filename);
 
@@ -21,6 +22,20 @@ export interface ChromiumBrowserLauncher {
     headless: false;
     channel?: InteractiveBrowserChannel;
   }): Promise<Browser>;
+}
+
+export interface PersistentBrowserLauncher extends ChromiumBrowserLauncher {
+  launchPersistentContext(
+    userDataDir: string,
+    options: {
+      headless: false;
+      channel?: InteractiveBrowserChannel;
+    },
+  ): Promise<BrowserContext>;
+}
+
+export function getDefaultBrowserProfileDir(): string {
+  return join(homedir(), ".teams-api", "browser-profile");
 }
 
 const INTERACTIVE_BROWSER_CHANNELS: Partial<
@@ -128,5 +143,53 @@ export async function launchInteractiveBrowser(
 
     log("Retrying Playwright bundled Chromium after install...");
     return chromium.launch({ headless: false });
+  }
+}
+
+export async function launchInteractiveBrowserContext(
+  chromium: PersistentBrowserLauncher,
+  log: LogFunction,
+  userDataDir: string,
+  options?: {
+    platform?: NodeJS.Platform;
+    installBundledChromium?: (log: LogFunction) => void;
+  },
+): Promise<BrowserContext> {
+  for (const channel of getInteractiveBrowserChannels(options?.platform)) {
+    try {
+      log(`Trying installed ${formatChannelName(channel)}...`);
+      const context = await chromium.launchPersistentContext(userDataDir, {
+        headless: false,
+        channel,
+      });
+      log(
+        `Using installed ${formatChannelName(channel)} for interactive login.`,
+      );
+      return context;
+    } catch (error) {
+      log(
+        `Could not launch ${formatChannelName(channel)}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  try {
+    log("Trying Playwright bundled Chromium...");
+    const context = await chromium.launchPersistentContext(userDataDir, {
+      headless: false,
+    });
+    log("Using Playwright bundled Chromium for interactive login.");
+    return context;
+  } catch (error) {
+    if (!isMissingPlaywrightBrowserError(error)) {
+      throw error;
+    }
+
+    const installChromium =
+      options?.installBundledChromium ?? installBundledChromium;
+    installChromium(log);
+
+    log("Retrying Playwright bundled Chromium after install...");
+    return chromium.launchPersistentContext(userDataDir, { headless: false });
   }
 }

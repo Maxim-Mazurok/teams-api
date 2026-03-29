@@ -9,7 +9,10 @@
 import type { TeamsToken, InteractiveLoginOptions } from "../types.js";
 import { resolveTeamsRegion } from "../region.js";
 import { diagnosePageState } from "./page-diagnostics.js";
-import { launchInteractiveBrowser } from "../browser-runtime.js";
+import {
+  launchInteractiveBrowserContext,
+  getDefaultBrowserProfileDir,
+} from "../browser-runtime.js";
 import {
   captureTokensFromPage,
   TOKEN_INTERCEPT_TIMEOUT,
@@ -40,9 +43,14 @@ export async function acquireTokenViaInteractiveLogin(
     : () => {};
 
   log("Launching browser for interactive login...");
-  const browser = await launchInteractiveBrowser(chromium, log);
-  const context = await browser.newContext();
-  const page = await context.newPage();
+  const profileDir = getDefaultBrowserProfileDir();
+  log(`Using browser profile: ${profileDir}`);
+  const context = await launchInteractiveBrowserContext(
+    chromium,
+    log,
+    profileDir,
+  );
+  const page = context.pages()[0] || (await context.newPage());
 
   try {
     log("Navigating to Teams...");
@@ -122,6 +130,5 @@ export async function acquireTokenViaInteractiveLogin(
     };
   } finally {
     await context.close();
-    await browser.close();
   }
 }
