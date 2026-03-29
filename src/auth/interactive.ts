@@ -50,7 +50,12 @@ export async function acquireTokenViaInteractiveLogin(
     log,
     profileDir,
   );
-  const page = context.pages()[0] || (await context.newPage());
+
+  // Close leftover tabs from previous sessions, then open a fresh page
+  for (const stale of context.pages()) {
+    await stale.close();
+  }
+  const page = await context.newPage();
 
   try {
     log("Navigating to Teams...");
