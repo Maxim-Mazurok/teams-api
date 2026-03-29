@@ -8,7 +8,7 @@
 import { detectTeamsRegionFromUrl } from "../region.js";
 import { diagnosePageState } from "./page-diagnostics.js";
 
-export const TOKEN_INTERCEPT_TIMEOUT = 60 * 1_000;
+export const TOKEN_INTERCEPT_TIMEOUT = 90 * 1_000;
 export const PAGE_RELOAD_TIMEOUT = 30 * 1_000;
 export const PAGE_STATE_POLL_INTERVAL = 3 * 1_000;
 
