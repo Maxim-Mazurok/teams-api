@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/Maxim-Mazurok/teams-api/compare/v1.0.2...v1.0.3) (2026-03-29)
+
+
+### Bug Fixes
+
+* chunk Windows credential store to handle large token payloads ([39386df](https://github.com/Maxim-Mazurok/teams-api/commit/39386df15fd0e0a82888481b462a2bc0342c690e))
+
 ## [1.0.2](https://github.com/Maxim-Mazurok/teams-api/compare/v1.0.1...v1.0.2) (2026-03-29)
 
 
