@@ -128,5 +128,45 @@ describe.runIf(process.platform === "win32")(
 
       expect(loaded).toBe(specialData);
     });
+
+    it("should chunk large payloads that exceed 2560 bytes", async () => {
+      const { createCredentialStore } =
+        await import("../../src/credential-store.js");
+      const store = createCredentialStore();
+
+      const largeData = "X".repeat(5000);
+      await store.save(testAccount, largeData);
+      const loaded = await store.load(testAccount);
+
+      expect(loaded).toBe(largeData);
+    });
+
+    it("should clear chunked credentials completely", async () => {
+      const { createCredentialStore } =
+        await import("../../src/credential-store.js");
+      const store = createCredentialStore();
+
+      await store.save(testAccount, "Y".repeat(5000));
+      await store.clear(testAccount);
+      const loaded = await store.load(testAccount);
+
+      expect(loaded).toBeNull();
+    });
+
+    it("should overwrite chunked with non-chunked and vice versa", async () => {
+      const { createCredentialStore } =
+        await import("../../src/credential-store.js");
+      const store = createCredentialStore();
+
+      // Save chunked, then overwrite with small
+      await store.save(testAccount, "Z".repeat(5000));
+      await store.save(testAccount, "small-value");
+      expect(await store.load(testAccount)).toBe("small-value");
+
+      // Save small, then overwrite with chunked
+      const large = "W".repeat(5000);
+      await store.save(testAccount, large);
+      expect(await store.load(testAccount)).toBe(large);
+    });
   },
 );

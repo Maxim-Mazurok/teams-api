@@ -104,20 +104,87 @@ function accountToFileName(account: string): string {
   return createHash("sha256").update(account).digest("hex") + ".dat";
 }
 
+// Windows Credential Manager limits each credential blob to 2560 bytes.
+// Teams tokens easily exceed this (~4500+ bytes for 5 JWTs).  We chunk
+// large payloads across multiple credential entries.
+const WINCRED_MAX_BLOB = 2560;
+const CHUNK_MARKER = "CHUNKED:";
+
 class WinCredStore implements CredentialStore {
   async save(account: string, data: string): Promise<void> {
-    await getKeytar().setPassword(CREDENTIAL_SERVICE, accountKey(account), data);
+    const key = accountKey(account);
+    const kt = getKeytar();
+
+    // Clear any previous chunks before saving
+    await this.clearChunks(key, kt);
+
+    if (data.length <= WINCRED_MAX_BLOB) {
+      await kt.setPassword(CREDENTIAL_SERVICE, key, data);
+      return;
+    }
+
+    const chunks: string[] = [];
+    for (let i = 0; i < data.length; i += WINCRED_MAX_BLOB) {
+      chunks.push(data.slice(i, i + WINCRED_MAX_BLOB));
+    }
+
+    // Primary entry stores the chunk count
+    await kt.setPassword(CREDENTIAL_SERVICE, key, `${CHUNK_MARKER}${chunks.length}`);
+    for (let i = 0; i < chunks.length; i++) {
+      await kt.setPassword(CREDENTIAL_SERVICE, `${key}:${i}`, chunks[i]);
+    }
   }
 
   async load(account: string): Promise<string | null> {
-    return getKeytar().getPassword(CREDENTIAL_SERVICE, accountKey(account));
+    const key = accountKey(account);
+    const kt = getKeytar();
+
+    const value = await kt.getPassword(CREDENTIAL_SERVICE, key);
+    if (!value) return null;
+
+    if (!value.startsWith(CHUNK_MARKER)) {
+      return value; // Single-entry credential (backward compatible)
+    }
+
+    const chunkCount = parseInt(value.slice(CHUNK_MARKER.length), 10);
+    const parts: string[] = [];
+    for (let i = 0; i < chunkCount; i++) {
+      const chunk = await kt.getPassword(CREDENTIAL_SERVICE, `${key}:${i}`);
+      if (chunk === null) return null; // Corrupted — missing chunk
+      parts.push(chunk);
+    }
+    return parts.join("");
   }
 
   async clear(account: string): Promise<void> {
+    const key = accountKey(account);
+    const kt = getKeytar();
+    await this.clearChunks(key, kt);
     try {
-      await getKeytar().deletePassword(CREDENTIAL_SERVICE, accountKey(account));
+      await kt.deletePassword(CREDENTIAL_SERVICE, key);
     } catch {
       // Entry may not exist
+    }
+  }
+
+  private async clearChunks(
+    key: string,
+    kt: typeof import("keytar"),
+  ): Promise<void> {
+    try {
+      const value = await kt.getPassword(CREDENTIAL_SERVICE, key);
+      if (value?.startsWith(CHUNK_MARKER)) {
+        const count = parseInt(value.slice(CHUNK_MARKER.length), 10);
+        for (let i = 0; i < count; i++) {
+          try {
+            await kt.deletePassword(CREDENTIAL_SERVICE, `${key}:${i}`);
+          } catch {
+            // Chunk may not exist
+          }
+        }
+      }
+    } catch {
+      // Primary entry may not exist
     }
   }
 }

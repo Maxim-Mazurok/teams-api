@@ -46,7 +46,7 @@ export async function acquireTokenViaAutoLogin(
     options.profileDirectory ?? DEFAULT_PROFILE_DIRECTORY;
   const headless = options.headless ?? true;
   const log: LogFunction = options.verbose
-    ? console.log.bind(console)
+    ? console.error.bind(console)
     : () => {};
 
   // Clean up any previous profile to ensure a fresh session
