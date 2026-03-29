@@ -671,6 +671,26 @@ describe("get-messages", () => {
     expect(result[1].content).toBe("First");
   });
 
+  it("should append ;messageid= to conversation ID when messageId is provided", async () => {
+    const messages = [makeMessage()];
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(
+        makeConversation({ id: "19:channel@thread.tacv2" }),
+      ),
+      getMessages: vi.fn().mockResolvedValue(messages),
+    });
+
+    await action.execute(client, {
+      chat: "My Channel",
+      messageId: "1774510153041",
+    });
+
+    expect(client.getMessages).toHaveBeenCalledWith(
+      "19:channel@thread.tacv2;messageid=1774510153041",
+      expect.objectContaining({ limit: undefined }),
+    );
+  });
+
   it("should format messages correctly", () => {
     const messages = [
       makeMessage({
@@ -907,6 +927,33 @@ describe("send-message", () => {
     })) as SentMessage & { conversation: string };
 
     expect(result.conversation).toBe("Luke Prior");
+  });
+
+  it("should append ;messageid= to conversation ID when messageId is provided", async () => {
+    const sentMessage: SentMessage = {
+      messageId: "1774999999999",
+      arrivalTime: 1774999999999,
+    };
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(
+        makeConversation({ id: "19:channel@thread.tacv2", topic: "Dev Channel" }),
+      ),
+      sendMessage: vi.fn().mockResolvedValue(sentMessage),
+    });
+
+    await action.execute(client, {
+      chat: "Dev Channel",
+      messageId: "1774510153041",
+      content: "Thread reply!",
+    });
+
+    expect(client.sendMessage).toHaveBeenCalledWith(
+      "19:channel@thread.tacv2;messageid=1774510153041",
+      "Thread reply!",
+      "markdown",
+      [],
+      undefined,
+    );
   });
 
   it("should error when no content provided", async () => {

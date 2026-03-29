@@ -28,6 +28,10 @@ Call teams_get_messages with chat: "Chat Name" for group chats, or to: "Person N
 
 Call teams_send_message with to: "Person Name" and content: "Your reply" for 1:1 chats, or chat: "Chat Name" and content: "Your message" for group chats.
 
+### Read or reply in a channel thread
+
+Channel posts have threads. To read replies under a specific post, call teams_get_messages with chat: "Channel Name" and messageId: "<root message ID>". To reply in a thread, call teams_send_message with the same chat and messageId parameters.
+
 ### Monitor a conversation for new messages
 
 Call teams_get_messages with chat: "Chat Name" and order: "newest-first" and limit: 10 to check recent activity.

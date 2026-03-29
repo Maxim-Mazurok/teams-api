@@ -132,9 +132,18 @@ export const getMessages: ActionDefinition = {
     "Identify the conversation by topic name (--chat), " +
     "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
     "At least one identifier is required. " +
+    "For channel threads, provide --message-id to read replies under a specific post. " +
     "Messages include reactions, mentions, followers (thread subscribers), and quoted message references.",
   parameters: [
     ...conversationParameters,
+    {
+      name: "messageId",
+      type: "string",
+      description:
+        "Root message ID to read a channel thread. " +
+        "When provided, fetches replies under this specific post instead of the main conversation.",
+      required: false,
+    },
     {
       name: "limit",
       type: "number",
@@ -161,7 +170,11 @@ export const getMessages: ActionDefinition = {
     },
   ],
   execute: async (client, parameters) => {
-    const { conversationId } = await resolveConversationId(client, parameters);
+    let { conversationId } = await resolveConversationId(client, parameters);
+    const messageId = parameters.messageId as string | undefined;
+    if (messageId) {
+      conversationId = `${conversationId};messageid=${messageId}`;
+    }
     const limit = parameters.limit as number | undefined;
     const textOnly = (parameters.textOnly as boolean | undefined) ?? true;
     const onProgress = parameters.onProgress as
@@ -255,6 +268,7 @@ export const sendMessage: ActionDefinition = {
     "Identify the conversation by topic name (--chat), " +
     "person name for 1:1 chats (--to), or direct ID (--conversation-id). " +
     "At least one identifier is required. " +
+    "For channel thread replies, provide --message-id to reply under a specific post. " +
     "Content is interpreted as Markdown by default and converted to rich HTML. " +
     "To send images, provide file paths via --image. " +
     "To send file attachments (documents, videos, etc.), provide file paths via --file. " +
@@ -263,6 +277,14 @@ export const sendMessage: ActionDefinition = {
     "Without placeholders, text appears first followed by all images.",
   parameters: [
     ...conversationParameters,
+    {
+      name: "messageId",
+      type: "string",
+      description:
+        "Root message ID to reply in a channel thread. " +
+        "When provided, the message is posted as a reply under this specific post.",
+      required: false,
+    },
     {
       name: "content",
       type: "string",
@@ -324,10 +346,14 @@ export const sendMessage: ActionDefinition = {
     },
   ],
   execute: async (client, parameters) => {
-    const { conversationId, label } = await resolveConversationId(
+    let { conversationId, label } = await resolveConversationId(
       client,
       parameters,
     );
+    const threadMessageId = parameters.messageId as string | undefined;
+    if (threadMessageId) {
+      conversationId = `${conversationId};messageid=${threadMessageId}`;
+    }
     const content = (parameters.content as string | undefined) ?? "";
     const imagePaths = (parameters.image as string[] | undefined) ?? [];
     const filePaths = (parameters.file as string[] | undefined) ?? [];
