@@ -50,8 +50,8 @@ export async function acquireTokenViaAutoLogin(
     : () => {};
 
   // Clean up any previous profile to ensure a fresh session
-  const { execSync } = await import("node:child_process");
-  execSync(`rm -rf "${profileDirectory}"`);
+  const { rmSync } = await import("node:fs");
+  rmSync(profileDirectory, { recursive: true, force: true });
 
   log("Launching Chrome with fresh profile...");
   const launchPromise = chromium.launchPersistentContext(profileDirectory, {
@@ -183,7 +183,7 @@ export async function acquireTokenViaAutoLogin(
   } finally {
     await context.close();
     try {
-      execSync(`rm -rf "${profileDirectory}"`);
+      rmSync(profileDirectory, { recursive: true, force: true });
     } catch {
       // Best-effort cleanup
     }
