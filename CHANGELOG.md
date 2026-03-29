@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/Maxim-Mazurok/teams-api/compare/v1.1.1...v1.1.2) (2026-03-29)
+
+
+### Bug Fixes
+
+* increase token intercept timeout to 90s ([20f7efc](https://github.com/Maxim-Mazurok/teams-api/commit/20f7efcb107bb89d20adb40cc8939dbb8bec727c))
+
 ## [1.1.1](https://github.com/Maxim-Mazurok/teams-api/compare/v1.1.0...v1.1.1) (2026-03-29)
 
 # [1.1.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.0.4...v1.1.0) (2026-03-29)
