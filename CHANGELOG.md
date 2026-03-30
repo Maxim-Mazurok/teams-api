@@ -1,3 +1,10 @@
+## [1.2.3](https://github.com/Maxim-Mazurok/teams-api/compare/v1.2.2...v1.2.3) (2026-03-30)
+
+
+### Bug Fixes
+
+* resolve bot display names and show local time in scheduled messages ([#34](https://github.com/Maxim-Mazurok/teams-api/issues/34)) ([4b3733a](https://github.com/Maxim-Mazurok/teams-api/commit/4b3733a704770170612963f3d684938637a50619))
+
 ## [1.2.2](https://github.com/Maxim-Mazurok/teams-api/compare/v1.2.1...v1.2.2) (2026-03-30)
 
 
