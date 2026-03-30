@@ -570,7 +570,10 @@ describe("findOneOnOneConversation", () => {
   it("should create a new 1:1 conversation when person found via substrate but no existing chat", async () => {
     // No pre-existing 1:1 conversations
     mockedApi.fetchConversations.mockResolvedValue([
-      makeConversation({ id: "19:some-group@thread.v2", threadType: "meeting" }),
+      makeConversation({
+        id: "19:some-group@thread.v2",
+        threadType: "meeting",
+      }),
     ]);
 
     mockedApi.searchPeople.mockResolvedValue([
@@ -617,7 +620,10 @@ describe("findOneOnOneConversation", () => {
     // would abort the if(matchedPerson) block before matchedPersonForCreation was
     // set, causing findOneOnOneConversation to return null instead of creating the chat.
     mockedApi.fetchConversations.mockResolvedValue([
-      makeConversation({ id: "19:some-group@thread.v2", threadType: "meeting" }),
+      makeConversation({
+        id: "19:some-group@thread.v2",
+        threadType: "meeting",
+      }),
     ]);
 
     mockedApi.searchPeople.mockResolvedValue([
@@ -695,7 +701,6 @@ describe("findOneOnOneConversation", () => {
     expect(result!.memberDisplayName).toBe("Alice Smith");
     expect(mockedApi.createOneOnOneConversation).not.toHaveBeenCalled();
   });
-
 
   it("should fall back to profile-based matching when substrate search returns empty", async () => {
     mockedApi.fetchConversations.mockResolvedValue([
@@ -804,6 +809,128 @@ describe("findOneOnOneConversation", () => {
     await expect(
       client.findOneOnOneConversation("Nonexistent Person"),
     ).rejects.toBeInstanceOf(ApiAuthError);
+  });
+
+  it("should find person via group chat member scanning when substrate returns empty", async () => {
+    // No existing 1:1 conversations; only a group chat where Alice is a member
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({
+        id: "19:group-chat-id@thread.v2",
+        threadType: "chat",
+        topic: "Team Chat",
+      }),
+    ]);
+
+    // Substrate search returns nothing (e.g., substrate API returning 400)
+    mockedApi.searchPeople.mockResolvedValue([]);
+    mockedApi.searchChats.mockResolvedValue([]);
+
+    // Group chat has Alice as a member
+    mockedApi.fetchMembers.mockResolvedValue([
+      {
+        id: "8:orgid:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
+        displayName: "",
+        role: "member",
+        memberType: "person" as const,
+      },
+      {
+        id: "8:orgid:f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0",
+        displayName: "",
+        role: "member",
+        memberType: "person" as const,
+      },
+    ]);
+
+    // Profile resolution finds Alice
+    mockedApi.fetchProfiles.mockResolvedValue([
+      {
+        mri: "8:orgid:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
+        displayName: "Current User",
+        email: "me@example.com",
+        jobTitle: "",
+        userType: "Member",
+      },
+      {
+        mri: "8:orgid:f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0",
+        displayName: "Alice Smith",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        userType: "Member",
+      },
+    ]);
+
+    // Should create a new 1:1 conversation since none exists
+    mockedApi.createOneOnOneConversation.mockResolvedValue({
+      id: "19:new-1on1@unq.gbl.spaces",
+    });
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findOneOnOneConversation("Alice");
+
+    expect(result).not.toBeNull();
+    expect(result!.conversationId).toBe("19:new-1on1@unq.gbl.spaces");
+    expect(result!.memberDisplayName).toBe("Alice Smith");
+    expect(mockedApi.createOneOnOneConversation).toHaveBeenCalledWith(
+      expect.anything(),
+      "8:orgid:f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0",
+    );
+    expect(mockedApi.fetchMembers).toHaveBeenCalled();
+  });
+
+  it("should find person via group chat members when substrate throws auth error", async () => {
+    // Only a group chat, no 1:1s
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({
+        id: "19:group-chat@thread.v2",
+        threadType: "chat",
+        topic: "Project Chat",
+      }),
+    ]);
+
+    // Substrate throws auth error (expired token)
+    mockedApi.searchPeople.mockRejectedValue(
+      new ApiAuthError("Substrate search authentication failed: 403 Forbidden"),
+    );
+
+    // Group chat has Alice
+    mockedApi.fetchMembers.mockResolvedValue([
+      {
+        id: "8:orgid:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
+        displayName: "",
+        role: "member",
+        memberType: "person" as const,
+      },
+    ]);
+
+    // Profile resolution finds Alice
+    mockedApi.fetchProfiles.mockResolvedValue([
+      {
+        mri: "8:orgid:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
+        displayName: "Alice Smith",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        userType: "Member",
+      },
+    ]);
+
+    mockedApi.createOneOnOneConversation.mockResolvedValue({
+      id: "19:new-convo@unq.gbl.spaces",
+    });
+
+    const client = TeamsClient.fromToken("token", "apac", "bearer");
+    const result = await client.findOneOnOneConversation("Alice");
+
+    expect(result).not.toBeNull();
+    expect(result!.memberDisplayName).toBe("Alice Smith");
+    expect(mockedApi.createOneOnOneConversation).toHaveBeenCalledWith(
+      expect.anything(),
+      "8:orgid:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
+    );
   });
 });
 
@@ -1127,9 +1254,7 @@ describe("getMessages", () => {
         "8:orgid:follower-user",
       ]),
     );
-    expect(messages[0].reactions[0].users[0].displayName).toBe(
-      "Reaction User",
-    );
+    expect(messages[0].reactions[0].users[0].displayName).toBe("Reaction User");
     expect(messages[0].followers[0].displayName).toBe("Follower User");
   });
 
@@ -2108,12 +2233,34 @@ describe("sendMessageWithFiles", () => {
 
     // Mock member resolution for default "chat" scope
     mockedApi.fetchMembers.mockResolvedValue([
-      { id: "8:orgid:user-1", displayName: "User One", role: "User", memberType: "person" },
-      { id: "8:orgid:user-2", displayName: "User Two", role: "User", memberType: "person" },
+      {
+        id: "8:orgid:user-1",
+        displayName: "User One",
+        role: "User",
+        memberType: "person",
+      },
+      {
+        id: "8:orgid:user-2",
+        displayName: "User Two",
+        role: "User",
+        memberType: "person",
+      },
     ]);
     mockedApi.fetchProfiles.mockResolvedValue([
-      { mri: "8:orgid:user-1", displayName: "User One", email: "user1@company.com", jobTitle: "", userType: "Member" },
-      { mri: "8:orgid:user-2", displayName: "User Two", email: "user2@company.com", jobTitle: "", userType: "Member" },
+      {
+        mri: "8:orgid:user-1",
+        displayName: "User One",
+        email: "user1@company.com",
+        jobTitle: "",
+        userType: "Member",
+      },
+      {
+        mri: "8:orgid:user-2",
+        displayName: "User Two",
+        email: "user2@company.com",
+        jobTitle: "",
+        userType: "Member",
+      },
     ]);
 
     const uploadResult: attachments.SharePointUploadResult = {
@@ -2193,10 +2340,21 @@ describe("sendMessageWithFiles", () => {
 
     // Mock member resolution for default "chat" scope
     mockedApi.fetchMembers.mockResolvedValue([
-      { id: "8:orgid:user-1", displayName: "User One", role: "User", memberType: "person" },
+      {
+        id: "8:orgid:user-1",
+        displayName: "User One",
+        role: "User",
+        memberType: "person",
+      },
     ]);
     mockedApi.fetchProfiles.mockResolvedValue([
-      { mri: "8:orgid:user-1", displayName: "User One", email: "user1@company.com", jobTitle: "", userType: "Member" },
+      {
+        mri: "8:orgid:user-1",
+        displayName: "User One",
+        email: "user1@company.com",
+        jobTitle: "",
+        userType: "Member",
+      },
     ]);
 
     mockedAttachments.uploadSharePointFile.mockResolvedValue({

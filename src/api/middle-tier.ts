@@ -41,7 +41,7 @@ export async function fetchProfiles(
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 || response.status === 403) {
       throw new ApiAuthError(
         `Profile resolution authentication failed: ${response.status} ${response.statusText}`,
       );

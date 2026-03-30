@@ -332,6 +332,13 @@ describe("fetchProfiles", () => {
       fetchProfiles(tokenWithBearer, ["8:orgid:user1"]),
     ).rejects.toThrow(ApiAuthError);
   });
+
+  it("should throw ApiAuthError on 403", async () => {
+    mockFetchResponse({}, 403);
+    await expect(
+      fetchProfiles(tokenWithBearer, ["8:orgid:user1"]),
+    ).rejects.toThrow(ApiAuthError);
+  });
 });
 
 describe("postMessage", () => {
@@ -812,7 +819,8 @@ describe("removeReaction", () => {
       ok: false,
       status: 400,
       statusText: "Bad Request",
-      text: () => Promise.resolve("Request body does not contain 'emotions' key"),
+      text: () =>
+        Promise.resolve("Request body does not contain 'emotions' key"),
     });
 
     await expect(
