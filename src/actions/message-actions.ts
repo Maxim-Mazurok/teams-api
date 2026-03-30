@@ -439,13 +439,27 @@ export const sendMessage: ActionDefinition = {
         scheduledTime?: string;
       };
     if (scheduled) {
-      return [
+      const lines = [
         "## Message Scheduled",
         "",
         `- **To:** ${conversation}`,
         `- **Message ID:** ${messageId}`,
-        `- **Scheduled for:** ${scheduledTime}`,
-      ].join("\n");
+        `- **Scheduled for (UTC):** ${scheduledTime}`,
+      ];
+      if (scheduledTime) {
+        const date = new Date(scheduledTime);
+        const humanReadable = date.toLocaleString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZoneName: "short",
+        });
+        lines.push(`- **Scheduled for (local):** ${humanReadable}`);
+      }
+      return lines.join("\n");
     }
     return [
       "## Message Sent",

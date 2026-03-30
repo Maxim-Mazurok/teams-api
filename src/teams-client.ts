@@ -1629,17 +1629,17 @@ export class TeamsClient {
     return this.withTokenRefresh(async () => {
       const members = await fetchMembers(this.token, conversationId);
 
-      const unresolvedPeople = members.filter(
-        (member) => member.memberType === "person" && !member.displayName,
+      const unresolvedMembers = members.filter(
+        (member) => !member.displayName,
       );
 
-      if (unresolvedPeople.length === 0) {
+      if (unresolvedMembers.length === 0) {
         return members;
       }
 
-      // Primary: resolve via middle-tier profile API (requires bearerToken)
+      // Primary: resolve via middle-tier profile API (supports both people and bots)
       {
-        const mris = unresolvedPeople.map((member) => member.id);
+        const mris = unresolvedMembers.map((member) => member.id);
         try {
           const profiles = await fetchProfiles(this.token, mris);
           const profileLookup = new Map(
@@ -1650,7 +1650,9 @@ export class TeamsClient {
               member.displayName = profileLookup.get(member.id) ?? "";
             }
           }
-          return members;
+          if (members.every((member) => member.displayName)) {
+            return members;
+          }
         } catch {
           // Fall through to message-history fallback
         }
@@ -1658,7 +1660,9 @@ export class TeamsClient {
 
       // Fallback: resolve from message sender names in conversation history
       const unresolvedMris = new Set(
-        unresolvedPeople.map((member) => member.id),
+        unresolvedMembers
+          .filter((member) => !member.displayName)
+          .map((member) => member.id),
       );
       const nameLookup = new Map<string, string>();
       const maxPages = 10;

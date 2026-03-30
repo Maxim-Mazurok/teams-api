@@ -1071,7 +1071,13 @@ describe("send-message", () => {
     const output = action.formatConcise(result);
 
     expect(output).toContain("## Message Scheduled");
-    expect(output).toContain("**Scheduled for:** 2025-07-20T14:30:00.000Z");
+    expect(output).toContain(
+      "**Scheduled for (UTC):** 2025-07-20T14:30:00.000Z",
+    );
+    expect(output).toContain("**Scheduled for (local):**");
+    expect(output).toMatch(
+      /Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/,
+    ); // includes day of week
   });
 });
 
