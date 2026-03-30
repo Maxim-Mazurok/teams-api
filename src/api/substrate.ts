@@ -92,7 +92,7 @@ export async function searchPeople(
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 || response.status === 403) {
       throw new ApiAuthError(
         `Substrate search authentication failed: ${response.status} ${response.statusText}`,
       );
@@ -176,7 +176,7 @@ export async function searchChats(
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 || response.status === 403) {
       throw new ApiAuthError(
         `Substrate search authentication failed: ${response.status} ${response.statusText}`,
       );

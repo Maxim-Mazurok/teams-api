@@ -878,7 +878,9 @@ export class TeamsClient {
       }
 
       // Strategy 1: Substrate search API for people + chat lookup
-      let matchedPersonForCreation: { mri: string; displayName: string } | undefined;
+      let matchedPersonForCreation:
+        | { mri: string; displayName: string }
+        | undefined;
       try {
         const people = await searchPeople(this.token, personName, 5);
         const matchedPerson = people.find((person) =>
@@ -943,6 +945,89 @@ export class TeamsClient {
           authError = error;
         }
         // Substrate unavailable — fall through to profile-based matching
+      }
+
+      // Fallback person discovery: scan group chat members and resolve
+      // via profiles when Substrate search is unavailable.
+      if (!matchedPersonForCreation) {
+        try {
+          const memberMris = new Set<string>();
+
+          // Extract UUIDs from 1:1 conversation IDs
+          for (const conversation of conversations) {
+            const match = conversation.id.match(
+              /19:([a-f0-9-]+)_([a-f0-9-]+)@unq\.gbl\.spaces/i,
+            );
+            if (match) {
+              memberMris.add(`8:orgid:${match[1]}`);
+              memberMris.add(`8:orgid:${match[2]}`);
+            }
+          }
+
+          // Scan group chat members
+          const maxGroupChatsToScan = 10;
+          let groupChatsScanned = 0;
+          for (const conversation of conversations) {
+            if (groupChatsScanned >= maxGroupChatsToScan) break;
+            if (
+              conversation.id.includes("@unq.gbl.spaces") ||
+              conversation.id.startsWith("48:")
+            ) {
+              continue;
+            }
+            if (
+              conversation.threadType === "chat" ||
+              conversation.threadType === "topic"
+            ) {
+              try {
+                const members = await fetchMembers(this.token, conversation.id);
+                for (const member of members) {
+                  if (member.id.startsWith("8:orgid:")) {
+                    memberMris.add(member.id);
+                  }
+                }
+                groupChatsScanned++;
+              } catch {
+                continue;
+              }
+            }
+          }
+
+          if (memberMris.size > 0) {
+            const profiles = await fetchProfiles(this.token, [...memberMris]);
+            const matchedProfile = profiles.find((profile) =>
+              profile.displayName.toLowerCase().includes(targetLower),
+            );
+            if (
+              matchedProfile &&
+              /^8:orgid:[0-9a-f-]+$/i.test(matchedProfile.mri)
+            ) {
+              matchedPersonForCreation = {
+                displayName: matchedProfile.displayName,
+                mri: matchedProfile.mri,
+              };
+
+              // Check if a conversation already exists with this person
+              const personUuid = matchedProfile.mri.replace("8:orgid:", "");
+              const existingConversation = conversations.find(
+                (conversation) =>
+                  conversation.id.includes(personUuid) &&
+                  conversation.threadType === "chat",
+              );
+              if (existingConversation) {
+                return {
+                  conversationId: existingConversation.id,
+                  memberDisplayName: matchedProfile.displayName,
+                };
+              }
+            }
+          }
+        } catch (error) {
+          if (error instanceof ApiAuthError) {
+            authError = error;
+          }
+          // Profile-based fallback failed — continue to other strategies
+        }
       }
 
       // If substrate search identified the person but found no existing chat, create one.
@@ -1140,10 +1225,9 @@ export class TeamsClient {
     // Primary: resolve via profile API
     const displayNameByMri = new Map<string, string>();
     try {
-      const profiles = await fetchProfiles(
-        this.token,
-        [...unresolvedParticipantMris],
-      );
+      const profiles = await fetchProfiles(this.token, [
+        ...unresolvedParticipantMris,
+      ]);
       for (const profile of profiles) {
         if (profile.displayName) {
           displayNameByMri.set(profile.mri, profile.displayName);
@@ -1473,8 +1557,7 @@ export class TeamsClient {
       const needsChatScope = contentParts.some(
         (part) =>
           part.type === "file" &&
-          (part.sharingScope === "chat" ||
-            part.sharingScope === undefined) &&
+          (part.sharingScope === "chat" || part.sharingScope === undefined) &&
           fileSharingScope === "chat",
       );
 
@@ -1634,9 +1717,7 @@ export class TeamsClient {
   /**
    * Resolve emails of all members in a conversation (for user-scoped sharing).
    */
-  private async resolveMemberEmails(
-    conversationId: string,
-  ): Promise<string[]> {
+  private async resolveMemberEmails(conversationId: string): Promise<string[]> {
     const members = await fetchMembers(this.token, conversationId);
     const memberIds = members.map((member) => member.id);
     const profiles = await fetchProfiles(this.token, memberIds);
