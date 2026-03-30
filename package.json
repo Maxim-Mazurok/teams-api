@@ -1,6 +1,6 @@
 {
   "name": "teams-api",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "AI-native Microsoft Teams integration — read conversations, send messages, manage members via the Teams Chat Service REST API",
   "type": "commonjs",
   "repository": {
