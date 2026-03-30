@@ -41,12 +41,34 @@ The quickest way to get started is to click one of the install badges above, or 
 
 **Option 2 — CLI:**
 
+macOS / Linux:
+
 ```bash
 # VS Code
 code --add-mcp '{"name":"teams","command":"npx","args":["-y","-p","teams-api@latest","teams-api-mcp"],"env":{"TEAMS_LOGIN":"true"}}'
 
 # VS Code Insiders
 code-insiders --add-mcp '{"name":"teams","command":"npx","args":["-y","-p","teams-api@latest","teams-api-mcp"],"env":{"TEAMS_LOGIN":"true"}}'
+```
+
+Windows (PowerShell):
+
+```powershell
+# VS Code
+code --add-mcp '{"name":"teams","command":"npx","args":["-y","-p","teams-api@latest","teams-api-mcp"],"env":{"TEAMS_LOGIN":"true"}}'
+
+# VS Code Insiders
+code-insiders --add-mcp '{"name":"teams","command":"npx","args":["-y","-p","teams-api@latest","teams-api-mcp"],"env":{"TEAMS_LOGIN":"true"}}'
+```
+
+Windows (CMD):
+
+```cmd
+rem VS Code
+code --add-mcp "{\"name\":\"teams\",\"command\":\"npx\",\"args\":[\"-y\",\"-p\",\"teams-api@latest\",\"teams-api-mcp\"],\"env\":{\"TEAMS_LOGIN\":\"true\"}}"
+
+rem VS Code Insiders
+code-insiders --add-mcp "{\"name\":\"teams\",\"command\":\"npx\",\"args\":[\"-y\",\"-p\",\"teams-api@latest\",\"teams-api-mcp\"],\"env\":{\"TEAMS_LOGIN\":\"true\"}}"
 ```
 
 **Option 3 — Manual config:**
