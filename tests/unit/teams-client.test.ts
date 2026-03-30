@@ -1650,6 +1650,13 @@ describe("getMembers", () => {
           jobTitle: "",
           userType: "",
         },
+        {
+          mri: "28:bot-id",
+          displayName: "Test Bot",
+          email: "",
+          jobTitle: "",
+          userType: "",
+        },
       ]);
 
       const client = TeamsClient.fromToken("token", "apac", "bearer-token");
@@ -1657,11 +1664,13 @@ describe("getMembers", () => {
 
       expect(members[0].displayName).toBe("Already Named");
       expect(members[1].displayName).toBe("Bob");
-      expect(members[2].displayName).toBe("");
-      // Only user2 should have been sent to fetchProfiles
+      expect(members[2].displayName).toBe("Test Bot");
+      // Both user2 and bot sent to fetchProfiles
       expect(mockedApi.fetchProfiles).toHaveBeenCalledWith(expect.anything(), [
         "8:orgid:user2",
+        "28:bot-id",
       ]);
+      expect(mockedApi.fetchMessagesPage).not.toHaveBeenCalled();
     });
   });
 
@@ -1855,7 +1864,7 @@ describe("getMembers", () => {
     expect(mockedApi.fetchMessagesPage).not.toHaveBeenCalled();
   });
 
-  it("should skip name resolution for bot-only unresolved members", async () => {
+  it("should resolve bot display names via profile API", async () => {
     mockedApi.fetchMembers.mockResolvedValue([
       {
         id: "8:orgid:user1",
@@ -1870,13 +1879,50 @@ describe("getMembers", () => {
         memberType: "bot" as const,
       },
     ]);
+    mockedApi.fetchProfiles.mockResolvedValue([
+      {
+        mri: "28:bot-id",
+        displayName: "Max Mini Bot",
+        email: "",
+        jobTitle: "",
+        userType: "",
+      },
+    ]);
 
-    const client = TeamsClient.fromToken("token");
+    const client = TeamsClient.fromToken("token", "apac", "bearer-token");
     const members = await client.getMembers("conv-id");
 
-    expect(members[1].displayName).toBe("");
-    expect(mockedApi.fetchProfiles).not.toHaveBeenCalled();
+    expect(members[1].displayName).toBe("Max Mini Bot");
+    expect(mockedApi.fetchProfiles).toHaveBeenCalledWith(expect.anything(), [
+      "28:bot-id",
+    ]);
     expect(mockedApi.fetchMessagesPage).not.toHaveBeenCalled();
+  });
+
+  it("should fall back to message history when profile API fails for bot", async () => {
+    mockedApi.fetchMembers.mockResolvedValue([
+      {
+        id: "28:bot-id",
+        displayName: "",
+        role: "User",
+        memberType: "bot" as const,
+      },
+    ]);
+    mockedApi.fetchProfiles.mockRejectedValue(new Error("profile API down"));
+    mockedApi.fetchMessagesPage.mockResolvedValue(
+      makeMessagesPage([
+        makeMessage({
+          senderMri: "28:bot-id",
+          senderDisplayName: "Max Mini",
+        }),
+      ]),
+    );
+
+    const client = TeamsClient.fromToken("token", "apac", "bearer-token");
+    const members = await client.getMembers("conv-id");
+
+    expect(members[0].displayName).toBe("Max Mini");
+    expect(mockedApi.fetchMessagesPage).toHaveBeenCalled();
   });
 
   it("should leave display name empty when no messages match", async () => {
