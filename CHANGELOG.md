@@ -1,3 +1,10 @@
+## [1.2.2](https://github.com/Maxim-Mazurok/teams-api/compare/v1.2.1...v1.2.2) (2026-03-30)
+
+
+### Bug Fixes
+
+* add profile-based fallback to findOneOnOneConversation ([e825f4c](https://github.com/Maxim-Mazurok/teams-api/commit/e825f4cec50752700b21cff3406dc68bb780cc2f))
+
 ## [1.2.1](https://github.com/Maxim-Mazurok/teams-api/compare/v1.2.0...v1.2.1) (2026-03-30)
 
 # [1.2.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.1.2...v1.2.0) (2026-03-29)
