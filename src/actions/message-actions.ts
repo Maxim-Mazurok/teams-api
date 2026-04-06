@@ -153,6 +153,15 @@ export const getMessages: ActionDefinition = {
       required: false,
     },
     {
+      name: "since",
+      type: "string",
+      description:
+        "ISO-8601 timestamp. Only return messages created strictly after this time. " +
+        "Useful for incremental syncing — pass the timestamp of the last fetched message " +
+        "to retrieve only newer messages.",
+      required: false,
+    },
+    {
       name: "textOnly",
       type: "boolean",
       description:
@@ -176,6 +185,7 @@ export const getMessages: ActionDefinition = {
       conversationId = `${conversationId};messageid=${messageId}`;
     }
     const limit = parameters.limit as number | undefined;
+    const since = parameters.since as string | undefined;
     const textOnly = (parameters.textOnly as boolean | undefined) ?? true;
     const onProgress = parameters.onProgress as
       | ((count: number) => void)
@@ -183,6 +193,7 @@ export const getMessages: ActionDefinition = {
 
     let messages = await client.getMessages(conversationId, {
       limit,
+      since,
       onProgress,
     });
 

@@ -333,6 +333,10 @@ export interface GetMessagesOptions {
   maxPages?: number;
   /** Number of messages per page (default: 200). */
   pageSize?: number;
+  /** ISO-8601 timestamp. When set, only messages created strictly after this
+   *  timestamp are returned. Pagination stops early once all remaining
+   *  messages are at or before the cutoff. */
+  since?: string;
   /** Callback invoked with the running total after each page is fetched. */
   onProgress?: (totalFetched: number) => void;
 }

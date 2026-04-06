@@ -1219,6 +1219,107 @@ describe("getMessages", () => {
     expect(messages).toHaveLength(1);
   });
 
+  it("should filter messages by since timestamp", async () => {
+    mockedApi.fetchMessagesPage.mockResolvedValueOnce(
+      makeMessagesPage(
+        [
+          makeMessage({
+            id: "1",
+            originalArrivalTime: "2026-03-27T10:00:00.000Z",
+          }),
+          makeMessage({
+            id: "2",
+            originalArrivalTime: "2026-03-26T10:00:00.000Z",
+          }),
+          makeMessage({
+            id: "3",
+            originalArrivalTime: "2026-03-25T10:00:00.000Z",
+          }),
+        ],
+        null,
+      ),
+    );
+
+    const client = TeamsClient.fromToken("token");
+    const messages = await client.getMessages("conv-id", {
+      since: "2026-03-26T00:00:00.000Z",
+    });
+
+    expect(messages).toHaveLength(2);
+    expect(messages.map((m) => m.id)).toEqual(["1", "2"]);
+  });
+
+  it("should stop paginating early when since cutoff is reached", async () => {
+    mockedApi.fetchMessagesPage
+      .mockResolvedValueOnce(
+        makeMessagesPage(
+          [
+            makeMessage({
+              id: "1",
+              originalArrivalTime: "2026-03-27T10:00:00.000Z",
+            }),
+          ],
+          "https://next-page",
+        ),
+      )
+      .mockResolvedValueOnce(
+        makeMessagesPage(
+          [
+            makeMessage({
+              id: "2",
+              originalArrivalTime: "2026-03-26T10:00:00.000Z",
+            }),
+            makeMessage({
+              id: "3",
+              originalArrivalTime: "2026-03-25T10:00:00.000Z",
+            }),
+          ],
+          "https://another-page",
+        ),
+      );
+
+    const client = TeamsClient.fromToken("token");
+    const messages = await client.getMessages("conv-id", {
+      since: "2026-03-25T12:00:00.000Z",
+    });
+
+    expect(messages).toHaveLength(2);
+    expect(messages.map((m) => m.id)).toEqual(["1", "2"]);
+    // Should not fetch a third page since the cutoff was reached on page 2
+    expect(mockedApi.fetchMessagesPage).toHaveBeenCalledTimes(2);
+  });
+
+  it("should combine since with limit", async () => {
+    mockedApi.fetchMessagesPage.mockResolvedValueOnce(
+      makeMessagesPage(
+        [
+          makeMessage({
+            id: "1",
+            originalArrivalTime: "2026-03-27T10:00:00.000Z",
+          }),
+          makeMessage({
+            id: "2",
+            originalArrivalTime: "2026-03-26T10:00:00.000Z",
+          }),
+          makeMessage({
+            id: "3",
+            originalArrivalTime: "2026-03-25T10:00:00.000Z",
+          }),
+        ],
+        null,
+      ),
+    );
+
+    const client = TeamsClient.fromToken("token");
+    const messages = await client.getMessages("conv-id", {
+      since: "2026-03-25T00:00:00.000Z",
+      limit: 1,
+    });
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].id).toBe("1");
+  });
+
   it("should enrich reaction and follower display names via profiles", async () => {
     mockedApi.fetchMessagesPage.mockResolvedValueOnce(
       makeMessagesPage([
