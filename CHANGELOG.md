@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.2.3...v1.3.0) (2026-04-06)
+
+
+### Features
+
+* add `--since` filter to `get-messages` for incremental syncing ([#20](https://github.com/Maxim-Mazurok/teams-api/issues/20)) ([0e1db4f](https://github.com/Maxim-Mazurok/teams-api/commit/0e1db4fc099542611697f2a0907d1b395d05122f))
+
 ## [1.2.3](https://github.com/Maxim-Mazurok/teams-api/compare/v1.2.2...v1.2.3) (2026-03-30)
 
 
