@@ -1987,7 +1987,7 @@ describe("download-file", () => {
     rmSync(testDirectory, { recursive: true });
   });
 
-  it("should download AMS images", async () => {
+  it("should download AMS images with correct extension for JPEG", async () => {
     const imageData = Buffer.from("fake-image-data");
     const mockClient = createMockClient({
       getMessages: vi.fn().mockResolvedValue([
@@ -2024,6 +2024,42 @@ describe("download-file", () => {
     expect(result[0].contentType).toBe("image/jpeg");
     expect(result[0].data).toEqual(imageData);
     expect(result[0].savedTo).toBeTruthy();
+  });
+
+  it("should use .png extension when image content type is image/png", async () => {
+    const imageData = Buffer.from("fake-png-data");
+    const mockClient = createMockClient({
+      getMessages: vi.fn().mockResolvedValue([
+        makeMessage({
+          id: "msg-1",
+          images: [
+            {
+              amsObjectId: "ams-456",
+              url: "https://as-prod.asyncgw.teams.microsoft.com/v1/objects/ams-456/views/imgo",
+              fullSizeUrl:
+                "https://as-prod.asyncgw.teams.microsoft.com/v1/objects/ams-456/views/imgpsh_fullsize_anim",
+              width: 1024,
+              height: 768,
+              contentPosition: 0,
+            },
+          ],
+        }),
+      ]),
+      downloadImage: vi.fn().mockResolvedValue({
+        data: imageData,
+        contentType: "image/png",
+        size: imageData.length,
+      }),
+    });
+
+    const result = (await downloadFileAction.execute(mockClient, {
+      conversationId: "19:test@thread.space",
+      messageId: "msg-1",
+    })) as import("../../src/actions/file-actions.js").DownloadResult[];
+
+    expect(result).toHaveLength(1);
+    expect(result[0].fileName).toBe("ams-456.png");
+    expect(result[0].contentType).toBe("image/png");
   });
 
   it("should throw when message not found", async () => {

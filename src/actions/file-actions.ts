@@ -8,6 +8,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { extensionFromContentType } from "./mime-utils.js";
 import { type ActionDefinition } from "./formatters.js";
 import {
   conversationParameters,
@@ -102,7 +103,8 @@ export const downloadFileAction: ActionDefinition = {
         true,
       );
 
-      const fileName = `${image.amsObjectId}.jpg`;
+      const extension = extensionFromContentType(contentType);
+      const fileName = `${image.amsObjectId}.${extension}`;
       const outputPath = resolve(join(resolvedOutputDirectory, fileName));
       writeFileSync(outputPath, data);
 
