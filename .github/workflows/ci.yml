@@ -58,17 +58,30 @@ jobs:
         run: npm run build
 
       - name: Release
-        run: npm run release
+        id: release
+        run: |
+          VERSION_BEFORE=$(node -p "require('./package.json').version")
+          npm run release
+          VERSION_AFTER=$(node -p "require('./package.json').version")
+          if [ "$VERSION_BEFORE" != "$VERSION_AFTER" ]; then
+            echo "new-release=true" >> "$GITHUB_OUTPUT"
+            echo "New release: $VERSION_BEFORE → $VERSION_AFTER"
+          else
+            echo "new-release=false" >> "$GITHUB_OUTPUT"
+            echo "No new release"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
 
       - name: Install mcp-publisher
+        if: steps.release.outputs.new-release == 'true'
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
           sudo mv mcp-publisher /usr/local/bin/
 
       - name: Publish to MCP Registry
+        if: steps.release.outputs.new-release == 'true'
         run: |
           VERSION=$(node -p "require('./package.json').version")
           sed -i "s/\"version\": \"0.0.0\"/\"version\": \"$VERSION\"/g" server.json
