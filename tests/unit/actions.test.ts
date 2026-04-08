@@ -1064,7 +1064,61 @@ describe("send-message", () => {
         content: "Hello",
         scheduleAt: "not-a-date",
       }),
-    ).rejects.toThrow('Invalid --scheduleAt value: "not-a-date"');
+    ).rejects.toThrow('Ambiguous --scheduleAt value: "not-a-date"');
+  });
+
+  it("should reject bare datetime without timezone", async () => {
+    const client = createMockClient();
+
+    await expect(
+      action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        content: "Hello",
+        scheduleAt: "2030-07-20T09:00:00",
+      }),
+    ).rejects.toThrow("no timezone designator");
+  });
+
+  it("should accept scheduleAt with positive UTC offset", async () => {
+    const futureDate = new Date();
+    futureDate.setFullYear(futureDate.getFullYear() + 1);
+    const year = futureDate.getFullYear();
+
+    const client = createMockClient({
+      scheduleMessage: vi.fn().mockResolvedValue({
+        arrivalTime: futureDate.getTime(),
+      }),
+    });
+
+    const result = (await action.execute(client, {
+      conversationId: "19:chat@thread.v2",
+      content: "Hello",
+      scheduleAt: `${year}-07-20T09:00:00+05:30`,
+    })) as ScheduledMessage & { scheduled: boolean };
+
+    expect(result.scheduled).toBe(true);
+    expect(client.scheduleMessage).toHaveBeenCalled();
+  });
+
+  it("should accept scheduleAt with negative UTC offset", async () => {
+    const futureDate = new Date();
+    futureDate.setFullYear(futureDate.getFullYear() + 1);
+    const year = futureDate.getFullYear();
+
+    const client = createMockClient({
+      scheduleMessage: vi.fn().mockResolvedValue({
+        arrivalTime: futureDate.getTime(),
+      }),
+    });
+
+    const result = (await action.execute(client, {
+      conversationId: "19:chat@thread.v2",
+      content: "Hello",
+      scheduleAt: `${year}-07-20T09:00:00-08:00`,
+    })) as ScheduledMessage & { scheduled: boolean };
+
+    expect(result.scheduled).toBe(true);
+    expect(client.scheduleMessage).toHaveBeenCalled();
   });
 
   it("should reject scheduleAt in the past", async () => {

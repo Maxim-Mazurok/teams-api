@@ -351,7 +351,10 @@ export const sendMessage: ActionDefinition = {
       type: "string",
       description:
         "Schedule the message to be sent at a future time. " +
-        "Accepts an ISO 8601 timestamp (e.g. 2025-01-15T14:30:00Z). " +
+        "Accepts an ISO 8601 timestamp with an explicit timezone designator " +
+        '(e.g. 2025-01-15T14:30:00Z, 2025-01-15T14:30:00+05:30). Bare local ' +
+        "datetimes without a timezone (e.g. 2025-01-15T14:30:00) are rejected " +
+        "because they are ambiguous. " +
         "Cannot be combined with --image or --file attachments.",
       required: false,
     },
@@ -384,6 +387,14 @@ export const sendMessage: ActionDefinition = {
     }
 
     if (scheduleAtRaw) {
+      const trimmed = scheduleAtRaw.trim();
+      if (!/(?:Z|[+-]\d{2}:\d{2})$/i.test(trimmed)) {
+        throw new Error(
+          `Ambiguous --scheduleAt value: "${scheduleAtRaw}". ` +
+            "The timestamp has no timezone designator. Append Z for UTC or a " +
+            "UTC offset like +05:30 (e.g. 2025-01-15T14:30:00Z).",
+        );
+      }
       const scheduleAt = new Date(scheduleAtRaw);
       if (isNaN(scheduleAt.getTime())) {
         throw new Error(
