@@ -1090,11 +1090,11 @@ describe("send-message", () => {
       }),
     });
 
-    const result = await action.execute(client, {
+    const result = (await action.execute(client, {
       conversationId: "19:chat@thread.v2",
       content: "Hello",
       scheduleAt: `${year}-07-20T09:00:00+05:30`,
-    });
+    })) as ScheduledMessage & { scheduled: boolean };
 
     expect(result.scheduled).toBe(true);
     expect(client.scheduleMessage).toHaveBeenCalled();
@@ -1111,11 +1111,11 @@ describe("send-message", () => {
       }),
     });
 
-    const result = await action.execute(client, {
+    const result = (await action.execute(client, {
       conversationId: "19:chat@thread.v2",
       content: "Hello",
       scheduleAt: `${year}-07-20T09:00:00-08:00`,
-    });
+    })) as ScheduledMessage & { scheduled: boolean };
 
     expect(result.scheduled).toBe(true);
     expect(client.scheduleMessage).toHaveBeenCalled();
