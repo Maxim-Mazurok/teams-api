@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.3.0...v1.4.0) (2026-04-08)
+
+
+### Features
+
+* reject ambiguous scheduleAt timestamps without timezone ([#37](https://github.com/Maxim-Mazurok/teams-api/issues/37)) ([9cfcd1c](https://github.com/Maxim-Mazurok/teams-api/commit/9cfcd1c1a606d9a1e16d4b0174fdef4c25db0d2a)), closes [#33](https://github.com/Maxim-Mazurok/teams-api/issues/33)
+
 # [1.3.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.2.3...v1.3.0) (2026-04-06)
 
 
