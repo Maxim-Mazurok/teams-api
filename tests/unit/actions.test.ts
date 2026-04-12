@@ -694,9 +694,9 @@ describe("get-messages", () => {
   it("should append ;messageid= to conversation ID when messageId is provided", async () => {
     const messages = [makeMessage()];
     const client = createMockClient({
-      findConversation: vi.fn().mockResolvedValue(
-        makeConversation({ id: "19:channel@thread.tacv2" }),
-      ),
+      findConversation: vi
+        .fn()
+        .mockResolvedValue(makeConversation({ id: "19:channel@thread.tacv2" })),
       getMessages: vi.fn().mockResolvedValue(messages),
     });
 
@@ -822,6 +822,7 @@ describe("send-message", () => {
       "markdown",
       [],
       undefined,
+      undefined,
     );
     expect(result.messageId).toBe("1773000000000");
     expect(result.conversation).toBe("Design Review");
@@ -848,6 +849,7 @@ describe("send-message", () => {
       "text",
       [],
       undefined,
+      undefined,
     );
   });
 
@@ -871,6 +873,7 @@ describe("send-message", () => {
       "<b>Bold</b>",
       "html",
       [],
+      undefined,
       undefined,
     );
   });
@@ -896,11 +899,14 @@ describe("send-message", () => {
       "markdown",
       [],
       "My Post Title",
+      undefined,
     );
   });
 
   it("should forward --subject to scheduleMessage", async () => {
-    const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
+    const futureDate = new Date(
+      Date.now() + 24 * 60 * 60 * 1_000,
+    ).toISOString();
     const scheduledMessage: ScheduledMessage = {
       messageId: "1753021800000",
       arrivalTime: 1753021800000,
@@ -955,9 +961,14 @@ describe("send-message", () => {
       arrivalTime: 1774999999999,
     };
     const client = createMockClient({
-      findConversation: vi.fn().mockResolvedValue(
-        makeConversation({ id: "19:channel@thread.tacv2", topic: "Dev Channel" }),
-      ),
+      findConversation: vi
+        .fn()
+        .mockResolvedValue(
+          makeConversation({
+            id: "19:channel@thread.tacv2",
+            topic: "Dev Channel",
+          }),
+        ),
       sendMessage: vi.fn().mockResolvedValue(sentMessage),
     });
 
@@ -972,6 +983,7 @@ describe("send-message", () => {
       "Thread reply!",
       "markdown",
       [],
+      undefined,
       undefined,
     );
   });
@@ -1185,6 +1197,7 @@ describe("edit-message", () => {
       "msg-123",
       "Updated content",
       "markdown",
+      undefined,
     );
     expect(result.messageId).toBe("msg-123");
     expect(result.conversation).toBe("Design Review");
@@ -1211,6 +1224,7 @@ describe("edit-message", () => {
       "msg-text",
       "plain text update",
       "text",
+      undefined,
     );
   });
 
@@ -1235,6 +1249,7 @@ describe("edit-message", () => {
       "msg-html",
       "<b>Bold edit</b>",
       "html",
+      undefined,
     );
   });
 
@@ -1674,7 +1689,11 @@ describe("formatOutput", () => {
   });
 
   it("should handle null result in detailed format", () => {
-    const output = formatOutput(getAction("find-conversation"), null, "detailed");
+    const output = formatOutput(
+      getAction("find-conversation"),
+      null,
+      "detailed",
+    );
     expect(output).toBe("null");
   });
 });

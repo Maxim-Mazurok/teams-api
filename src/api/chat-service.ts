@@ -165,6 +165,20 @@ export async function fetchMembers(
 }
 
 /**
+ * Escape plain-text content for safe inclusion in HTML.
+ *
+ * When a quote is prepended to a plain-text message, the text must be
+ * escaped and wrapped so it renders correctly alongside the HTML blockquote.
+ */
+function escapeHtmlContent(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
  * Convert content to the appropriate format for the Teams API.
  *
  * - "text": sent as-is with messagetype "Text"
@@ -216,14 +230,24 @@ export async function postMessage(
   amsReferences: string[] = [],
   filesJson?: string,
   subject?: string,
+  quoteHtml?: string,
 ): Promise<SentMessage> {
   const url = `${chatServiceBase(token.region)}/users/ME/conversations/${encodeURIComponent(conversationId)}/messages`;
 
   const clientMessageId = String(Date.now());
-  const { resolvedContent, messagetype, contenttype } = resolveMessageContent(
+  let { resolvedContent, messagetype, contenttype } = resolveMessageContent(
     content,
     format,
   );
+
+  if (quoteHtml) {
+    if (messagetype !== "RichText/Html") {
+      // Wrap plain-text content in a paragraph so it renders correctly as HTML
+      resolvedContent = escapeHtmlContent(resolvedContent);
+    }
+    resolvedContent = quoteHtml + resolvedContent;
+    messagetype = "RichText/Html";
+  }
 
   const body: Record<string, unknown> = {
     content: resolvedContent,
@@ -288,13 +312,22 @@ export async function editMessage(
   content: string,
   senderDisplayName: string,
   format: MessageFormat = "markdown",
+  quoteHtml?: string,
 ): Promise<EditedMessage> {
   const url = `${chatServiceBase(token.region)}/users/ME/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`;
 
-  const { resolvedContent, messagetype, contenttype } = resolveMessageContent(
+  let { resolvedContent, messagetype, contenttype } = resolveMessageContent(
     content,
     format,
   );
+
+  if (quoteHtml) {
+    if (messagetype !== "RichText/Html") {
+      resolvedContent = escapeHtmlContent(resolvedContent);
+    }
+    resolvedContent = quoteHtml + resolvedContent;
+    messagetype = "RichText/Html";
+  }
 
   const body = {
     content: resolvedContent,
@@ -606,7 +639,9 @@ export async function createOneOnOneConversation(
 
   const data = (await response.json()) as { id?: string };
   if (!data.id) {
-    throw new Error("No conversation ID returned when creating 1:1 conversation");
+    throw new Error(
+      "No conversation ID returned when creating 1:1 conversation",
+    );
   }
   return { id: data.id };
 }

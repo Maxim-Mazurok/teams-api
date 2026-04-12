@@ -116,8 +116,9 @@ async function fetchCurrentVersion(): Promise<string | null> {
         continue;
       }
       const responseText = await response.text();
-      const emoticonAssetVersionMatch =
-        /"emoticonAssetVersion":"([^"]+)"/.exec(responseText);
+      const emoticonAssetVersionMatch = /"emoticonAssetVersion":"([^"]+)"/.exec(
+        responseText,
+      );
       if (!emoticonAssetVersionMatch) {
         console.warn(
           `[emoji-map] emoticonAssetVersion not found for app version ${appVersionCandidate}, trying next candidate`,
@@ -238,4 +239,3 @@ export function resolveReactionKey(input: string): string {
   // Map not loaded — fall back to lowercasing (standard reactions still work)
   return input.toLowerCase();
 }
-

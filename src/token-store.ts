@@ -25,7 +25,10 @@ interface StoredToken {
 
 const store = createCredentialStore();
 
-export async function saveToken(email: string, token: TeamsToken): Promise<void> {
+export async function saveToken(
+  email: string,
+  token: TeamsToken,
+): Promise<void> {
   const storedToken: StoredToken = {
     skypeToken: token.skypeToken,
     region: token.region,

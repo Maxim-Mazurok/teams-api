@@ -231,7 +231,10 @@ export const getMessages: ActionDefinition = {
       if (quote && message.quotedMessageId) {
         const quotedSender =
           senderLookup.get(message.quotedMessageId) ?? "unknown";
-        lines.push(`> **[replying to ${quotedSender} (${message.quotedMessageId})]:** ${quote}`, "");
+        lines.push(
+          `> **[replying to ${quotedSender} (${message.quotedMessageId})]:** ${quote}`,
+          "",
+        );
       }
 
       lines.push(body, "");
@@ -261,7 +264,9 @@ export const getMessages: ActionDefinition = {
         metadata.push(attachmentSummary);
       }
       if (message.editTime) {
-        metadata.push(`Edited: ${message.editTime.slice(0, 19).replace("T", " ")}`);
+        metadata.push(
+          `Edited: ${message.editTime.slice(0, 19).replace("T", " ")}`,
+        );
       }
       if (metadata.length > 0) {
         lines.push(metadata.join(" | "), "");
@@ -331,7 +336,7 @@ export const sendMessage: ActionDefinition = {
       name: "fileSharingScope",
       type: "string",
       description:
-        'Sharing scope for uploaded files: ' +
+        "Sharing scope for uploaded files: " +
         '"chat" (default — share with chat participants), ' +
         '"organization" (anyone in the org with the link), ' +
         '"none" (no sharing — only the uploader can access). ' +
@@ -352,10 +357,18 @@ export const sendMessage: ActionDefinition = {
       description:
         "Schedule the message to be sent at a future time. " +
         "Accepts an ISO 8601 timestamp with an explicit timezone designator " +
-        '(e.g. 2025-01-15T14:30:00Z, 2025-01-15T14:30:00+05:30). Bare local ' +
+        "(e.g. 2025-01-15T14:30:00Z, 2025-01-15T14:30:00+05:30). Bare local " +
         "datetimes without a timezone (e.g. 2025-01-15T14:30:00) are rejected " +
         "because they are ambiguous. " +
         "Cannot be combined with --image or --file attachments.",
+      required: false,
+    },
+    {
+      name: "quoteMessageId",
+      type: "string",
+      description:
+        "Message ID to quote (inline reply). The referenced message's content " +
+        "is automatically fetched and included as a blockquote above your message.",
       required: false,
     },
   ],
@@ -373,6 +386,7 @@ export const sendMessage: ActionDefinition = {
     const filePaths = (parameters.file as string[] | undefined) ?? [];
     const scheduleAtRaw = parameters.scheduleAt as string | undefined;
     const subject = parameters.subject as string | undefined;
+    const quoteMessageId = parameters.quoteMessageId as string | undefined;
 
     if (!content && imagePaths.length === 0 && filePaths.length === 0) {
       throw new Error(
@@ -448,6 +462,7 @@ export const sendMessage: ActionDefinition = {
       messageFormat,
       [],
       subject,
+      quoteMessageId,
     );
     return { ...result, conversation: label };
   },
@@ -525,6 +540,14 @@ export const editMessageAction: ActionDefinition = {
       required: false,
       default: "markdown",
     },
+    {
+      name: "quoteMessageId",
+      type: "string",
+      description:
+        "Message ID to quote (inline reply). The referenced message's content " +
+        "is automatically fetched and included as a blockquote above your message.",
+      required: false,
+    },
   ],
   execute: async (client, parameters) => {
     const { conversationId, label } = await resolveConversationId(
@@ -535,11 +558,13 @@ export const editMessageAction: ActionDefinition = {
     const content = parameters.content as string;
     const messageFormat =
       (parameters.messageFormat as MessageFormat | undefined) ?? "markdown";
+    const quoteMessageId = parameters.quoteMessageId as string | undefined;
     const result = await client.editMessage(
       conversationId,
       messageId,
       content,
       messageFormat,
+      quoteMessageId,
     );
     return { ...result, conversation: label };
   },
@@ -624,7 +649,7 @@ export const addReactionAction: ActionDefinition = {
       description:
         'Reaction name — standard ("like", "heart", "laugh", "surprised", "angry", "sad") ' +
         'or any Teams emoji shortcut ("horse", "fire", "clap"). ' +
-        'Auto-resolved to the Teams emoji ID.',
+        "Auto-resolved to the Teams emoji ID.",
       required: true,
     },
   ],
@@ -681,7 +706,7 @@ export const removeReactionAction: ActionDefinition = {
       type: "string",
       description:
         'Reaction name or emoji ID to remove (e.g. "like", "heart", "horse", "1f40e_horse"). ' +
-        'Auto-resolved to the Teams emoji ID.',
+        "Auto-resolved to the Teams emoji ID.",
       required: true,
     },
   ],

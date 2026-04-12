@@ -51,9 +51,15 @@ function mockFetchSuccess(): void {
     "fetch",
     vi.fn().mockImplementation((url: string) => {
       if (url.includes("config.teams.microsoft.com")) {
-        return Promise.resolve({ ok: true, text: () => Promise.resolve(TEST_ECS_RESPONSE) });
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(TEST_ECS_RESPONSE),
+        });
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(testCatalog) });
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(testCatalog),
+      });
     }),
   );
 }
@@ -62,10 +68,7 @@ function mockFetchSuccess(): void {
  * Stub fetch to fail for all requests.
  */
 function mockFetchFailure(): void {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockResolvedValue({ ok: false, status: 404 }),
-  );
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404 }));
 }
 
 /**
@@ -78,7 +81,10 @@ function mockFetchEcsFailCdnSuccess(): void {
       if (url.includes("config.teams.microsoft.com")) {
         return Promise.resolve({ ok: false, status: 503 });
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(testCatalog) });
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(testCatalog),
+      });
     }),
   );
 }
@@ -97,8 +103,12 @@ describe("initializeEmojiMap", () => {
     mockFetchSuccess();
     await initializeEmojiMap();
     const calls = vi.mocked(fetch).mock.calls.map((c) => c[0] as string);
-    expect(calls.some((u) => u.includes("config.teams.microsoft.com"))).toBe(true);
-    expect(calls.some((u) => u.includes("statics.teams.cdn.office.net"))).toBe(true);
+    expect(calls.some((u) => u.includes("config.teams.microsoft.com"))).toBe(
+      true,
+    );
+    expect(calls.some((u) => u.includes("statics.teams.cdn.office.net"))).toBe(
+      true,
+    );
     // CDN URL uses the ECS-resolved version hash
     expect(calls.some((u) => u.includes(TEST_ECS_VERSION))).toBe(true);
   });
@@ -117,20 +127,28 @@ describe("initializeEmojiMap", () => {
       "fetch",
       vi.fn().mockImplementation((url: string) => {
         if (url.includes("config.teams.microsoft.com")) {
-          return Promise.resolve({ ok: true, text: () => Promise.resolve(TEST_ECS_RESPONSE) });
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(TEST_ECS_RESPONSE),
+          });
         }
         if (url.includes(TEST_ECS_VERSION)) {
           return Promise.resolve({ ok: false, status: 404 });
         }
         // Fallback CDN versions succeed
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(testCatalog) });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(testCatalog),
+        });
       }),
     );
     await initializeEmojiMap();
     expect(resolveReactionKey("horse")).toBe("1f40e_horse");
     const calls = vi.mocked(fetch).mock.calls.map((c) => c[0] as string);
     // ECS call, ECS-version CDN call (404), then a fallback version CDN call
-    expect(calls.filter((u) => u.includes("statics.teams.cdn.office.net")).length).toBeGreaterThanOrEqual(2);
+    expect(
+      calls.filter((u) => u.includes("statics.teams.cdn.office.net")).length,
+    ).toBeGreaterThanOrEqual(2);
   });
 
   it("validates the ECS version format and falls back on malformed values", async () => {
@@ -139,16 +157,28 @@ describe("initializeEmojiMap", () => {
       "fetch",
       vi.fn().mockImplementation((url: string) => {
         if (url.includes("config.teams.microsoft.com")) {
-          return Promise.resolve({ ok: true, text: () => Promise.resolve(malformedEcsResponse) });
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(malformedEcsResponse),
+          });
         }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(testCatalog) });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(testCatalog),
+        });
       }),
     );
     await initializeEmojiMap();
     // Should still succeed via fallback versions
     expect(resolveReactionKey("horse")).toBe("1f40e_horse");
-    const warnings = vi.mocked(console.warn).mock.calls.map((c) => c[0] as string);
-    expect(warnings.some((w) => w.includes("Unexpected emoticonAssetVersion format"))).toBe(true);
+    const warnings = vi
+      .mocked(console.warn)
+      .mock.calls.map((c) => c[0] as string);
+    expect(
+      warnings.some((w) =>
+        w.includes("Unexpected emoticonAssetVersion format"),
+      ),
+    ).toBe(true);
   });
 
   it("falls back to hardcoded versions when ECS is unreachable", async () => {
@@ -157,8 +187,12 @@ describe("initializeEmojiMap", () => {
     expect(resolveReactionKey("horse")).toBe("1f40e_horse");
     const calls = vi.mocked(fetch).mock.calls.map((c) => c[0] as string);
     // Should have tried ECS then a fallback CDN version
-    expect(calls.some((u) => u.includes("config.teams.microsoft.com"))).toBe(true);
-    expect(calls.some((u) => u.includes("statics.teams.cdn.office.net"))).toBe(true);
+    expect(calls.some((u) => u.includes("config.teams.microsoft.com"))).toBe(
+      true,
+    );
+    expect(calls.some((u) => u.includes("statics.teams.cdn.office.net"))).toBe(
+      true,
+    );
   });
 
   it("does not throw when all fetches fail", async () => {
@@ -236,9 +270,7 @@ describe("resolveReactionKey (map loaded)", () => {
 
   describe("unknown keys", () => {
     it("passes through unknown keys lowercased", () => {
-      expect(resolveReactionKey("unknown_emoji_xyz")).toBe(
-        "unknown_emoji_xyz",
-      );
+      expect(resolveReactionKey("unknown_emoji_xyz")).toBe("unknown_emoji_xyz");
       expect(resolveReactionKey("CustomReaction")).toBe("customreaction");
     });
   });

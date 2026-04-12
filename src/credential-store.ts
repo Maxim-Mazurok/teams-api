@@ -52,7 +52,14 @@ class KeychainStore implements CredentialStore {
     try {
       return execFileSync(
         "security",
-        ["find-generic-password", "-a", account, "-s", CREDENTIAL_SERVICE, "-w"],
+        [
+          "find-generic-password",
+          "-a",
+          account,
+          "-s",
+          CREDENTIAL_SERVICE,
+          "-w",
+        ],
         { encoding: "utf-8" },
       ).trim();
     } catch {
@@ -129,7 +136,11 @@ class WinCredStore implements CredentialStore {
     }
 
     // Primary entry stores the chunk count
-    await kt.setPassword(CREDENTIAL_SERVICE, key, `${CHUNK_MARKER}${chunks.length}`);
+    await kt.setPassword(
+      CREDENTIAL_SERVICE,
+      key,
+      `${CHUNK_MARKER}${chunks.length}`,
+    );
     for (let i = 0; i < chunks.length; i++) {
       await kt.setPassword(CREDENTIAL_SERVICE, `${key}:${i}`, chunks[i]);
     }
@@ -193,7 +204,8 @@ class WinCredStore implements CredentialStore {
 
 function getLinuxStorePath(): string {
   const configDir =
-    process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? homedir(), ".config");
+    process.env.XDG_CONFIG_HOME ??
+    join(process.env.HOME ?? homedir(), ".config");
   return join(configDir, "teams-api");
 }
 

@@ -463,7 +463,8 @@ describe("uploadSharePointFile", () => {
           Promise.resolve({
             shareId: "share-link-id",
             link: {
-              webUrl: "https://company-my.sharepoint.com/:t:/p/user_name/shared-link",
+              webUrl:
+                "https://company-my.sharepoint.com/:t:/p/user_name/shared-link",
             },
           }),
       });

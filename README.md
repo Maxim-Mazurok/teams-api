@@ -192,15 +192,15 @@ Manual token usage, debug-session auth, and programmatic Node.js usage are cover
 
 ## Platform support
 
-| Feature                | macOS          | Windows / Linux |
-| ---------------------- | -------------- | --------------- |
-| **Interactive login**  | Full support   | Full support    |
-| **Auto-login (FIDO2)** | Full support   | Not supported   |
-| **Debug session**      | Full support   | Full support    |
-| **Direct token**       | Full support   | Full support    |
+| Feature                | macOS          | Windows / Linux                   |
+| ---------------------- | -------------- | --------------------------------- |
+| **Interactive login**  | Full support   | Full support                      |
+| **Auto-login (FIDO2)** | Full support   | Not supported                     |
+| **Debug session**      | Full support   | Full support                      |
+| **Direct token**       | Full support   | Full support                      |
 | **Token caching**      | macOS Keychain | Windows DPAPI / Linux secret-tool |
-| **CLI & MCP server**   | Full support   | Full support    |
-| **Programmatic API**   | Full support   | Full support    |
+| **CLI & MCP server**   | Full support   | Full support                      |
+| **Programmatic API**   | Full support   | Full support                      |
 
 > [!NOTE]
 > **Windows Defender false positive:** Older versions of this package used inline PowerShell to call the Windows DPAPI — a pattern that Windows Defender flags as ransomware-like behavior. This has been replaced with native Windows Credential Manager storage via [keytar](https://github.com/atom/node-keytar). If you hit issues on an older version, upgrade and re-run `teams-api auth --login`. See [SECURITY.md](./SECURITY.md) for details.
@@ -305,8 +305,8 @@ The examples below use `teams-api` for readability. If you are not installing gl
 | `--substrate-token <token>` | Optional Substrate bearer token (advanced/manual)                                |
 | `--debug-port <port>`       | Chrome debug port (default: 9222)                                                |
 | `--region <region>`         | API region override. Auto-detected for login/debug auth; required with `--token` |
-| `--format <format>`         | Output format: concise, detailed                                             |
-| `--output <file>`           | Export output to file (default format: concise)                              |
+| `--format <format>`         | Output format: concise, detailed                                                 |
+| `--output <file>`           | Export output to file (default format: concise)                                  |
 
 ### Examples
 
