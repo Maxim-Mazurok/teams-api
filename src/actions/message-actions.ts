@@ -26,6 +26,10 @@ import {
   resolveConversationId,
 } from "./conversation-resolution.js";
 import { emitAuditEvent } from "../audit.js";
+import {
+  resolveProtectedPatterns,
+  matchProtectedConversation,
+} from "../conversation-protection.js";
 
 /** Map file extension to MIME content type. */
 function contentTypeFromExtension(filePath: string): string {
@@ -584,12 +588,34 @@ export const editMessageAction: ActionDefinition = {
         "Defaults to TEAMS_AGENT_MARKER env var. Omit or set to empty to disable.",
       required: false,
     },
+    {
+      name: "protectedConversations",
+      type: "string",
+      description:
+        "Comma-separated glob patterns of conversation names where editing is blocked. " +
+        '`*` matches any characters, matching is case-insensitive. Example: "Architecture *,*compliance*". ' +
+        "Defaults to TEAMS_PROTECTED_CONVERSATIONS env var. Omit to allow all.",
+      required: false,
+    },
   ],
   execute: async (client, parameters) => {
     const { conversationId, label } = await resolveConversationId(
       client,
       parameters,
     );
+
+    const protectedPatterns = resolveProtectedPatterns(
+      parameters.protectedConversations as string | undefined,
+    );
+    const matchedPattern = matchProtectedConversation(label, protectedPatterns);
+    if (matchedPattern) {
+      throw new Error(
+        `Cannot edit message in "${label}": conversation is protected ` +
+          `(matched pattern "${matchedPattern}"). ` +
+          `Remove the pattern from TEAMS_PROTECTED_CONVERSATIONS or the protectedConversations parameter to allow editing.`,
+      );
+    }
+
     const messageId = parameters.messageId as string;
     const agentMarker =
       (parameters.agentMarker as string | undefined) ??
@@ -697,12 +723,34 @@ export const deleteMessageAction: ActionDefinition = {
         `"${DEFAULT_DELETE_TOMBSTONE}".`,
       required: false,
     },
+    {
+      name: "protectedConversations",
+      type: "string",
+      description:
+        "Comma-separated glob patterns of conversation names where deletion is blocked. " +
+        '`*` matches any characters, matching is case-insensitive. Example: "Architecture *,*compliance*". ' +
+        "Defaults to TEAMS_PROTECTED_CONVERSATIONS env var. Omit to allow all.",
+      required: false,
+    },
   ],
   execute: async (client, parameters) => {
     const { conversationId, label } = await resolveConversationId(
       client,
       parameters,
     );
+
+    const protectedPatterns = resolveProtectedPatterns(
+      parameters.protectedConversations as string | undefined,
+    );
+    const matchedPattern = matchProtectedConversation(label, protectedPatterns);
+    if (matchedPattern) {
+      throw new Error(
+        `Cannot delete message in "${label}": conversation is protected ` +
+          `(matched pattern "${matchedPattern}"). ` +
+          `Remove the pattern from TEAMS_PROTECTED_CONVERSATIONS or the protectedConversations parameter to allow deletion.`,
+      );
+    }
+
     const messageId = parameters.messageId as string;
 
     const deleteMode: DeleteMode =
