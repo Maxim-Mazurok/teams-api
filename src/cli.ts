@@ -54,10 +54,7 @@ function addAuthOptions(command: Command): Command {
       "--login",
       "Interactive browser login (all platforms, no FIDO2 needed)",
     )
-    .option(
-      "--debug",
-      "Use Chrome debug session for token capture",
-    )
+    .option("--debug", "Use Chrome debug session for token capture")
     .option(
       "--email <email>",
       "Corporate email (required with --auto, optional with --login)",

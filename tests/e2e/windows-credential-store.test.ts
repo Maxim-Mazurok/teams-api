@@ -86,40 +86,36 @@ describe.skipIf(!shouldRun)(
   },
 );
 
-describe.skipIf(!shouldRun)(
-  "Windows Token Store",
-  { timeout: 30_000 },
-  () => {
-    const tokenKey = "teams-api-e2e-token";
+describe.skipIf(!shouldRun)("Windows Token Store", { timeout: 30_000 }, () => {
+  const tokenKey = "teams-api-e2e-token";
 
-    afterAll(async () => {
-      await clearToken(tokenKey).catch(() => {});
-    });
+  afterAll(async () => {
+    await clearToken(tokenKey).catch(() => {});
+  });
 
-    it("should save and load a realistic token payload", async () => {
-      const token = {
-        skypeToken: "sk_" + "a".repeat(1500),
-        region: "apac",
-        bearerToken: "bt_" + "b".repeat(1500),
-        substrateToken: "st_" + "c".repeat(500),
-      };
-      await saveToken(tokenKey, token as any);
-      const loaded = await loadToken(tokenKey);
+  it("should save and load a realistic token payload", async () => {
+    const token = {
+      skypeToken: "sk_" + "a".repeat(1500),
+      region: "apac",
+      bearerToken: "bt_" + "b".repeat(1500),
+      substrateToken: "st_" + "c".repeat(500),
+    };
+    await saveToken(tokenKey, token as any);
+    const loaded = await loadToken(tokenKey);
 
-      expect(loaded).not.toBeNull();
-      expect(loaded!.skypeToken).toBe(token.skypeToken);
-      expect(loaded!.bearerToken).toBe(token.bearerToken);
-      expect(loaded!.substrateToken).toBe(token.substrateToken);
-      expect(loaded!.region).toBe(token.region);
-    });
+    expect(loaded).not.toBeNull();
+    expect(loaded!.skypeToken).toBe(token.skypeToken);
+    expect(loaded!.bearerToken).toBe(token.bearerToken);
+    expect(loaded!.substrateToken).toBe(token.substrateToken);
+    expect(loaded!.region).toBe(token.region);
+  });
 
-    it("should clear a saved token", async () => {
-      await saveToken(tokenKey, {
-        skypeToken: "temp",
-        region: "amer",
-      } as any);
-      await clearToken(tokenKey);
-      expect(await loadToken(tokenKey)).toBeNull();
-    });
-  },
-);
+  it("should clear a saved token", async () => {
+    await saveToken(tokenKey, {
+      skypeToken: "temp",
+      region: "amer",
+    } as any);
+    await clearToken(tokenKey);
+    expect(await loadToken(tokenKey)).toBeNull();
+  });
+});

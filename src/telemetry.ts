@@ -144,7 +144,11 @@ export function recordToolError(opts: {
     parameters: opts.parameters,
     error:
       opts.error instanceof Error
-        ? { name: opts.error.name, message: opts.error.message, stack: opts.error.stack }
+        ? {
+            name: opts.error.name,
+            message: opts.error.message,
+            stack: opts.error.stack,
+          }
         : String(opts.error),
   });
 }

@@ -122,7 +122,7 @@ describe.runIf(process.platform === "win32")(
         await import("../../src/credential-store.js");
       const store = createCredentialStore();
 
-      const specialData = 'quotes"and\'backslash\\newline\ntab\t${}`template`';
+      const specialData = "quotes\"and'backslash\\newline\ntab\t${}`template`";
       await store.save(testAccount, specialData);
       const loaded = await store.load(testAccount);
 

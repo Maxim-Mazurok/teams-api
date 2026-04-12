@@ -49,14 +49,18 @@ describe("getTelemetryDir", () => {
 
   it("returns XDG path on linux when XDG_DATA_HOME is set", () => {
     vi.stubEnv("XDG_DATA_HOME", "/custom/data");
-    expect(getTelemetryDir("linux")).toMatch(/[/\\]custom[/\\]data[/\\]teams-api$/);
+    expect(getTelemetryDir("linux")).toMatch(
+      /[/\\]custom[/\\]data[/\\]teams-api$/,
+    );
   });
 
   it("returns ~/.local/share on linux when XDG_DATA_HOME is not set", () => {
     const original = process.env.XDG_DATA_HOME;
     try {
       delete process.env.XDG_DATA_HOME;
-      expect(getTelemetryDir("linux")).toMatch(/\.local[/\\]share[/\\]teams-api$/);
+      expect(getTelemetryDir("linux")).toMatch(
+        /\.local[/\\]share[/\\]teams-api$/,
+      );
     } finally {
       if (original !== undefined) {
         process.env.XDG_DATA_HOME = original;
@@ -186,9 +190,7 @@ describe("write functions", () => {
     expect((r.error as Record<string, unknown>).message).toBe(
       "Request failed with 401",
     );
-    expect(
-      typeof (r.error as Record<string, unknown>).stack,
-    ).toBe("string");
+    expect(typeof (r.error as Record<string, unknown>).stack).toBe("string");
   });
 
   it("writes an auth record", () => {
@@ -212,9 +214,9 @@ describe("write functions", () => {
     });
     const records = readRecords();
     expect(records[0].success).toBe(false);
-    expect(
-      ((records[0].error) as Record<string, unknown>).message,
-    ).toBe("Timeout");
+    expect((records[0].error as Record<string, unknown>).message).toBe(
+      "Timeout",
+    );
   });
 
   it("appends multiple records sequentially", () => {

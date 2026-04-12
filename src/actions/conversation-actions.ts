@@ -34,8 +34,7 @@ export const listConversations: ActionDefinition = {
     lines.push("|---|-------|------|----|--------------|");
     for (let i = 0; i < conversations.length; i++) {
       const conversation = conversations[i];
-      const lastMessage =
-        conversation.lastMessageTime?.slice(0, 10) ?? "";
+      const lastMessage = conversation.lastMessageTime?.slice(0, 10) ?? "";
       const topic = conversation.topic || "(untitled)";
       lines.push(
         `| ${i} | ${topic} | ${conversation.threadType} | ${conversation.id} | ${lastMessage} |`,
@@ -75,7 +74,9 @@ export const findConversation: ActionDefinition = {
       `- **Type:** ${conversation.threadType}`,
     ];
     if (conversation.lastMessageTime) {
-      lines.push(`- **Last message:** ${conversation.lastMessageTime.slice(0, 10)}`);
+      lines.push(
+        `- **Last message:** ${conversation.lastMessageTime.slice(0, 10)}`,
+      );
     }
     return lines.join("\n");
   },

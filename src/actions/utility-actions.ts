@@ -43,7 +43,9 @@ export const getMembers: ActionDefinition = {
       lines.push("|------|------|------|----|");
       for (const member of people) {
         const name = member.displayName || "(unknown)";
-        lines.push(`| ${name} | ${member.role} | ${member.memberType} | ${member.id} |`);
+        lines.push(
+          `| ${name} | ${member.role} | ${member.memberType} | ${member.id} |`,
+        );
       }
     }
     if (bots.length > 0) {

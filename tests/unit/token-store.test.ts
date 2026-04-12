@@ -60,10 +60,7 @@ describe("saveToken", () => {
     await saveToken(testEmail, testToken);
 
     expect(mockStore.save).toHaveBeenCalledTimes(1);
-    expect(mockStore.save).toHaveBeenCalledWith(
-      testEmail,
-      expect.any(String),
-    );
+    expect(mockStore.save).toHaveBeenCalledWith(testEmail, expect.any(String));
   });
 
   it("should store base64-encoded JSON with acquiredAt timestamp", async () => {
