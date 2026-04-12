@@ -27,6 +27,7 @@ import type {
   DeletedMessage,
   ReactionResult,
   ScheduledMessage,
+  DeleteMode,
 } from "../../src/types.js";
 
 // ── Mock client factory ──────────────────────────────────────────────
@@ -1751,7 +1752,7 @@ describe("edit-message", () => {
 describe("delete-message", () => {
   const action = getAction("delete-message");
 
-  it("should resolve conversation and delete message", async () => {
+  it("should resolve conversation and delete message (hard mode by default)", async () => {
     const conversation = makeConversation({
       id: "19:chat@thread.v2",
       topic: "Design Review",
@@ -1802,7 +1803,7 @@ describe("delete-message", () => {
     ).rejects.toThrow("One of --conversation-id, --chat, or --to is required.");
   });
 
-  it("should format result correctly", () => {
+  it("should format hard-delete result correctly", () => {
     const result = {
       messageId: "msg-123",
       conversation: "Design Review",
@@ -1813,6 +1814,210 @@ describe("delete-message", () => {
     expect(output).toContain("## Message Deleted");
     expect(output).toContain("**From:** Design Review");
     expect(output).toContain("**Message ID:** msg-123");
+  });
+
+  // ── soft-delete mode ──
+
+  it("should replace content with default tombstone when deleteMode is 'soft'", async () => {
+    const conversation = makeConversation({
+      id: "19:chat@thread.v2",
+      topic: "Design Review",
+    });
+    const editedMessage: EditedMessage = {
+      messageId: "msg-123",
+      editTime: "2026-04-12T09:00:00Z",
+    };
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(conversation),
+      editMessage: vi.fn().mockResolvedValue(editedMessage),
+    });
+
+    const result = (await action.execute(client, {
+      chat: "Design Review",
+      messageId: "msg-123",
+      deleteMode: "soft",
+    })) as { messageId: string; softDeleted: boolean; editTime: string };
+
+    expect(client.editMessage).toHaveBeenCalledWith(
+      "19:chat@thread.v2",
+      "msg-123",
+      "~~This message was removed by an agent~~",
+      "markdown",
+    );
+    expect(client.deleteMessage).not.toHaveBeenCalled();
+    expect(result.softDeleted).toBe(true);
+    expect(result.editTime).toBe("2026-04-12T09:00:00Z");
+  });
+
+  it("should use custom tombstone from parameter", async () => {
+    const conversation = makeConversation({
+      id: "19:chat@thread.v2",
+      topic: "Design Review",
+    });
+    const editedMessage: EditedMessage = {
+      messageId: "msg-123",
+      editTime: "2026-04-12T09:00:00Z",
+    };
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(conversation),
+      editMessage: vi.fn().mockResolvedValue(editedMessage),
+    });
+
+    const result = (await action.execute(client, {
+      chat: "Design Review",
+      messageId: "msg-123",
+      deleteMode: "soft",
+      deleteTombstone: "[REDACTED]",
+    })) as { messageId: string; softDeleted: boolean };
+
+    expect(client.editMessage).toHaveBeenCalledWith(
+      "19:chat@thread.v2",
+      "msg-123",
+      "[REDACTED]",
+      "markdown",
+    );
+    expect(result.softDeleted).toBe(true);
+  });
+
+  it("should fall back to TEAMS_DELETE_MODE env var", async () => {
+    process.env.TEAMS_DELETE_MODE = "soft";
+    const conversation = makeConversation({
+      id: "19:chat@thread.v2",
+      topic: "Design Review",
+    });
+    const editedMessage: EditedMessage = {
+      messageId: "msg-123",
+      editTime: "2026-04-12T09:00:00Z",
+    };
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(conversation),
+      editMessage: vi.fn().mockResolvedValue(editedMessage),
+    });
+
+    await action.execute(client, {
+      chat: "Design Review",
+      messageId: "msg-123",
+    });
+
+    expect(client.editMessage).toHaveBeenCalled();
+    expect(client.deleteMessage).not.toHaveBeenCalled();
+    delete process.env.TEAMS_DELETE_MODE;
+  });
+
+  it("should fall back to TEAMS_DELETE_TOMBSTONE env var for tombstone text", async () => {
+    process.env.TEAMS_DELETE_MODE = "soft";
+    process.env.TEAMS_DELETE_TOMBSTONE = "🗑️ removed";
+    const conversation = makeConversation({
+      id: "19:chat@thread.v2",
+      topic: "Design Review",
+    });
+    const editedMessage: EditedMessage = {
+      messageId: "msg-123",
+      editTime: "2026-04-12T09:00:00Z",
+    };
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(conversation),
+      editMessage: vi.fn().mockResolvedValue(editedMessage),
+    });
+
+    await action.execute(client, {
+      chat: "Design Review",
+      messageId: "msg-123",
+    });
+
+    expect(client.editMessage).toHaveBeenCalledWith(
+      "19:chat@thread.v2",
+      "msg-123",
+      "🗑️ removed",
+      "markdown",
+    );
+    delete process.env.TEAMS_DELETE_MODE;
+    delete process.env.TEAMS_DELETE_TOMBSTONE;
+  });
+
+  it("should prefer parameter over env var for deleteMode", async () => {
+    process.env.TEAMS_DELETE_MODE = "soft";
+    const conversation = makeConversation({
+      id: "19:chat@thread.v2",
+      topic: "Design Review",
+    });
+    const deletedMessage: DeletedMessage = { messageId: "msg-123" };
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(conversation),
+      deleteMessage: vi.fn().mockResolvedValue(deletedMessage),
+    });
+
+    await action.execute(client, {
+      chat: "Design Review",
+      messageId: "msg-123",
+      deleteMode: "hard",
+    });
+
+    expect(client.deleteMessage).toHaveBeenCalled();
+    expect(client.editMessage).not.toHaveBeenCalled();
+    delete process.env.TEAMS_DELETE_MODE;
+  });
+
+  // ── block mode ──
+
+  it("should refuse deletion when deleteMode is 'block'", async () => {
+    const conversation = makeConversation({
+      id: "19:chat@thread.v2",
+      topic: "Design Review",
+    });
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(conversation),
+    });
+
+    await expect(
+      action.execute(client, {
+        chat: "Design Review",
+        messageId: "msg-123",
+        deleteMode: "block",
+      }),
+    ).rejects.toThrow(
+      'Cannot delete message msg-123: delete mode is set to "block"',
+    );
+    expect(client.deleteMessage).not.toHaveBeenCalled();
+    expect(client.editMessage).not.toHaveBeenCalled();
+  });
+
+  it("should refuse deletion when TEAMS_DELETE_MODE is 'block'", async () => {
+    process.env.TEAMS_DELETE_MODE = "block";
+    const conversation = makeConversation({
+      id: "19:chat@thread.v2",
+      topic: "Design Review",
+    });
+    const client = createMockClient({
+      findConversation: vi.fn().mockResolvedValue(conversation),
+    });
+
+    await expect(
+      action.execute(client, {
+        chat: "Design Review",
+        messageId: "msg-123",
+      }),
+    ).rejects.toThrow('delete mode is set to "block"');
+    delete process.env.TEAMS_DELETE_MODE;
+  });
+
+  // ── soft-delete formatting ──
+
+  it("should format soft-delete result correctly", () => {
+    const result = {
+      messageId: "msg-123",
+      conversation: "Design Review",
+      softDeleted: true,
+      editTime: "2026-04-12T09:00:00Z",
+    };
+
+    const output = action.formatConcise(result);
+
+    expect(output).toContain("## Message Soft-Deleted");
+    expect(output).toContain("**In:** Design Review");
+    expect(output).toContain("**Message ID:** msg-123");
+    expect(output).toContain("**Edit time:** 2026-04-12T09:00:00Z");
+    expect(output).toContain("tombstone marker");
   });
 });
 

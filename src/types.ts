@@ -254,6 +254,15 @@ export type MessageFormat = "text" | "markdown" | "html";
  */
 export type ReplyGuard = "allow" | "warn" | "block";
 
+/**
+ * Controls how message deletion is handled.
+ *
+ * - `"hard"` — permanently delete the message (default, current behavior).
+ * - `"soft"` — replace message content with a tombstone marker instead of deleting.
+ * - `"block"` — refuse deletion entirely with an error.
+ */
+export type DeleteMode = "hard" | "soft" | "block";
+
 /** Result of checking whether a message has thread replies. */
 export interface ReplyCheckResult {
   /** Whether the message has at least one reply. */
