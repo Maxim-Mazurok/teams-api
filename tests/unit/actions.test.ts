@@ -1166,6 +1166,134 @@ describe("send-message", () => {
       /Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/,
     ); // includes day of week
   });
+
+  describe("agent marker", () => {
+    const sentMessage: SentMessage = {
+      messageId: "1773000000000",
+      arrivalTime: 1773000000000,
+    };
+
+    it("should prepend agentMarker to content when parameter is provided", async () => {
+      const client = createMockClient({
+        sendMessage: vi.fn().mockResolvedValue(sentMessage),
+      });
+
+      await action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        content: "Hello world",
+        agentMarker: "Ⓜ",
+      });
+
+      expect(client.sendMessage).toHaveBeenCalledWith(
+        "19:chat@thread.v2",
+        "Ⓜ Hello world",
+        "markdown",
+        [],
+        undefined,
+        undefined,
+      );
+    });
+
+    it("should not prepend marker when agentMarker is empty", async () => {
+      const client = createMockClient({
+        sendMessage: vi.fn().mockResolvedValue(sentMessage),
+      });
+
+      await action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        content: "Hello world",
+        agentMarker: "",
+      });
+
+      expect(client.sendMessage).toHaveBeenCalledWith(
+        "19:chat@thread.v2",
+        "Hello world",
+        "markdown",
+        [],
+        undefined,
+        undefined,
+      );
+    });
+
+    it("should fall back to TEAMS_AGENT_MARKER env var", async () => {
+      const original = process.env.TEAMS_AGENT_MARKER;
+      process.env.TEAMS_AGENT_MARKER = "🤖";
+      try {
+        const client = createMockClient({
+          sendMessage: vi.fn().mockResolvedValue(sentMessage),
+        });
+
+        await action.execute(client, {
+          conversationId: "19:chat@thread.v2",
+          content: "Hello world",
+        });
+
+        expect(client.sendMessage).toHaveBeenCalledWith(
+          "19:chat@thread.v2",
+          "🤖 Hello world",
+          "markdown",
+          [],
+          undefined,
+          undefined,
+        );
+      } finally {
+        if (original === undefined) {
+          delete process.env.TEAMS_AGENT_MARKER;
+        } else {
+          process.env.TEAMS_AGENT_MARKER = original;
+        }
+      }
+    });
+
+    it("should prefer parameter over env var", async () => {
+      const original = process.env.TEAMS_AGENT_MARKER;
+      process.env.TEAMS_AGENT_MARKER = "🤖";
+      try {
+        const client = createMockClient({
+          sendMessage: vi.fn().mockResolvedValue(sentMessage),
+        });
+
+        await action.execute(client, {
+          conversationId: "19:chat@thread.v2",
+          content: "Hello world",
+          agentMarker: "[Bot]",
+        });
+
+        expect(client.sendMessage).toHaveBeenCalledWith(
+          "19:chat@thread.v2",
+          "[Bot] Hello world",
+          "markdown",
+          [],
+          undefined,
+          undefined,
+        );
+      } finally {
+        if (original === undefined) {
+          delete process.env.TEAMS_AGENT_MARKER;
+        } else {
+          process.env.TEAMS_AGENT_MARKER = original;
+        }
+      }
+    });
+
+    it("should not prepend marker when content is empty", async () => {
+      const client = createMockClient({
+        sendMessage: vi.fn().mockResolvedValue(sentMessage),
+      });
+
+      // Empty content stays empty — marker is not prepended to nothing.
+      // This also means the "at least one of" validation still triggers.
+      await expect(
+        action.execute(client, {
+          conversationId: "19:chat@thread.v2",
+          content: "",
+          agentMarker: "Ⓜ",
+        }),
+      ).rejects.toThrow(
+        "At least one of --content, --image, or --file must be provided",
+      );
+    });
+  });
 });
 
 // ── edit-message ─────────────────────────────────────────────────────
@@ -1510,6 +1638,110 @@ describe("edit-message", () => {
           process.env.TEAMS_EDIT_REPLY_GUARD = original;
         }
       }
+    });
+  });
+
+  describe("agent marker", () => {
+    const editedMessage: EditedMessage = {
+      messageId: "msg-123",
+      editTime: "2026-03-24T10:00:00.000Z",
+    };
+
+    it("should prepend agentMarker to content when parameter is provided", async () => {
+      const client = createMockClient({
+        editMessage: vi.fn().mockResolvedValue(editedMessage),
+      });
+
+      await action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        messageId: "msg-123",
+        content: "Updated content",
+        agentMarker: "Ⓜ",
+      });
+
+      expect(client.editMessage).toHaveBeenCalledWith(
+        "19:chat@thread.v2",
+        "msg-123",
+        "Ⓜ Updated content",
+        "markdown",
+        undefined,
+      );
+    });
+
+    it("should not prepend marker when agentMarker is empty", async () => {
+      const client = createMockClient({
+        editMessage: vi.fn().mockResolvedValue(editedMessage),
+      });
+
+      await action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        messageId: "msg-123",
+        content: "Updated content",
+        agentMarker: "",
+      });
+
+      expect(client.editMessage).toHaveBeenCalledWith(
+        "19:chat@thread.v2",
+        "msg-123",
+        "Updated content",
+        "markdown",
+        undefined,
+      );
+    });
+
+    it("should fall back to TEAMS_AGENT_MARKER env var", async () => {
+      const original = process.env.TEAMS_AGENT_MARKER;
+      process.env.TEAMS_AGENT_MARKER = "[Agent]";
+      try {
+        const client = createMockClient({
+          editMessage: vi.fn().mockResolvedValue(editedMessage),
+        });
+
+        await action.execute(client, {
+          conversationId: "19:chat@thread.v2",
+          messageId: "msg-123",
+          content: "Updated content",
+        });
+
+        expect(client.editMessage).toHaveBeenCalledWith(
+          "19:chat@thread.v2",
+          "msg-123",
+          "[Agent] Updated content",
+          "markdown",
+          undefined,
+        );
+      } finally {
+        if (original === undefined) {
+          delete process.env.TEAMS_AGENT_MARKER;
+        } else {
+          process.env.TEAMS_AGENT_MARKER = original;
+        }
+      }
+    });
+
+    it("should apply marker before reply guard annotation", async () => {
+      const client = createMockClient({
+        checkForReplies: vi
+          .fn()
+          .mockResolvedValue({ hasReplies: true, replyCount: 2 }),
+        editMessage: vi.fn().mockResolvedValue(editedMessage),
+      });
+
+      await action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        messageId: "msg-123",
+        content: "Updated content",
+        agentMarker: "Ⓜ",
+        replyGuard: "warn",
+      });
+
+      expect(client.editMessage).toHaveBeenCalledWith(
+        "19:chat@thread.v2",
+        "msg-123",
+        "Ⓜ Updated content\n\n⚠️ _This message was edited after receiving 2 replies._",
+        "markdown",
+        undefined,
+      );
     });
   });
 });

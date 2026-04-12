@@ -392,6 +392,23 @@ Use this only if you already have tokens from another flow or need to avoid brow
 | `TEAMS_LOGIN`            | Set to `true` to enable interactive browser login                     |
 | `TEAMS_DEBUG_PORT`       | Chrome debug port (default: 9222)                                     |
 | `TEAMS_EDIT_REPLY_GUARD` | Edit reply guard: `allow` (default), `warn`, or `block`. See below    |
+| `TEAMS_AGENT_MARKER`     | Agent marker prefix for sent/edited messages (e.g. `Ⓜ`). See below   |
+
+#### Agent marker
+
+When an AI agent sends or edits messages on behalf of a user, it can be hard to tell which messages were composed by the agent and which by the human. The `TEAMS_AGENT_MARKER` environment variable (or `--agent-marker` CLI flag / `agentMarker` MCP parameter) automatically prepends a configurable string to message content:
+
+```jsonc
+{
+  "env": {
+    "TEAMS_AGENT_MARKER": "Ⓜ", // or "🤖", "[Bot]", etc.
+  },
+}
+```
+
+When set, every `send-message` and `edit-message` call prepends the marker followed by a space to the content. For example, with `TEAMS_AGENT_MARKER=Ⓜ`, sending "Hello world" produces "Ⓜ Hello world".
+
+The per-call parameter takes precedence over the environment variable. Pass an empty string to disable the marker for a specific call.
 
 #### Edit reply guard
 
