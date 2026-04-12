@@ -246,6 +246,23 @@ export interface UserProfile {
 export type MessageFormat = "text" | "markdown" | "html";
 
 /**
+ * Controls behavior when editing a message that already has replies.
+ *
+ * - `"allow"` — edit proceeds without any check (default, backward-compatible).
+ * - `"warn"` — edit proceeds but an annotation is appended to the content.
+ * - `"block"` — edit is refused with an error.
+ */
+export type ReplyGuard = "allow" | "warn" | "block";
+
+/** Result of checking whether a message has thread replies. */
+export interface ReplyCheckResult {
+  /** Whether the message has at least one reply. */
+  hasReplies: boolean;
+  /** Number of replies found (capped at the fetch limit). */
+  replyCount: number;
+}
+
+/**
  * Controls who gets access to uploaded SharePoint files.
  *
  * - `"chat"` — share with chat participants only (default).

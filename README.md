@@ -381,16 +381,29 @@ Use this only if you already have tokens from another flow or need to avoid brow
 
 ### Environment variables
 
-| Variable                | Description                                                           |
-| ----------------------- | --------------------------------------------------------------------- |
-| `TEAMS_TOKEN`           | Pre-existing skype token                                              |
-| `TEAMS_BEARER_TOKEN`    | Optional middle-tier bearer token                                     |
-| `TEAMS_SUBSTRATE_TOKEN` | Optional Substrate bearer token                                       |
-| `TEAMS_REGION`          | API region override. Required with `TEAMS_TOKEN`; optional otherwise  |
-| `TEAMS_EMAIL`           | Corporate email. Optional — the server prompts the AI agent if needed |
-| `TEAMS_AUTO`            | Set to `true` to enable auto-login (macOS + FIDO2)                    |
-| `TEAMS_LOGIN`           | Set to `true` to enable interactive browser login                     |
-| `TEAMS_DEBUG_PORT`      | Chrome debug port (default: 9222)                                     |
+| Variable                 | Description                                                           |
+| ------------------------ | --------------------------------------------------------------------- |
+| `TEAMS_TOKEN`            | Pre-existing skype token                                              |
+| `TEAMS_BEARER_TOKEN`     | Optional middle-tier bearer token                                     |
+| `TEAMS_SUBSTRATE_TOKEN`  | Optional Substrate bearer token                                       |
+| `TEAMS_REGION`           | API region override. Required with `TEAMS_TOKEN`; optional otherwise  |
+| `TEAMS_EMAIL`            | Corporate email. Optional — the server prompts the AI agent if needed |
+| `TEAMS_AUTO`             | Set to `true` to enable auto-login (macOS + FIDO2)                    |
+| `TEAMS_LOGIN`            | Set to `true` to enable interactive browser login                     |
+| `TEAMS_DEBUG_PORT`       | Chrome debug port (default: 9222)                                     |
+| `TEAMS_EDIT_REPLY_GUARD` | Edit reply guard: `allow` (default), `warn`, or `block`. See below    |
+
+#### Edit reply guard
+
+When editing a message that already has replies, the original context can be lost — replies may no longer make sense. The `TEAMS_EDIT_REPLY_GUARD` environment variable (or `--reply-guard` CLI flag / `replyGuard` MCP parameter) controls this:
+
+| Value   | Behavior                                                                           |
+| ------- | ---------------------------------------------------------------------------------- |
+| `allow` | Edit proceeds normally (default, backward-compatible)                              |
+| `warn`  | Edit proceeds but an annotation is appended: _"⚠️ This message was edited after…"_ |
+| `block` | Edit is refused with an error listing the reply count                              |
+
+The per-call parameter takes precedence over the environment variable.
 
 ### Available tools
 
