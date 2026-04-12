@@ -439,6 +439,31 @@ export interface ChatSearchResult {
   totalMemberCount: number;
 }
 
+/**
+ * Configures audit logging for state-modifying actions (edit, delete).
+ *
+ * - `"off"` — no audit logging (default).
+ * - `"stderr"` — write JSON Lines to stderr.
+ * - `"file:<path>"` — append JSON Lines to the specified file path.
+ */
+export type AuditDestination = "off" | "stderr" | `file:${string}`;
+
+/** A structured audit event emitted for edit and delete actions. */
+export interface AuditEvent {
+  /** ISO 8601 timestamp when the event was emitted. */
+  timestamp: string;
+  /** The action that was performed. */
+  action: "edit" | "delete" | "soft-delete";
+  /** Conversation thread ID. */
+  conversationId: string;
+  /** Human-readable conversation label (topic name or 1:1 partner). */
+  conversationLabel: string;
+  /** The target message ID. */
+  messageId: string;
+  /** Content set on the message (new content for edits, tombstone for soft-delete, null for hard delete). */
+  content: string | null;
+}
+
 /** Thread types that represent system streams, not user conversations. */
 export const SYSTEM_STREAM_TYPES = [
   "streamofannotations",

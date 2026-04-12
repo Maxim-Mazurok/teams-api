@@ -395,6 +395,7 @@ Use this only if you already have tokens from another flow or need to avoid brow
 | `TEAMS_AGENT_MARKER`     | Agent marker prefix for sent/edited messages (e.g. `Ⓜ`). See below   |
 | `TEAMS_DELETE_MODE`      | Delete mode: `hard` (default), `soft`, or `block`. See below          |
 | `TEAMS_DELETE_TOMBSTONE` | Custom tombstone text for soft-delete mode. See below                 |
+| `TEAMS_AUDIT_LOG`        | Audit logging: `off` (default), `stderr`, or `file:<path>`. See below |
 
 #### Agent marker
 
@@ -446,6 +447,37 @@ When using `soft` mode, the message content is replaced with `~~This message was
 ```
 
 The per-call parameters take precedence over environment variables.
+
+#### Audit logging
+
+State-modifying actions (edit and delete) can emit structured audit events for compliance and traceability. The `TEAMS_AUDIT_LOG` environment variable controls where events are written:
+
+| Value         | Behavior                                                    |
+| ------------- | ----------------------------------------------------------- |
+| `off`         | No audit logging (default)                                  |
+| `stderr`      | Write JSON Lines to stderr                                  |
+| `file:<path>` | Append JSON Lines to the specified file (created on demand) |
+
+```jsonc
+{
+  "env": {
+    "TEAMS_AUDIT_LOG": "file:/var/log/teams-audit.jsonl",
+  },
+}
+```
+
+Each event is a single JSON line with the following fields:
+
+| Field               | Description                                                                   |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `timestamp`         | ISO 8601 timestamp                                                            |
+| `action`            | `"edit"`, `"delete"`, or `"soft-delete"`                                      |
+| `conversationId`    | Conversation thread ID                                                        |
+| `conversationLabel` | Human-readable conversation label (topic or 1:1 partner name)                 |
+| `messageId`         | Target message ID                                                             |
+| `content`           | New content for edits, tombstone text for soft-delete, `null` for hard delete |
+
+Audit logging is designed to be silent — errors in the audit pipeline never affect tool execution.
 
 ### Available tools
 
