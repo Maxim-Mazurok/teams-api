@@ -57,6 +57,7 @@ import type {
   MessageContentPart,
   FileSharingScope,
   UserProfile,
+  ReplyCheckResult,
 } from "./types.js";
 import { SYSTEM_STREAM_TYPES } from "./types.js";
 import { isTextMessageType } from "./constants.js";
@@ -1334,6 +1335,29 @@ export class TeamsClient {
         subject,
         quoteHtml,
       );
+    });
+  }
+
+  /**
+   * Check whether a message has thread replies.
+   *
+   * Fetches a small batch of messages from the thread context and filters out
+   * the root message and system events to determine if real replies exist.
+   */
+  async checkForReplies(
+    conversationId: string,
+    messageId: string,
+  ): Promise<ReplyCheckResult> {
+    return this.withTokenRefresh(async () => {
+      const threadConversationId = `${conversationId};messageid=${messageId}`;
+      const messages = await this.getMessages(threadConversationId, {
+        limit: 50,
+        pageSize: 50,
+      });
+      const replies = messages.filter(
+        (message) => message.id !== messageId && !message.isDeleted,
+      );
+      return { hasReplies: replies.length > 0, replyCount: replies.length };
     });
   }
 

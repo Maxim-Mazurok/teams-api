@@ -12,6 +12,7 @@ import type {
   MessageContentPart,
   FileSharingScope,
   ScheduledMessage,
+  ReplyGuard,
 } from "../types.js";
 import { isTextMessageType } from "../constants.js";
 import {
@@ -548,6 +549,15 @@ export const editMessageAction: ActionDefinition = {
         "is automatically fetched and included as a blockquote above your message.",
       required: false,
     },
+    {
+      name: "replyGuard",
+      type: "string",
+      description:
+        'Controls behavior when the message has replies: "allow" (edit normally), ' +
+        '"warn" (edit with annotation appended), "block" (refuse edit). ' +
+        'Defaults to TEAMS_EDIT_REPLY_GUARD env var, or "allow".',
+      required: false,
+    },
   ],
   execute: async (client, parameters) => {
     const { conversationId, label } = await resolveConversationId(
@@ -555,10 +565,35 @@ export const editMessageAction: ActionDefinition = {
       parameters,
     );
     const messageId = parameters.messageId as string;
-    const content = parameters.content as string;
+    let content = parameters.content as string;
     const messageFormat =
       (parameters.messageFormat as MessageFormat | undefined) ?? "markdown";
     const quoteMessageId = parameters.quoteMessageId as string | undefined;
+
+    const replyGuard: ReplyGuard =
+      (parameters.replyGuard as ReplyGuard | undefined) ??
+      (process.env.TEAMS_EDIT_REPLY_GUARD as ReplyGuard | undefined) ??
+      "allow";
+
+    if (replyGuard !== "allow") {
+      const { hasReplies, replyCount } = await client.checkForReplies(
+        conversationId,
+        messageId,
+      );
+      if (hasReplies) {
+        if (replyGuard === "block") {
+          throw new Error(
+            `Cannot edit message ${messageId}: it has ${replyCount} ${replyCount === 1 ? "reply" : "replies"}. ` +
+              `The reply guard is set to "block". Pass --reply-guard allow to override.`,
+          );
+        }
+        if (replyGuard === "warn") {
+          const annotation = `\n\n⚠️ _This message was edited after receiving ${replyCount} ${replyCount === 1 ? "reply" : "replies"}._`;
+          content += annotation;
+        }
+      }
+    }
+
     const result = await client.editMessage(
       conversationId,
       messageId,

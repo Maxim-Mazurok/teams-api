@@ -46,6 +46,9 @@ function createMockClient(
     sendMessageWithImages: vi.fn(),
     sendMessageWithFiles: vi.fn(),
     editMessage: vi.fn(),
+    checkForReplies: vi
+      .fn()
+      .mockResolvedValue({ hasReplies: false, replyCount: 0 }),
     deleteMessage: vi.fn(),
     addReaction: vi.fn(),
     removeReaction: vi.fn(),
@@ -961,14 +964,12 @@ describe("send-message", () => {
       arrivalTime: 1774999999999,
     };
     const client = createMockClient({
-      findConversation: vi
-        .fn()
-        .mockResolvedValue(
-          makeConversation({
-            id: "19:channel@thread.tacv2",
-            topic: "Dev Channel",
-          }),
-        ),
+      findConversation: vi.fn().mockResolvedValue(
+        makeConversation({
+          id: "19:channel@thread.tacv2",
+          topic: "Dev Channel",
+        }),
+      ),
       sendMessage: vi.fn().mockResolvedValue(sentMessage),
     });
 
@@ -1297,6 +1298,219 @@ describe("edit-message", () => {
     expect(output).toContain("**In:** Design Review");
     expect(output).toContain("**Message ID:** msg-123");
     expect(output).toContain("**Edit time:** 2026-03-24T10:00:00.000Z");
+  });
+
+  describe("reply guard", () => {
+    const editedMessage: EditedMessage = {
+      messageId: "msg-123",
+      editTime: "2026-03-24T10:00:00.000Z",
+    };
+
+    it("should allow edit by default when message has replies", async () => {
+      const client = createMockClient({
+        editMessage: vi.fn().mockResolvedValue(editedMessage),
+      });
+
+      await action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        messageId: "msg-123",
+        content: "Updated content",
+      });
+
+      expect(client.checkForReplies).not.toHaveBeenCalled();
+      expect(client.editMessage).toHaveBeenCalled();
+    });
+
+    it("should block edit when replyGuard is 'block' and message has replies", async () => {
+      const client = createMockClient({
+        checkForReplies: vi
+          .fn()
+          .mockResolvedValue({ hasReplies: true, replyCount: 3 }),
+        editMessage: vi.fn().mockResolvedValue(editedMessage),
+      });
+
+      await expect(
+        action.execute(client, {
+          conversationId: "19:chat@thread.v2",
+          messageId: "msg-123",
+          content: "Updated content",
+          replyGuard: "block",
+        }),
+      ).rejects.toThrow(
+        'Cannot edit message msg-123: it has 3 replies. The reply guard is set to "block".',
+      );
+
+      expect(client.checkForReplies).toHaveBeenCalledWith(
+        "19:chat@thread.v2",
+        "msg-123",
+      );
+      expect(client.editMessage).not.toHaveBeenCalled();
+    });
+
+    it("should allow edit when replyGuard is 'block' but message has no replies", async () => {
+      const client = createMockClient({
+        checkForReplies: vi
+          .fn()
+          .mockResolvedValue({ hasReplies: false, replyCount: 0 }),
+        editMessage: vi.fn().mockResolvedValue(editedMessage),
+      });
+
+      await action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        messageId: "msg-123",
+        content: "Updated content",
+        replyGuard: "block",
+      });
+
+      expect(client.checkForReplies).toHaveBeenCalled();
+      expect(client.editMessage).toHaveBeenCalled();
+    });
+
+    it("should append annotation when replyGuard is 'warn' and message has replies", async () => {
+      const client = createMockClient({
+        checkForReplies: vi
+          .fn()
+          .mockResolvedValue({ hasReplies: true, replyCount: 2 }),
+        editMessage: vi.fn().mockResolvedValue(editedMessage),
+      });
+
+      await action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        messageId: "msg-123",
+        content: "Updated content",
+        replyGuard: "warn",
+      });
+
+      expect(client.editMessage).toHaveBeenCalledWith(
+        "19:chat@thread.v2",
+        "msg-123",
+        "Updated content\n\n⚠️ _This message was edited after receiving 2 replies._",
+        "markdown",
+        undefined,
+      );
+    });
+
+    it("should use singular 'reply' for count of 1 in warn annotation", async () => {
+      const client = createMockClient({
+        checkForReplies: vi
+          .fn()
+          .mockResolvedValue({ hasReplies: true, replyCount: 1 }),
+        editMessage: vi.fn().mockResolvedValue(editedMessage),
+      });
+
+      await action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        messageId: "msg-123",
+        content: "Updated content",
+        replyGuard: "warn",
+      });
+
+      expect(client.editMessage).toHaveBeenCalledWith(
+        "19:chat@thread.v2",
+        "msg-123",
+        "Updated content\n\n⚠️ _This message was edited after receiving 1 reply._",
+        "markdown",
+        undefined,
+      );
+    });
+
+    it("should not append annotation when replyGuard is 'warn' but no replies", async () => {
+      const client = createMockClient({
+        checkForReplies: vi
+          .fn()
+          .mockResolvedValue({ hasReplies: false, replyCount: 0 }),
+        editMessage: vi.fn().mockResolvedValue(editedMessage),
+      });
+
+      await action.execute(client, {
+        conversationId: "19:chat@thread.v2",
+        messageId: "msg-123",
+        content: "Updated content",
+        replyGuard: "warn",
+      });
+
+      expect(client.editMessage).toHaveBeenCalledWith(
+        "19:chat@thread.v2",
+        "msg-123",
+        "Updated content",
+        "markdown",
+        undefined,
+      );
+    });
+
+    it("should use singular 'reply' for count of 1 in block error", async () => {
+      const client = createMockClient({
+        checkForReplies: vi
+          .fn()
+          .mockResolvedValue({ hasReplies: true, replyCount: 1 }),
+        editMessage: vi.fn().mockResolvedValue(editedMessage),
+      });
+
+      await expect(
+        action.execute(client, {
+          conversationId: "19:chat@thread.v2",
+          messageId: "msg-123",
+          content: "Updated",
+          replyGuard: "block",
+        }),
+      ).rejects.toThrow("it has 1 reply");
+    });
+
+    it("should fall back to TEAMS_EDIT_REPLY_GUARD env var", async () => {
+      const original = process.env.TEAMS_EDIT_REPLY_GUARD;
+      process.env.TEAMS_EDIT_REPLY_GUARD = "block";
+      try {
+        const client = createMockClient({
+          checkForReplies: vi
+            .fn()
+            .mockResolvedValue({ hasReplies: true, replyCount: 1 }),
+          editMessage: vi.fn().mockResolvedValue(editedMessage),
+        });
+
+        await expect(
+          action.execute(client, {
+            conversationId: "19:chat@thread.v2",
+            messageId: "msg-123",
+            content: "Updated",
+          }),
+        ).rejects.toThrow('The reply guard is set to "block"');
+      } finally {
+        if (original === undefined) {
+          delete process.env.TEAMS_EDIT_REPLY_GUARD;
+        } else {
+          process.env.TEAMS_EDIT_REPLY_GUARD = original;
+        }
+      }
+    });
+
+    it("should prefer parameter over env var", async () => {
+      const original = process.env.TEAMS_EDIT_REPLY_GUARD;
+      process.env.TEAMS_EDIT_REPLY_GUARD = "block";
+      try {
+        const client = createMockClient({
+          checkForReplies: vi
+            .fn()
+            .mockResolvedValue({ hasReplies: true, replyCount: 1 }),
+          editMessage: vi.fn().mockResolvedValue(editedMessage),
+        });
+
+        await action.execute(client, {
+          conversationId: "19:chat@thread.v2",
+          messageId: "msg-123",
+          content: "Updated content",
+          replyGuard: "allow",
+        });
+
+        expect(client.checkForReplies).not.toHaveBeenCalled();
+        expect(client.editMessage).toHaveBeenCalled();
+      } finally {
+        if (original === undefined) {
+          delete process.env.TEAMS_EDIT_REPLY_GUARD;
+        } else {
+          process.env.TEAMS_EDIT_REPLY_GUARD = original;
+        }
+      }
+    });
   });
 });
 
