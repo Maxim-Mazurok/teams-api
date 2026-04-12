@@ -393,6 +393,8 @@ Use this only if you already have tokens from another flow or need to avoid brow
 | `TEAMS_DEBUG_PORT`       | Chrome debug port (default: 9222)                                     |
 | `TEAMS_EDIT_REPLY_GUARD` | Edit reply guard: `allow` (default), `warn`, or `block`. See below    |
 | `TEAMS_AGENT_MARKER`     | Agent marker prefix for sent/edited messages (e.g. `Ⓜ`). See below   |
+| `TEAMS_DELETE_MODE`      | Delete mode: `hard` (default), `soft`, or `block`. See below          |
+| `TEAMS_DELETE_TOMBSTONE` | Custom tombstone text for soft-delete mode. See below                 |
 
 #### Agent marker
 
@@ -421,6 +423,29 @@ When editing a message that already has replies, the original context can be los
 | `block` | Edit is refused with an error listing the reply count                              |
 
 The per-call parameter takes precedence over the environment variable.
+
+#### Delete mode (soft-delete)
+
+Hard-deleting messages removes content permanently, which can be problematic for auditability and conversation flow in group chats. The `TEAMS_DELETE_MODE` environment variable (or `--delete-mode` CLI flag / `deleteMode` MCP parameter) controls how message deletion is handled:
+
+| Value   | Behavior                                                            |
+| ------- | ------------------------------------------------------------------- |
+| `hard`  | Permanently delete the message (default, current behavior)          |
+| `soft`  | Replace message content with a tombstone marker instead of deleting |
+| `block` | Refuse deletion entirely with an error                              |
+
+When using `soft` mode, the message content is replaced with `~~This message was removed by an agent~~` by default. Customize the tombstone text with `TEAMS_DELETE_TOMBSTONE` (or `--delete-tombstone` / `deleteTombstone`):
+
+```jsonc
+{
+  "env": {
+    "TEAMS_DELETE_MODE": "soft",
+    "TEAMS_DELETE_TOMBSTONE": "🗑️ [removed by automation]",
+  },
+}
+```
+
+The per-call parameters take precedence over environment variables.
 
 ### Available tools
 

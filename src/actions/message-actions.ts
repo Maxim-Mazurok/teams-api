@@ -13,6 +13,7 @@ import type {
   FileSharingScope,
   ScheduledMessage,
   ReplyGuard,
+  DeleteMode,
 } from "../types.js";
 import { isTextMessageType } from "../constants.js";
 import {
@@ -648,6 +649,8 @@ export const editMessageAction: ActionDefinition = {
   },
 };
 
+const DEFAULT_DELETE_TOMBSTONE = "~~This message was removed by an agent~~";
+
 export const deleteMessageAction: ActionDefinition = {
   name: "delete-message",
   title: "Delete Message",
@@ -665,6 +668,24 @@ export const deleteMessageAction: ActionDefinition = {
       description: "ID of the message to delete",
       required: true,
     },
+    {
+      name: "deleteMode",
+      type: "string",
+      description:
+        'Controls how deletion is handled: "hard" (permanently delete, default), ' +
+        '"soft" (replace content with tombstone marker), "block" (refuse deletion). ' +
+        'Defaults to TEAMS_DELETE_MODE env var, or "hard".',
+      required: false,
+    },
+    {
+      name: "deleteTombstone",
+      type: "string",
+      description:
+        'Custom tombstone text used when deleteMode is "soft". ' +
+        "Defaults to TEAMS_DELETE_TOMBSTONE env var, or " +
+        `"${DEFAULT_DELETE_TOMBSTONE}".`,
+      required: false,
+    },
   ],
   execute: async (client, parameters) => {
     const { conversationId, label } = await resolveConversationId(
@@ -672,14 +693,59 @@ export const deleteMessageAction: ActionDefinition = {
       parameters,
     );
     const messageId = parameters.messageId as string;
+
+    const deleteMode: DeleteMode =
+      (parameters.deleteMode as DeleteMode | undefined) ??
+      (process.env.TEAMS_DELETE_MODE as DeleteMode | undefined) ??
+      "hard";
+
+    if (deleteMode === "block") {
+      throw new Error(
+        `Cannot delete message ${messageId}: delete mode is set to "block". ` +
+          `Pass --delete-mode hard to override.`,
+      );
+    }
+
+    if (deleteMode === "soft") {
+      const tombstone =
+        (parameters.deleteTombstone as string | undefined) ??
+        process.env.TEAMS_DELETE_TOMBSTONE ??
+        DEFAULT_DELETE_TOMBSTONE;
+
+      const result = await client.editMessage(
+        conversationId,
+        messageId,
+        tombstone,
+        "markdown",
+      );
+      return {
+        messageId: result.messageId,
+        editTime: result.editTime,
+        conversation: label,
+        softDeleted: true,
+      };
+    }
+
     const result = await client.deleteMessage(conversationId, messageId);
     return { ...result, conversation: label };
   },
   formatConcise: (result) => {
-    const { messageId, conversation } = result as {
+    const { messageId, conversation, softDeleted, editTime } = result as {
       messageId: string;
       conversation: string;
+      softDeleted?: boolean;
+      editTime?: string;
     };
+    if (softDeleted) {
+      return [
+        "## Message Soft-Deleted",
+        "",
+        `- **In:** ${conversation}`,
+        `- **Message ID:** ${messageId}`,
+        `- **Edit time:** ${editTime}`,
+        "- **Mode:** Content replaced with tombstone marker",
+      ].join("\n");
+    }
     return [
       "## Message Deleted",
       "",
