@@ -372,6 +372,15 @@ export const sendMessage: ActionDefinition = {
         "is automatically fetched and included as a blockquote above your message.",
       required: false,
     },
+    {
+      name: "agentMarker",
+      type: "string",
+      description:
+        "Prefix to prepend to message content, marking it as agent-generated " +
+        '(e.g. "Ⓜ", "🤖", "[Bot]"). ' +
+        "Defaults to TEAMS_AGENT_MARKER env var. Omit or set to empty to disable.",
+      required: false,
+    },
   ],
   execute: async (client, parameters) => {
     let { conversationId, label } = await resolveConversationId(
@@ -382,7 +391,13 @@ export const sendMessage: ActionDefinition = {
     if (threadMessageId) {
       conversationId = `${conversationId};messageid=${threadMessageId}`;
     }
-    const content = (parameters.content as string | undefined) ?? "";
+    const agentMarker =
+      (parameters.agentMarker as string | undefined) ??
+      process.env.TEAMS_AGENT_MARKER ??
+      "";
+    const rawContent = (parameters.content as string | undefined) ?? "";
+    const content =
+      agentMarker && rawContent ? `${agentMarker} ${rawContent}` : rawContent;
     const imagePaths = (parameters.image as string[] | undefined) ?? [];
     const filePaths = (parameters.file as string[] | undefined) ?? [];
     const scheduleAtRaw = parameters.scheduleAt as string | undefined;
@@ -558,6 +573,15 @@ export const editMessageAction: ActionDefinition = {
         'Defaults to TEAMS_EDIT_REPLY_GUARD env var, or "allow".',
       required: false,
     },
+    {
+      name: "agentMarker",
+      type: "string",
+      description:
+        "Prefix to prepend to message content, marking it as agent-generated " +
+        '(e.g. "Ⓜ", "🤖", "[Bot]"). ' +
+        "Defaults to TEAMS_AGENT_MARKER env var. Omit or set to empty to disable.",
+      required: false,
+    },
   ],
   execute: async (client, parameters) => {
     const { conversationId, label } = await resolveConversationId(
@@ -565,7 +589,12 @@ export const editMessageAction: ActionDefinition = {
       parameters,
     );
     const messageId = parameters.messageId as string;
-    let content = parameters.content as string;
+    const agentMarker =
+      (parameters.agentMarker as string | undefined) ??
+      process.env.TEAMS_AGENT_MARKER ??
+      "";
+    const rawContent = parameters.content as string;
+    let content = agentMarker ? `${agentMarker} ${rawContent}` : rawContent;
     const messageFormat =
       (parameters.messageFormat as MessageFormat | undefined) ?? "markdown";
     const quoteMessageId = parameters.quoteMessageId as string | undefined;
