@@ -1472,6 +1472,7 @@ describe("sendMessage", () => {
       [],
       undefined,
       undefined,
+      undefined,
     );
   });
 
@@ -1497,6 +1498,7 @@ describe("sendMessage", () => {
       "Test User",
       "html",
       [],
+      undefined,
       undefined,
       undefined,
     );
@@ -1526,6 +1528,7 @@ describe("sendMessage", () => {
       [],
       undefined,
       "My Title",
+      undefined,
     );
   });
 });
@@ -2777,7 +2780,8 @@ describe("TeamsClient.fromInteractiveLogin", () => {
   const testToken = {
     skypeToken: "skype-token",
     region: "amer",
-    bearerToken: "eyJhbGciOiJSUzI1NiJ9.eyJ1cG4iOiJhbGljZUBjb250b3NvLmNvbSJ9.sig",
+    bearerToken:
+      "eyJhbGciOiJSUzI1NiJ9.eyJ1cG4iOiJhbGljZUBjb250b3NvLmNvbSJ9.sig",
     substrateToken: "substrate-token",
   };
 
@@ -2815,7 +2819,9 @@ describe("TeamsClient.fromInteractiveLogin", () => {
 
   it("should save under _default when no email available", async () => {
     const tokenWithoutBearer = { skypeToken: "sk", region: "amer" };
-    mockedAuth.acquireTokenViaInteractiveLogin.mockResolvedValue(tokenWithoutBearer);
+    mockedAuth.acquireTokenViaInteractiveLogin.mockResolvedValue(
+      tokenWithoutBearer,
+    );
 
     await TeamsClient.fromInteractiveLogin();
 
@@ -2877,7 +2883,9 @@ describe("TeamsClient.fromDebugSession", () => {
 
   it("should save under _default when no email extractable", async () => {
     const tokenWithoutBearer = { skypeToken: "sk", region: "amer" };
-    mockedAuth.acquireTokenViaDebugSession.mockResolvedValue(tokenWithoutBearer);
+    mockedAuth.acquireTokenViaDebugSession.mockResolvedValue(
+      tokenWithoutBearer,
+    );
 
     await TeamsClient.fromDebugSession();
 

@@ -78,6 +78,8 @@ import { resolveReactionKey, initializeEmojiMap } from "./emoji-map.js";
 import { fetchProfiles } from "./api/middle-tier.js";
 import { searchPeople, searchChats } from "./api/substrate.js";
 import { fetchTranscript } from "./api/transcripts.js";
+import { buildQuoteHtml } from "./html-utils.js";
+import { cleanContent } from "./actions/formatters.js";
 import {
   fetchAmsImage,
   fetchSharePointFile,
@@ -1314,9 +1316,13 @@ export class TeamsClient {
     format: MessageFormat = "markdown",
     amsReferences: string[] = [],
     subject?: string,
+    quoteMessageId?: string,
   ): Promise<SentMessage> {
     return this.withTokenRefresh(async () => {
       const displayName = await this.getCurrentUserDisplayName();
+      const quoteHtml = quoteMessageId
+        ? await this.buildQuoteHtmlForMessage(conversationId, quoteMessageId)
+        : undefined;
       return postMessage(
         this.token,
         conversationId,
@@ -1326,6 +1332,7 @@ export class TeamsClient {
         amsReferences,
         undefined,
         subject,
+        quoteHtml,
       );
     });
   }
@@ -1343,9 +1350,13 @@ export class TeamsClient {
     messageId: string,
     content: string,
     format: MessageFormat = "markdown",
+    quoteMessageId?: string,
   ): Promise<EditedMessage> {
     return this.withTokenRefresh(async () => {
       const displayName = await this.getCurrentUserDisplayName();
+      const quoteHtml = quoteMessageId
+        ? await this.buildQuoteHtmlForMessage(conversationId, quoteMessageId)
+        : undefined;
       return editMessage(
         this.token,
         conversationId,
@@ -1353,7 +1364,35 @@ export class TeamsClient {
         content,
         displayName,
         format,
+        quoteHtml,
       );
+    });
+  }
+
+  /**
+   * Look up a message in a conversation and build quote HTML for it.
+   *
+   * Fetches up to 200 recent messages (newest-first) to find the target.
+   * Since quotes typically reference recent messages, this handles the
+   * common case efficiently with a single page fetch.
+   */
+  private async buildQuoteHtmlForMessage(
+    conversationId: string,
+    quoteMessageId: string,
+  ): Promise<string> {
+    const messages = await this.getMessages(conversationId, { limit: 200 });
+    const target = messages.find((message) => message.id === quoteMessageId);
+    if (!target) {
+      throw new Error(
+        `Could not find message ${quoteMessageId} in conversation ${conversationId} (searched 200 most recent messages)`,
+      );
+    }
+    const previewText = cleanContent(target.content);
+    return buildQuoteHtml({
+      messageId: quoteMessageId,
+      senderMri: target.senderMri,
+      senderDisplayName: target.senderDisplayName || "(unknown)",
+      previewText,
     });
   }
 
@@ -1648,9 +1687,7 @@ export class TeamsClient {
     return this.withTokenRefresh(async () => {
       const members = await fetchMembers(this.token, conversationId);
 
-      const unresolvedMembers = members.filter(
-        (member) => !member.displayName,
-      );
+      const unresolvedMembers = members.filter((member) => !member.displayName);
 
       if (unresolvedMembers.length === 0) {
         return members;
