@@ -25,6 +25,7 @@ import {
   conversationParameters,
   resolveConversationId,
 } from "./conversation-resolution.js";
+import { emitAuditEvent } from "../audit.js";
 
 /** Map file extension to MIME content type. */
 function contentTypeFromExtension(filePath: string): string {
@@ -631,6 +632,16 @@ export const editMessageAction: ActionDefinition = {
       messageFormat,
       quoteMessageId,
     );
+
+    emitAuditEvent({
+      timestamp: new Date().toISOString(),
+      action: "edit",
+      conversationId,
+      conversationLabel: label,
+      messageId,
+      content,
+    });
+
     return { ...result, conversation: label };
   },
   formatConcise: (result) => {
@@ -718,6 +729,16 @@ export const deleteMessageAction: ActionDefinition = {
         tombstone,
         "markdown",
       );
+
+      emitAuditEvent({
+        timestamp: new Date().toISOString(),
+        action: "soft-delete",
+        conversationId,
+        conversationLabel: label,
+        messageId,
+        content: tombstone,
+      });
+
       return {
         messageId: result.messageId,
         editTime: result.editTime,
@@ -727,6 +748,16 @@ export const deleteMessageAction: ActionDefinition = {
     }
 
     const result = await client.deleteMessage(conversationId, messageId);
+
+    emitAuditEvent({
+      timestamp: new Date().toISOString(),
+      action: "delete",
+      conversationId,
+      conversationLabel: label,
+      messageId,
+      content: null,
+    });
+
     return { ...result, conversation: label };
   },
   formatConcise: (result) => {
