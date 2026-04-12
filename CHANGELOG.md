@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.4.0...v1.5.0) (2026-04-12)
+
+
+### Features
+
+* add inline quote/reply support for send and edit messages ([#38](https://github.com/Maxim-Mazurok/teams-api/issues/38)) ([d8a187e](https://github.com/Maxim-Mazurok/teams-api/commit/d8a187ed8ec9bdca7b3c907a1006da3fcf01d314))
+
 # [1.4.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.3.0...v1.4.0) (2026-04-08)
 
 
