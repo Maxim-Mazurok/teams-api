@@ -381,21 +381,22 @@ Use this only if you already have tokens from another flow or need to avoid brow
 
 ### Environment variables
 
-| Variable                 | Description                                                           |
-| ------------------------ | --------------------------------------------------------------------- |
-| `TEAMS_TOKEN`            | Pre-existing skype token                                              |
-| `TEAMS_BEARER_TOKEN`     | Optional middle-tier bearer token                                     |
-| `TEAMS_SUBSTRATE_TOKEN`  | Optional Substrate bearer token                                       |
-| `TEAMS_REGION`           | API region override. Required with `TEAMS_TOKEN`; optional otherwise  |
-| `TEAMS_EMAIL`            | Corporate email. Optional — the server prompts the AI agent if needed |
-| `TEAMS_AUTO`             | Set to `true` to enable auto-login (macOS + FIDO2)                    |
-| `TEAMS_LOGIN`            | Set to `true` to enable interactive browser login                     |
-| `TEAMS_DEBUG_PORT`       | Chrome debug port (default: 9222)                                     |
-| `TEAMS_EDIT_REPLY_GUARD` | Edit reply guard: `allow` (default), `warn`, or `block`. See below    |
-| `TEAMS_AGENT_MARKER`     | Agent marker prefix for sent/edited messages (e.g. `Ⓜ`). See below   |
-| `TEAMS_DELETE_MODE`      | Delete mode: `hard` (default), `soft`, or `block`. See below          |
-| `TEAMS_DELETE_TOMBSTONE` | Custom tombstone text for soft-delete mode. See below                 |
-| `TEAMS_AUDIT_LOG`        | Audit logging: `off` (default), `stderr`, or `file:<path>`. See below |
+| Variable                        | Description                                                                            |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| `TEAMS_TOKEN`                   | Pre-existing skype token                                                               |
+| `TEAMS_BEARER_TOKEN`            | Optional middle-tier bearer token                                                      |
+| `TEAMS_SUBSTRATE_TOKEN`         | Optional Substrate bearer token                                                        |
+| `TEAMS_REGION`                  | API region override. Required with `TEAMS_TOKEN`; optional otherwise                   |
+| `TEAMS_EMAIL`                   | Corporate email. Optional — the server prompts the AI agent if needed                  |
+| `TEAMS_AUTO`                    | Set to `true` to enable auto-login (macOS + FIDO2)                                     |
+| `TEAMS_LOGIN`                   | Set to `true` to enable interactive browser login                                      |
+| `TEAMS_DEBUG_PORT`              | Chrome debug port (default: 9222)                                                      |
+| `TEAMS_EDIT_REPLY_GUARD`        | Edit reply guard: `allow` (default), `warn`, or `block`. See below                     |
+| `TEAMS_AGENT_MARKER`            | Agent marker prefix for sent/edited messages (e.g. `Ⓜ`). See below                    |
+| `TEAMS_DELETE_MODE`             | Delete mode: `hard` (default), `soft`, or `block`. See below                           |
+| `TEAMS_DELETE_TOMBSTONE`        | Custom tombstone text for soft-delete mode. See below                                  |
+| `TEAMS_AUDIT_LOG`               | Audit logging: `off` (default), `stderr`, or `file:<path>`. See below                  |
+| `TEAMS_PROTECTED_CONVERSATIONS` | Comma-separated glob patterns of conversations where edit/delete is blocked. See below |
 
 #### Agent marker
 
@@ -478,6 +479,22 @@ Each event is a single JSON line with the following fields:
 | `content`           | New content for edits, tombstone text for soft-delete, `null` for hard delete |
 
 Audit logging is designed to be silent — errors in the audit pipeline never affect tool execution.
+
+#### Protected conversations
+
+Some conversations contain sensitive or compliance-relevant information where accidental edits or deletions could be harmful. The `TEAMS_PROTECTED_CONVERSATIONS` environment variable (or `--protected-conversations` CLI flag / `protectedConversations` MCP parameter) blocks edit and delete actions in matching conversations:
+
+```jsonc
+{
+  "env": {
+    "TEAMS_PROTECTED_CONVERSATIONS": "Incident *,*compliance*,Architecture Decisions",
+  },
+}
+```
+
+Patterns are comma-separated and support `*` as a wildcard (matches any characters). Matching is case-insensitive. When a conversation's name matches any pattern, both `edit-message` and `delete-message` throw an error before making any changes — the message is left untouched.
+
+The per-call parameter takes precedence over the environment variable, so individual tool invocations can override the configured patterns when needed.
 
 ### Available tools
 
