@@ -2,15 +2,29 @@
  * Unit tests for browser runtime helpers (src/browser-runtime.ts).
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mkdirSync, symlinkSync, lstatSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import type { Browser, BrowserContext } from "playwright";
 import {
   getInteractiveBrowserChannels,
   getDefaultBrowserProfileDir,
   isMissingPlaywrightBrowserError,
+  isProfileLockError,
+  cleanStaleSingletonLock,
   launchInteractiveBrowser,
   launchInteractiveBrowserContext,
 } from "../../src/browser-runtime.js";
+
+function symlinkExists(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function createBrowserStub(): Browser {
   return {} as Browser;
@@ -284,5 +298,121 @@ describe("launchInteractiveBrowserContext", () => {
       userDataDir,
       { headless: false },
     );
+  });
+
+  it("should retry on profile lock error after cleaning stale lock", async () => {
+    const context = createContextStub();
+    const chromium = {
+      launch: vi.fn(),
+      launchPersistentContext: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Browser exit code 21"))
+        .mockResolvedValueOnce(context),
+    };
+
+    const result = await launchInteractiveBrowserContext(
+      chromium,
+      vi.fn(),
+      userDataDir,
+      { platform: "darwin", installBundledChromium: vi.fn() },
+    );
+
+    expect(result).toBe(context);
+    // First attempt fails with lock error, second attempt succeeds
+    expect(chromium.launchPersistentContext).toHaveBeenCalledTimes(2);
+  });
+
+  it("should throw after exhausting retries on persistent lock error", async () => {
+    const chromium = {
+      launch: vi.fn(),
+      launchPersistentContext: vi
+        .fn()
+        .mockRejectedValue(new Error("Browser exit code 21")),
+    };
+
+    await expect(
+      launchInteractiveBrowserContext(chromium, vi.fn(), userDataDir, {
+        platform: "darwin",
+        installBundledChromium: vi.fn(),
+      }),
+    ).rejects.toThrow("is locked and could not be cleaned");
+  });
+});
+
+describe("isProfileLockError", () => {
+  it("should detect exit code 21 errors", () => {
+    expect(isProfileLockError(new Error("Browser exit code 21"))).toBe(true);
+  });
+
+  it("should detect SingletonLock errors", () => {
+    expect(
+      isProfileLockError(new Error("Failed: SingletonLock file exists")),
+    ).toBe(true);
+  });
+
+  it("should detect process singleton errors", () => {
+    expect(
+      isProfileLockError(
+        new Error("Failed to create a Process Singleton for your profile"),
+      ),
+    ).toBe(true);
+  });
+
+  it("should detect profile in use errors", () => {
+    expect(
+      isProfileLockError(
+        new Error("profile directory is already in use by another process"),
+      ),
+    ).toBe(true);
+  });
+
+  it("should not match unrelated errors", () => {
+    expect(isProfileLockError(new Error("Network timeout"))).toBe(false);
+  });
+
+  it("should not match non-Error values", () => {
+    expect(isProfileLockError("exit code 21")).toBe(false);
+    expect(isProfileLockError(null)).toBe(false);
+  });
+});
+
+describe("cleanStaleSingletonLock", () => {
+  let testProfileDir: string;
+
+  beforeEach(() => {
+    testProfileDir = join(
+      tmpdir(),
+      `teams-api-test-profile-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    mkdirSync(testProfileDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(testProfileDir, { recursive: true, force: true });
+  });
+
+  it("should return false when no SingletonLock exists", () => {
+    const result = cleanStaleSingletonLock(testProfileDir, vi.fn());
+    expect(result).toBe(false);
+  });
+
+  it("should remove lock with dead PID", () => {
+    const lockPath = join(testProfileDir, "SingletonLock");
+    // Use a PID that almost certainly doesn't exist
+    symlinkSync("hostname-999999999", lockPath);
+
+    const result = cleanStaleSingletonLock(testProfileDir, vi.fn());
+    expect(result).toBe(true);
+    expect(symlinkExists(lockPath)).toBe(false);
+  });
+
+  it("should not remove lock held by a live process", () => {
+    const lockPath = join(testProfileDir, "SingletonLock");
+    // Use our own PID (which is definitely running)
+    symlinkSync(`hostname-${process.pid}`, lockPath);
+
+    const result = cleanStaleSingletonLock(testProfileDir, vi.fn());
+    expect(result).toBe(false);
+    expect(symlinkExists(lockPath)).toBe(true);
   });
 });
