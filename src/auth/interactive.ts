@@ -38,9 +38,8 @@ export async function acquireTokenViaInteractiveLogin(
   options?: InteractiveLoginOptions,
 ): Promise<TeamsToken> {
   const { chromium } = await import("playwright");
-  const log: LogFunction = options?.verbose
-    ? console.error.bind(console)
-    : () => {};
+  const log: LogFunction =
+    options?.log ?? (options?.verbose ? console.error.bind(console) : () => {});
 
   log("Launching browser for interactive login...");
   const profileDir = getDefaultBrowserProfileDir();

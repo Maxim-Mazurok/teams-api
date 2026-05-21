@@ -156,9 +156,7 @@ export function cleanStaleSingletonLock(
     if (pidMatch) {
       const pid = Number(pidMatch[1]);
       if (isProcessRunning(pid)) {
-        log(
-          `SingletonLock held by live process (PID ${pid}) — cannot remove.`,
-        );
+        log(`SingletonLock held by live process (PID ${pid}) — cannot remove.`);
         return false;
       }
       log(`SingletonLock held by dead process (PID ${pid}) — removing.`);
@@ -174,9 +172,7 @@ export function cleanStaleSingletonLock(
     log("Removed stale SingletonLock.");
     return true;
   } catch (removeError) {
-    log(
-      `Failed to remove SingletonLock: ${(removeError as Error).message}`,
-    );
+    log(`Failed to remove SingletonLock: ${(removeError as Error).message}`);
     return false;
   }
 }

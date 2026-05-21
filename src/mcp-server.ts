@@ -42,113 +42,13 @@ import { formatOutput } from "./actions/formatters.js";
 import type { ActionParameter, OutputFormat } from "./actions/formatters.js";
 import type { DownloadResult } from "./actions/file-actions.js";
 import { serverInstructions } from "./server-instructions.js";
-import { recordToolCall, recordToolError, recordAuth } from "./telemetry.js";
-
-let clientInstance: TeamsClient | null = null;
-
-class NeedsEmailError extends Error {
-  constructor() {
-    super(
-      "I need your corporate email address to log into Teams. " +
-        "Please provide your email and call this tool again.",
-    );
-    this.name = "NeedsEmailError";
-  }
-}
-
-async function getClient(toolEmail?: string): Promise<TeamsClient> {
-  if (clientInstance) {
-    return clientInstance;
-  }
-
-  const envToken = process.env.TEAMS_TOKEN;
-  const envBearerToken = process.env.TEAMS_BEARER_TOKEN;
-  const envSubstrateToken = process.env.TEAMS_SUBSTRATE_TOKEN;
-  const envRegion = process.env.TEAMS_REGION;
-  const email = process.env.TEAMS_EMAIL || toolEmail;
-  const envAuto = process.env.TEAMS_AUTO === "true";
-  const envLogin = process.env.TEAMS_LOGIN === "true";
-  const envDebug = process.env.TEAMS_DEBUG === "true";
-  const envDebugPort = process.env.TEAMS_DEBUG_PORT
-    ? Number(process.env.TEAMS_DEBUG_PORT)
-    : 9222;
-
-  if (envToken) {
-    if (!envRegion) {
-      throw new Error("TEAMS_REGION is required when TEAMS_TOKEN is set");
-    }
-    clientInstance = TeamsClient.fromToken(
-      envToken,
-      envRegion,
-      envBearerToken,
-      envSubstrateToken,
-    );
-    if (email) {
-      clientInstance.setEmail(email);
-    }
-    recordAuth({ strategy: "token", success: true });
-  } else if (envAuto) {
-    if (!email) {
-      throw new NeedsEmailError();
-    }
-    try {
-      clientInstance = await TeamsClient.create({
-        email,
-        region: envRegion,
-        headless: true,
-        verbose: false,
-      });
-      recordAuth({ strategy: "auto", success: true });
-    } catch (err) {
-      recordAuth({ strategy: "auto", success: false, error: err });
-      throw err;
-    }
-  } else if (envLogin) {
-    try {
-      clientInstance = await TeamsClient.fromInteractiveLogin({
-        region: envRegion,
-        email,
-        verbose: false,
-      });
-      if (email) {
-        clientInstance.setEmail(email);
-      }
-      recordAuth({ strategy: "login", success: true });
-    } catch (err) {
-      recordAuth({ strategy: "login", success: false, error: err });
-      throw err;
-    }
-  } else if (envDebug) {
-    try {
-      clientInstance = await TeamsClient.fromDebugSession({
-        debugPort: envDebugPort,
-        region: envRegion,
-      });
-      recordAuth({ strategy: "debug", success: true });
-    } catch (err) {
-      recordAuth({ strategy: "debug", success: false, error: err });
-      throw err;
-    }
-  } else {
-    // Default: smart login (cross-platform, zero-config)
-    try {
-      clientInstance = await TeamsClient.connect({
-        email,
-        region: envRegion,
-        verbose: false,
-      });
-      if (email) {
-        clientInstance.setEmail(email);
-      }
-      recordAuth({ strategy: "auto", success: true });
-    } catch (err) {
-      recordAuth({ strategy: "auto", success: false, error: err });
-      throw err;
-    }
-  }
-
-  return clientInstance;
-}
+import { recordToolCall, recordToolError } from "./telemetry.js";
+import {
+  AuthenticationInProgressError,
+  McpAuthManager,
+  NeedsEmailError,
+} from "./mcp-auth.js";
+import type { AuthLogFunction } from "./types.js";
 
 function parameterToZod(parameter: ActionParameter): z.ZodTypeAny {
   let schema: z.ZodTypeAny;
@@ -182,6 +82,39 @@ const server = new McpServer(
     instructions: serverInstructions,
   },
 );
+
+function formatLogMessage(messages: unknown[]): string {
+  return messages
+    .map((message) =>
+      message instanceof Error ? message.message : String(message),
+    )
+    .join(" ");
+}
+
+function createMcpAuthLogFunction(mcpServer: McpServer): AuthLogFunction {
+  return (...messages: unknown[]) => {
+    const data = formatLogMessage(messages);
+    void mcpServer
+      .sendLoggingMessage({
+        level: "info",
+        logger: "teams-api.auth",
+        data,
+      })
+      .catch((error: unknown) => {
+        if (process.env.TEAMS_TELEMETRY === "true") {
+          console.error(
+            "Failed to send MCP auth logging message:",
+            error instanceof Error ? error.message : error,
+          );
+        }
+      });
+  };
+}
+
+const authManager = new McpAuthManager<TeamsClient>({
+  clientFactory: TeamsClient,
+  log: createMcpAuthLogFunction(server),
+});
 
 // ── Register all actions as MCP tools ─────────────────────────────────
 
@@ -325,7 +258,9 @@ for (const action of actions) {
       const start = Date.now();
 
       try {
-        const client = await getClient(parameters.email as string | undefined);
+        const client = await authManager.getClient(
+          parameters.email as string | undefined,
+        );
         const result = await action.execute(
           client,
           parameters as Record<string, unknown>,
@@ -368,7 +303,10 @@ for (const action of actions) {
         };
       } catch (error) {
         const durationMs = Date.now() - start;
-        if (error instanceof NeedsEmailError) {
+        if (
+          error instanceof NeedsEmailError ||
+          error instanceof AuthenticationInProgressError
+        ) {
           recordToolError({
             tool: action.name,
             format: outputFormat,
@@ -397,6 +335,7 @@ for (const action of actions) {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  void authManager.authenticateOnStartup();
 }
 
 main().catch((error: Error) => {

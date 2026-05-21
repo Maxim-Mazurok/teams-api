@@ -9,19 +9,20 @@
  * to interactive. Only if interactive also fails does the user see an error.
  */
 
-import type { TeamsToken, SmartLoginOptions } from "./types.js";
+import type {
+  AuthLogFunction,
+  TeamsToken,
+  SmartLoginOptions,
+} from "./types.js";
 import { canAttemptAutoLogin } from "./platform.js";
 import { acquireTokenViaAutoLogin } from "./auth/auto-login.js";
 import { acquireTokenViaInteractiveLogin } from "./auth/interactive.js";
 
-type LogFunction = (...arguments_: unknown[]) => void;
-
 export async function acquireTokenViaSmartLogin(
   options?: SmartLoginOptions,
 ): Promise<TeamsToken> {
-  const log: LogFunction = options?.verbose
-    ? console.error.bind(console)
-    : () => {};
+  const log: AuthLogFunction =
+    options?.log ?? (options?.verbose ? console.error.bind(console) : () => {});
 
   // Try auto-login if prerequisites are met
   if (options?.email && canAttemptAutoLogin()) {
@@ -32,6 +33,7 @@ export async function acquireTokenViaSmartLogin(
         region: options.region,
         headless: true,
         verbose: options.verbose,
+        log,
       });
     } catch (error) {
       log(
@@ -46,5 +48,6 @@ export async function acquireTokenViaSmartLogin(
     region: options?.region,
     email: options?.email,
     verbose: options?.verbose,
+    log,
   });
 }

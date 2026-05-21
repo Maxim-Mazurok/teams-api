@@ -38,6 +38,9 @@ export interface TeamsToken {
   sharePointHost?: string;
 }
 
+/** Receives authentication progress messages. */
+export type AuthLogFunction = (...messages: unknown[]) => void;
+
 /** Options for automatic token acquisition via FIDO2 passkey. */
 export interface AutoLoginOptions {
   /** Corporate email for Microsoft Entra ID login. */
@@ -52,6 +55,8 @@ export interface AutoLoginOptions {
   headless?: boolean;
   /** Emit progress messages to console (default: false). */
   verbose?: boolean;
+  /** Optional structured progress logger. Overrides verbose console logging. */
+  log?: AuthLogFunction;
 }
 
 /** Options for interactive browser login (all platforms). */
@@ -62,6 +67,8 @@ export interface InteractiveLoginOptions {
   email?: string;
   /** Emit progress messages to console (default: false). */
   verbose?: boolean;
+  /** Optional structured progress logger. Overrides verbose console logging. */
+  log?: AuthLogFunction;
 }
 
 /** Options for smart login (zero-config default path). */
@@ -72,6 +79,8 @@ export interface SmartLoginOptions {
   region?: string;
   /** Emit progress messages to console (default: false). */
   verbose?: boolean;
+  /** Optional structured progress logger. Overrides verbose console logging. */
+  log?: AuthLogFunction;
 }
 
 /** Options for manual token capture from a running Chrome debug session. */

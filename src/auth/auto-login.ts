@@ -45,9 +45,8 @@ export async function acquireTokenViaAutoLogin(
   const profileDirectory =
     options.profileDirectory ?? DEFAULT_PROFILE_DIRECTORY;
   const headless = options.headless ?? true;
-  const log: LogFunction = options.verbose
-    ? console.error.bind(console)
-    : () => {};
+  const log: LogFunction =
+    options.log ?? (options.verbose ? console.error.bind(console) : () => {});
 
   // Clean up any previous profile to ensure a fresh session
   const { rmSync } = await import("node:fs");
