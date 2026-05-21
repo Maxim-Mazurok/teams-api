@@ -282,7 +282,8 @@ export class TeamsClient {
    * Token lifetime is ~24 hours. Cached tokens are reused within 23 hours.
    */
   static async create(options: AutoLoginOptions): Promise<TeamsClient> {
-    const log = options.verbose ? console.error.bind(console) : () => {};
+    const log =
+      options.log ?? (options.verbose ? console.error.bind(console) : () => {});
 
     const cachedToken = await loadToken(options.email);
     if (cachedToken) {
@@ -349,7 +350,9 @@ export class TeamsClient {
    * until they expire (~23 hours).
    */
   static async connect(options?: SmartLoginOptions): Promise<TeamsClient> {
-    const log = options?.verbose ? console.error.bind(console) : () => {};
+    const log =
+      options?.log ??
+      (options?.verbose ? console.error.bind(console) : () => {});
 
     // Check for cached token — use email if provided, otherwise try the default account
     const cacheKey = options?.email ?? DEFAULT_ACCOUNT;
