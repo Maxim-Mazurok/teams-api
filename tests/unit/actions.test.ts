@@ -9,13 +9,14 @@
  *   - Parameter definitions are complete and consistent
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { actions } from "../../src/actions/definitions.js";
 import { formatOutput } from "../../src/actions/formatters.js";
 import type {
   ActionDefinition,
   OutputFormat,
 } from "../../src/actions/formatters.js";
+import type { DescribeImageResult } from "../../src/actions/image-description-actions.js";
 import type { TeamsClient } from "../../src/teams-client.js";
 import type {
   Conversation,
@@ -57,6 +58,8 @@ function createMockClient(
     getMembers: vi.fn(),
     getCurrentUserDisplayName: vi.fn(),
     getToken: vi.fn(() => ({ skypeToken: "test-token", region: "apac" })),
+    downloadFile: vi.fn(),
+    downloadImage: vi.fn(),
     setEmail: vi.fn(),
     ...overrides,
   } as unknown as TeamsClient;
@@ -119,8 +122,8 @@ beforeEach(() => {
 // ── Registry tests ───────────────────────────────────────────────────
 
 describe("action registry", () => {
-  it("should contain all 15 actions", () => {
-    expect(actions).toHaveLength(15);
+  it("should contain all 16 actions", () => {
+    expect(actions).toHaveLength(16);
   });
 
   it("should have unique names", () => {
@@ -161,6 +164,7 @@ describe("action registry", () => {
     expect(names).toContain("get-members");
     expect(names).toContain("whoami");
     expect(names).toContain("get-transcript");
+    expect(names).toContain("describe-image");
   });
 });
 
@@ -2830,6 +2834,188 @@ describe("download-file", () => {
   });
 });
 
+// ── Describe image ───────────────────────────────────────────────────
+
+describe("describe-image", () => {
+  const describeImageAction = getAction("describe-image");
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.unstubAllEnvs();
+  });
+
+  function mockVisionResponse(description: string): ReturnType<typeof vi.fn> {
+    const fetchFunction = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: () =>
+        Promise.resolve({
+          choices: [{ message: { content: description } }],
+        }),
+      text: () => Promise.resolve(""),
+    });
+    globalThis.fetch = fetchFunction;
+    return fetchFunction;
+  }
+
+  it("should describe an inline image from a message", async () => {
+    vi.stubEnv("TEAMS_IMAGE_DESCRIPTION_API_KEY", "test-api-key");
+    vi.stubEnv("TEAMS_IMAGE_DESCRIPTION_MODEL", "vision-test-model");
+    const fetchFunction = mockVisionResponse(
+      "A dialog showing a validation warning.",
+    );
+    const imageData = Buffer.from("fake-image-data");
+    const client = createMockClient({
+      getMessages: vi.fn().mockResolvedValue([
+        makeMessage({
+          id: "msg-1",
+          images: [
+            {
+              amsObjectId: "ams-1",
+              url: "https://as-prod.asyncgw.teams.microsoft.com/v1/objects/ams-1/views/imgo",
+              fullSizeUrl:
+                "https://as-prod.asyncgw.teams.microsoft.com/v1/objects/ams-1/views/imgpsh_fullsize_anim",
+              width: 400,
+              height: 300,
+              contentPosition: 0,
+            },
+            {
+              amsObjectId: "ams-2",
+              url: "https://as-prod.asyncgw.teams.microsoft.com/v1/objects/ams-2/views/imgo",
+              fullSizeUrl:
+                "https://as-prod.asyncgw.teams.microsoft.com/v1/objects/ams-2/views/imgpsh_fullsize_anim",
+              width: 800,
+              height: 600,
+              contentPosition: 50,
+            },
+          ],
+        }),
+      ]),
+      downloadImage: vi.fn().mockResolvedValue({
+        data: imageData,
+        contentType: "image/png",
+        size: imageData.length,
+      }),
+    });
+
+    const result = (await describeImageAction.execute(client, {
+      conversationId: "19:test@thread.space",
+      messageId: "msg-1",
+      imageIndex: 1,
+    })) as DescribeImageResult;
+
+    expect(client.getMessages).toHaveBeenCalledWith("19:test@thread.space");
+    expect(client.downloadImage).toHaveBeenCalledWith("ams-2", true);
+    expect(fetchFunction).toHaveBeenCalledWith(
+      "https://api.openai.com/v1/chat/completions",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer test-api-key",
+        }),
+      }),
+    );
+    const requestBody = JSON.parse(
+      fetchFunction.mock.calls[0][1].body as string,
+    ) as {
+      model: string;
+      messages: Array<{
+        content: Array<{ type: string; image_url?: { url: string } }>;
+      }>;
+    };
+    expect(requestBody.model).toBe("vision-test-model");
+    expect(requestBody.messages[0].content[1].image_url?.url).toBe(
+      `data:image/png;base64,${imageData.toString("base64")}`,
+    );
+    expect(result.description).toBe("A dialog showing a validation warning.");
+    expect(result.image).toMatchObject({
+      sourceType: "message",
+      amsObjectId: "ams-2",
+      messageId: "msg-1",
+      imageIndex: 1,
+      width: 800,
+      height: 600,
+      contentType: "image/png",
+      size: imageData.length,
+    });
+  });
+
+  it("should describe a direct AMS object without fetching messages", async () => {
+    vi.stubEnv("TEAMS_IMAGE_DESCRIPTION_API_KEY", "test-api-key");
+    mockVisionResponse("A screenshot of a table.");
+    const client = createMockClient({
+      getMessages: vi.fn(),
+      downloadImage: vi.fn().mockResolvedValue({
+        data: Buffer.from("image"),
+        contentType: "image/jpeg",
+        size: 5,
+      }),
+    });
+
+    const result = (await describeImageAction.execute(client, {
+      amsObjectId: "ams-direct",
+      fullSize: false,
+    })) as DescribeImageResult;
+
+    expect(client.getMessages).not.toHaveBeenCalled();
+    expect(client.downloadImage).toHaveBeenCalledWith("ams-direct", false);
+    expect(result.image.sourceType).toBe("ams-object");
+  });
+
+  it("should require image description credentials", async () => {
+    const client = createMockClient({
+      downloadImage: vi.fn().mockResolvedValue({
+        data: Buffer.from("image"),
+        contentType: "image/png",
+        size: 5,
+      }),
+    });
+
+    await expect(
+      describeImageAction.execute(client, { amsObjectId: "ams-direct" }),
+    ).rejects.toThrow("TEAMS_IMAGE_DESCRIPTION_API_KEY or OPENAI_API_KEY");
+  });
+
+  it("should throw when a message has no inline images", async () => {
+    vi.stubEnv("TEAMS_IMAGE_DESCRIPTION_API_KEY", "test-api-key");
+    const client = createMockClient({
+      getMessages: vi.fn().mockResolvedValue([makeMessage({ id: "msg-1" })]),
+    });
+
+    await expect(
+      describeImageAction.execute(client, {
+        conversationId: "19:test@thread.space",
+        messageId: "msg-1",
+      }),
+    ).rejects.toThrow("Message msg-1 has no inline images.");
+  });
+
+  it("formatConcise should include description and source metadata", () => {
+    const output = describeImageAction.formatConcise({
+      description: "A screenshot of a chart.",
+      provider: "openai-compatible",
+      model: "vision-test-model",
+      image: {
+        sourceType: "message",
+        amsObjectId: "ams-1",
+        contentType: "image/png",
+        size: 42,
+        messageId: "msg-1",
+        imageIndex: 0,
+        width: 640,
+        height: 480,
+      },
+    } satisfies DescribeImageResult);
+
+    expect(output).toContain("A screenshot of a chart.");
+    expect(output).toContain("AMS object ID: ams-1");
+    expect(output).toContain("Message ID: msg-1");
+    expect(output).toContain("Dimensions: 640 x 480");
+  });
+});
+
 // ── Parametrized structural validation across all actions ────────────
 
 describe("action registry (parametrized)", () => {
@@ -2849,6 +3035,7 @@ describe("action registry (parametrized)", () => {
     "whoami",
     "get-transcript",
     "download-file",
+    "describe-image",
   ];
 
   it("should contain exactly the expected actions", () => {

@@ -83,6 +83,24 @@
           "description": "Override the telemetry output file path (default: platform-appropriate ~/Library/... or ~/.local/share/...)",
           "isRequired": false,
           "isSecret": false
+        },
+        {
+          "name": "TEAMS_IMAGE_DESCRIPTION_API_KEY",
+          "description": "API key for the OpenAI-compatible vision endpoint used by teams_describe_image",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "TEAMS_IMAGE_DESCRIPTION_MODEL",
+          "description": "Model name for teams_describe_image (defaults to gpt-4o-mini)",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "TEAMS_IMAGE_DESCRIPTION_BASE_URL",
+          "description": "OpenAI-compatible base URL for teams_describe_image",
+          "isRequired": false,
+          "isSecret": false
         }
       ]
     }

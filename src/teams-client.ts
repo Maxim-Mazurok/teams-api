@@ -177,6 +177,11 @@ export {
   createSharePointSharingLink,
 } from "./api/attachments.js";
 export type { SharePointUploadResult } from "./api/attachments.js";
+export { describeImageWithOpenAiCompatibleVision } from "./api/image-description.js";
+export type {
+  DescribeImageOptions,
+  ImageDescriptionResult,
+} from "./api/image-description.js";
 export { saveToken, loadToken, clearToken } from "./token-store.js";
 export { actions } from "./actions/definitions.js";
 export { formatOutput } from "./actions/formatters.js";

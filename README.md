@@ -511,9 +511,22 @@ All MCP tools accept an optional `format` parameter (`concise` or `detailed`). D
 | `teams_send_message`       | Send a message to a conversation                      |
 | `teams_get_members`        | List members of a conversation                        |
 | `teams_get_transcript`     | Get a meeting transcript from a recorded conversation |
+| `teams_download_file`      | Download message files and inline images              |
+| `teams_describe_image`     | Describe an inline Teams image with a vision model    |
 | `teams_whoami`             | Get the authenticated user's display name             |
 
 Workflow guidance, tips, and important notes are served automatically via the MCP server's `instructions` field — no separate skill file needed. For the same content on the CLI, run `teams-api guide`.
+
+### Image descriptions
+
+`teams_describe_image` reuses the existing Teams AMS image download support and sends the image bytes to an OpenAI-compatible vision endpoint. Configure it with `TEAMS_IMAGE_DESCRIPTION_API_KEY` or `OPENAI_API_KEY`. Optional overrides: `TEAMS_IMAGE_DESCRIPTION_MODEL` and `TEAMS_IMAGE_DESCRIPTION_BASE_URL`.
+
+Examples:
+
+```bash
+teams-api describe-image --chat "Project Chat" --message-id 1773736076914 --image-index 0
+teams-api describe-image --ams-object-id 0-eaua-d2-877b82634f4e978692f2243d445a6650
+```
 
 ## API regions
 

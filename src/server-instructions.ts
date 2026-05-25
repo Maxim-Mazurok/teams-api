@@ -52,6 +52,10 @@ Call teams_find_people to search the organization directory by name. Call teams_
 
 Call teams_get_transcript with chat: "Meeting Name" to retrieve the parsed transcript, or pass rawVtt: true for the original VTT file.
 
+### Describe an inline image
+
+Call teams_describe_image with chat/to/conversationId plus messageId to describe an inline Teams image, or pass amsObjectId directly if you already have it. The tool requires TEAMS_IMAGE_DESCRIPTION_API_KEY or OPENAI_API_KEY for an OpenAI-compatible vision endpoint.
+
 ## Important notes
 
 - Most tools accept chat, to, or conversationId to identify a conversation. You only need one — the server resolves the rest automatically.

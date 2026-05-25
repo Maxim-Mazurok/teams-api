@@ -65,6 +65,7 @@ src/
     middle-tier.ts      Middle-tier profile and presence lookups
     substrate.ts        Substrate search API (people, chats)
     transcripts.ts      VTT transcript fetching and parsing
+    image-description.ts  OpenAI-compatible vision endpoint integration
   auth/
     auto-login.ts       Auto-login via system Chrome + FIDO2 passkey
     debug-session.ts    CDP debug session token capture
@@ -75,6 +76,7 @@ src/
     definitions.ts      Action registry — imports and assembles all actions
     conversation-actions.ts  List, find, and 1:1 conversation actions
     message-actions.ts       Get, send, edit, delete message actions
+    image-description-actions.ts  Describe image action
     search-actions.ts        People and chat search actions
     utility-actions.ts       Whoami, get-members, get-transcript actions
     formatters.ts       Output formatting utilities and type definitions
