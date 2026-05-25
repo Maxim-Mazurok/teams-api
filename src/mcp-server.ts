@@ -17,6 +17,7 @@
  *     TEAMS_LOGIN           — Set to "true" to use interactive browser login (all platforms)
  *     TEAMS_DEBUG_PORT      — Chrome debug port (default: 9222)
  *     TEAMS_TELEMETRY       — Set to "true" to enable full debug telemetry (contributor use)
+ *     TEAMS_IMAGE_DESCRIPTION_API_KEY — Optional vision API key for teams_describe_image
  *
  * Usage in VS Code settings (mcp config):
  *   {
