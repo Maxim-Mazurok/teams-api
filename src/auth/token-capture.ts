@@ -14,6 +14,24 @@ export const PAGE_STATE_POLL_INTERVAL = 3 * 1_000;
 
 export type LogFunction = (...arguments_: unknown[]) => void;
 
+const FALLBACK_SKYPE_TOKEN_GRACE_PERIOD = 5 * 1_000;
+
+function isChatServiceRequest(requestUrl: string): boolean {
+  try {
+    const url = new URL(requestUrl);
+    return url.hostname.toLowerCase().endsWith(".ng.msg.teams.microsoft.com");
+  } catch {
+    return false;
+  }
+}
+
+function normalizeSkypeTokenHeader(value: string): string {
+  const prefix = "skypetoken=";
+  return value.toLowerCase().startsWith(prefix)
+    ? value.slice(prefix.length)
+    : value;
+}
+
 /**
  * Wait for the page to reach Teams and capture authentication tokens via CDP.
  *
@@ -47,6 +65,7 @@ export async function captureTokensFromPage(
     detach: () => Promise<void>;
   };
   let skypeToken: string | null = null;
+  let fallbackSkypeToken: string | null = null;
   let region: string | null = null;
   let bearerToken: string | null = null;
   let substrateToken: string | null = null;
@@ -63,8 +82,42 @@ export async function captureTokensFromPage(
   const tokenPromise = new Promise<void>((resolve) => {
     const timeout = setTimeout(() => {
       log("Token intercept timed out");
+      if (fallbackTimeout) {
+        clearTimeout(fallbackTimeout);
+      }
+      if (!skypeToken && fallbackSkypeToken) {
+        skypeToken = fallbackSkypeToken;
+        log("Using fallback Skype token from non-chat request headers");
+      }
       resolve();
     }, interceptTimeout);
+    let fallbackTimeout: NodeJS.Timeout | null = null;
+
+    function resolveWithToken(): void {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      if (fallbackTimeout) {
+        clearTimeout(fallbackTimeout);
+      }
+      log("Skype token captured from request headers");
+      clearTimeout(timeout);
+      resolve();
+    }
+
+    function scheduleFallbackResolution(): void {
+      if (fallbackTimeout) {
+        return;
+      }
+      fallbackTimeout = setTimeout(() => {
+        if (!skypeToken && fallbackSkypeToken) {
+          skypeToken = fallbackSkypeToken;
+          log("Using fallback Skype token from non-chat request headers");
+          resolveWithToken();
+        }
+      }, FALLBACK_SKYPE_TOKEN_GRACE_PERIOD);
+    }
 
     cdpSession.on(
       "Fetch.requestPaused",
@@ -75,16 +128,23 @@ export async function captureTokensFromPage(
         };
         const requestId = event.requestId as string;
         const requestUrl = request.url ?? "";
+        const isChatService = isChatServiceRequest(requestUrl);
         const detectedRegion = detectTeamsRegionFromUrl(requestUrl);
 
-        if (detectedRegion && !region) {
+        if (detectedRegion && (isChatService || !region)) {
           region = detectedRegion;
           log(`Detected Teams region from request URL: ${region}`);
         }
 
         for (const [name, value] of Object.entries(request.headers ?? {})) {
-          if (name.toLowerCase() === "x-skypetoken" && !skypeToken) {
-            skypeToken = value;
+          if (name.toLowerCase() === "x-skypetoken") {
+            const normalizedToken = normalizeSkypeTokenHeader(value);
+            if (isChatService && !skypeToken) {
+              skypeToken = normalizedToken;
+            } else if (!fallbackSkypeToken) {
+              fallbackSkypeToken = normalizedToken;
+              scheduleFallbackResolution();
+            }
           }
           if (
             name.toLowerCase() === "authorization" &&
@@ -108,11 +168,8 @@ export async function captureTokensFromPage(
           // Request may have already been handled
         }
 
-        if (skypeToken && !resolved) {
-          resolved = true;
-          log("Skype token captured from request headers");
-          clearTimeout(timeout);
-          resolve();
+        if (skypeToken) {
+          resolveWithToken();
         }
       },
     );
