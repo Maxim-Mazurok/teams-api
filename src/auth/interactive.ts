@@ -50,11 +50,11 @@ export async function acquireTokenViaInteractiveLogin(
     profileDir,
   );
 
-  // Close leftover tabs from previous sessions, then open a fresh page
-  for (const stale of context.pages()) {
-    await stale.close();
+  const existingPages = context.pages();
+  const page = existingPages[0] ?? (await context.newPage());
+  for (const stalePage of existingPages.slice(1)) {
+    await stalePage.close();
   }
-  const page = await context.newPage();
 
   try {
     log("Navigating to Teams...");
@@ -122,6 +122,7 @@ export async function acquireTokenViaInteractiveLogin(
       substrateToken,
       amsToken,
       sharePointToken,
+      sharePointHost,
     } = await captureTokensFromPage(page, log, TOKEN_INTERCEPT_TIMEOUT);
 
     return {
@@ -131,6 +132,7 @@ export async function acquireTokenViaInteractiveLogin(
       substrateToken,
       amsToken,
       sharePointToken,
+      sharePointHost,
     };
   } finally {
     await context.close();
