@@ -46,7 +46,11 @@
     "ai"
   ],
   "mcpName": "io.github.Maxim-Mazurok/teams-api",
-  "author": "Maxim Mazurok",
+  "author": {
+    "name": "Maxim Mazurok",
+    "email": "maxim@mazurok.com",
+    "url": "https://maxim.mazurok.com"
+  },
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
