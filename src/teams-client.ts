@@ -73,7 +73,11 @@ import {
   postScheduledMessage,
   fetchUserProperties,
 } from "./api/chat-service.js";
-import { ApiAuthError, ApiRateLimitError } from "./api/common.js";
+import {
+  ApiAuthError,
+  ApiRateLimitError,
+  ApiResponseError,
+} from "./api/common.js";
 import { resolveReactionKey, initializeEmojiMap } from "./emoji-map.js";
 import { fetchProfiles } from "./api/middle-tier.js";
 import { searchPeople, searchChats } from "./api/substrate.js";
@@ -957,33 +961,6 @@ export class TeamsClient {
               memberDisplayName: matchedPerson.displayName,
             };
           }
-
-          const currentUserObjectId = extractObjectIdFromToken(this.token);
-          if (currentUserObjectId && matchedPersonForConversation) {
-            const matchedPersonMri = matchedPersonForConversation.mri;
-            const candidateConversationIds = [
-              `19:${currentUserObjectId}_${personUuid}@unq.gbl.spaces`,
-              `19:${personUuid}_${currentUserObjectId}@unq.gbl.spaces`,
-            ];
-            for (const candidateConversationId of candidateConversationIds) {
-              try {
-                const members = await fetchMembers(
-                  this.token,
-                  candidateConversationId,
-                );
-                if (members.some((member) => member.id === matchedPersonMri)) {
-                  return {
-                    conversationId: candidateConversationId,
-                    memberDisplayName: matchedPerson.displayName,
-                  };
-                }
-              } catch (error) {
-                if (error instanceof ApiAuthError) {
-                  throw error;
-                }
-              }
-            }
-          }
         }
       } catch (error) {
         if (error instanceof ApiAuthError) {
@@ -1072,6 +1049,48 @@ export class TeamsClient {
             authError = error;
           }
           // Profile-based fallback failed — continue to other strategies
+        }
+      }
+
+      if (matchedPersonForConversation) {
+        const currentUserObjectId = extractObjectIdFromToken(this.token);
+        if (currentUserObjectId) {
+          const matchedPersonMri = matchedPersonForConversation.mri;
+          const matchedPersonObjectId = matchedPersonMri.replace(
+            "8:orgid:",
+            "",
+          );
+          const candidateConversationIds = [
+            `19:${currentUserObjectId}_${matchedPersonObjectId}@unq.gbl.spaces`,
+            `19:${matchedPersonObjectId}_${currentUserObjectId}@unq.gbl.spaces`,
+          ];
+          for (const candidateConversationId of candidateConversationIds) {
+            try {
+              const members = await fetchMembers(
+                this.token,
+                candidateConversationId,
+              );
+              if (
+                members.some(
+                  (member) =>
+                    member.id.toLowerCase() === matchedPersonMri.toLowerCase(),
+                )
+              ) {
+                return {
+                  conversationId: candidateConversationId,
+                  memberDisplayName: matchedPersonForConversation.displayName,
+                };
+              }
+            } catch (error) {
+              if (
+                error instanceof ApiResponseError &&
+                error.statusCode === 404
+              ) {
+                continue;
+              }
+              throw error;
+            }
+          }
         }
       }
 

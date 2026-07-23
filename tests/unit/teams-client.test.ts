@@ -12,7 +12,7 @@ import * as chatService from "../../src/api/chat-service.js";
 import * as middleTier from "../../src/api/middle-tier.js";
 import * as substrate from "../../src/api/substrate.js";
 import * as attachments from "../../src/api/attachments.js";
-import { ApiAuthError } from "../../src/api/common.js";
+import { ApiAuthError, ApiResponseError } from "../../src/api/common.js";
 import * as tokenStore from "../../src/token-store.js";
 import * as autoLogin from "../../src/auth/auto-login.js";
 import * as interactiveLogin from "../../src/auth/interactive.js";
@@ -534,7 +534,7 @@ describe("findOneOnOneConversation", () => {
     expect(result!.memberDisplayName).toBe("Alice Smith");
   });
 
-  it("should find an old 1:1 by verifying both deterministic conversation ID orderings", async () => {
+  it("should find an old 1:1 across both ID orderings and MRI casing", async () => {
     const currentUserObjectId = "11111111-1111-1111-1111-111111111111";
     const targetUserObjectId = "22222222-2222-2222-2222-222222222222";
     const currentUserMri = `8:orgid:${currentUserObjectId}`;
@@ -555,7 +555,9 @@ describe("findOneOnOneConversation", () => {
     ]);
     mockedApi.searchChats.mockResolvedValue([]);
     mockedApi.fetchMembers
-      .mockRejectedValueOnce(new Error("Conversation not found"))
+      .mockRejectedValueOnce(
+        new ApiResponseError("Conversation not found", 404),
+      )
       .mockResolvedValueOnce([
         {
           id: currentUserMri,
@@ -564,7 +566,7 @@ describe("findOneOnOneConversation", () => {
           memberType: "person",
         },
         {
-          id: targetUserMri,
+          id: targetUserMri.toUpperCase(),
           displayName: "Alice Smith",
           role: "Admin",
           memberType: "person",
@@ -592,6 +594,44 @@ describe("findOneOnOneConversation", () => {
       2,
       expect.anything(),
       targetUserFirstConversationId,
+    );
+  });
+
+  it("should propagate member lookup failures while verifying old 1:1 chats", async () => {
+    const currentUserObjectId = "11111111-1111-1111-1111-111111111111";
+    const targetUserObjectId = "22222222-2222-2222-2222-222222222222";
+
+    mockedApi.fetchConversations.mockResolvedValue([]);
+    mockedApi.searchPeople.mockResolvedValue([
+      {
+        displayName: "Alice Smith",
+        mri: `8:orgid:${targetUserObjectId}`,
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Development",
+        objectId: targetUserObjectId,
+      },
+    ]);
+    mockedApi.searchChats.mockResolvedValue([]);
+    mockedApi.fetchMembers.mockRejectedValue(
+      new ApiAuthError("Chat Service token expired"),
+    );
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      makeBearerToken({ oid: currentUserObjectId }),
+      "substrate-token",
+    );
+
+    await expect(
+      client.findOneOnOneConversation("Alice"),
+    ).rejects.toBeInstanceOf(ApiAuthError);
+
+    mockedApi.fetchMembers.mockRejectedValue(new Error("Network unavailable"));
+
+    await expect(client.findOneOnOneConversation("Alice")).rejects.toThrow(
+      "Network unavailable",
     );
   });
 
@@ -664,7 +704,7 @@ describe("findOneOnOneConversation", () => {
     mockedApi.searchChats.mockResolvedValue([]);
 
     mockedApi.fetchMembers.mockRejectedValue(
-      new Error("Conversation not found"),
+      new ApiResponseError("Conversation not found", 404),
     );
 
     const client = TeamsClient.fromToken(
@@ -707,7 +747,7 @@ describe("findOneOnOneConversation", () => {
     mockedApi.searchChats.mockRejectedValue(new Error("Server error: 503"));
 
     mockedApi.fetchMembers.mockRejectedValue(
-      new Error("Conversation not found"),
+      new ApiResponseError("Conversation not found", 404),
     );
 
     const client = TeamsClient.fromToken(
@@ -877,7 +917,7 @@ describe("findOneOnOneConversation", () => {
     ).rejects.toBeInstanceOf(ApiAuthError);
   });
 
-  it("should find person via group chat member scanning when substrate returns empty", async () => {
+  it("should verify old 1:1 IDs after group member discovery", async () => {
     // No existing 1:1 conversations; only a group chat where Alice is a member
     mockedApi.fetchConversations.mockResolvedValue([
       makeConversation({
@@ -892,20 +932,38 @@ describe("findOneOnOneConversation", () => {
     mockedApi.searchChats.mockResolvedValue([]);
 
     // Group chat has Alice as a member
-    mockedApi.fetchMembers.mockResolvedValue([
-      {
-        id: "8:orgid:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
-        displayName: "",
-        role: "member",
-        memberType: "person" as const,
-      },
-      {
-        id: "8:orgid:f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0",
-        displayName: "",
-        role: "member",
-        memberType: "person" as const,
-      },
-    ]);
+    mockedApi.fetchMembers
+      .mockResolvedValueOnce([
+        {
+          id: "8:orgid:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
+          displayName: "",
+          role: "member",
+          memberType: "person" as const,
+        },
+        {
+          id: "8:orgid:f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0",
+          displayName: "",
+          role: "member",
+          memberType: "person" as const,
+        },
+      ])
+      .mockRejectedValueOnce(
+        new ApiResponseError("Conversation not found", 404),
+      )
+      .mockResolvedValueOnce([
+        {
+          id: "8:orgid:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
+          displayName: "Current User",
+          role: "Admin",
+          memberType: "person" as const,
+        },
+        {
+          id: "8:orgid:f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0",
+          displayName: "Alice Smith",
+          role: "Admin",
+          memberType: "person" as const,
+        },
+      ]);
 
     // Profile resolution finds Alice
     mockedApi.fetchProfiles.mockResolvedValue([
@@ -937,7 +995,7 @@ describe("findOneOnOneConversation", () => {
 
     expect(result).not.toBeNull();
     expect(result!.conversationId).toBe(
-      "19:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5_f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0@unq.gbl.spaces",
+      "19:f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0_a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5@unq.gbl.spaces",
     );
     expect(result!.memberDisplayName).toBe("Alice Smith");
     expect(mockedApi.fetchMembers).toHaveBeenCalled();

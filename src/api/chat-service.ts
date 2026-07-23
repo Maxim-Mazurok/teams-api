@@ -21,7 +21,7 @@ import type {
   ReactionResult,
   ScheduledMessage,
 } from "../types.js";
-import { fetchWithRetry, ApiAuthError } from "./common.js";
+import { fetchWithRetry, ApiAuthError, ApiResponseError } from "./common.js";
 import { parseInlineImages, parseFileAttachments } from "./attachments.js";
 import MarkdownIt from "markdown-it";
 
@@ -141,8 +141,9 @@ export async function fetchMembers(
         `Authentication failed: ${response.status} ${response.statusText}`,
       );
     }
-    throw new Error(
+    throw new ApiResponseError(
       `Failed to fetch members: ${response.status} ${response.statusText}`,
+      response.status,
     );
   }
 
