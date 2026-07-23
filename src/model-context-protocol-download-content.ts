@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import type { ContentBlock } from "@modelcontextprotocol/sdk/types.js";
 import type { DownloadResult } from "./actions/file-actions.js";
 
@@ -65,7 +66,7 @@ export function buildDownloadContentBlocks(
 ): ContentBlock[] {
   const contentBlocks: ContentBlock[] = [];
   for (const download of downloads) {
-    if (download.contentType.startsWith("image/")) {
+    if (download.contentType.toLowerCase().startsWith("image/")) {
       contentBlocks.push({
         type: "image" as const,
         data: download.data.toString("base64"),
@@ -75,7 +76,7 @@ export function buildDownloadContentBlocks(
       contentBlocks.push({
         type: "resource" as const,
         resource: {
-          uri: `file://${download.savedTo}`,
+          uri: pathToFileURL(download.savedTo).toString(),
           mimeType: download.contentType,
           text: download.data.toString("utf-8"),
         },
@@ -83,4 +84,13 @@ export function buildDownloadContentBlocks(
     }
   }
   return contentBlocks;
+}
+
+export function createDownloadOutputResults(
+  downloads: DownloadResult[],
+): Array<Omit<DownloadResult, "data"> & { byteLength: number }> {
+  return downloads.map(({ data, ...download }) => ({
+    ...download,
+    byteLength: data.byteLength,
+  }));
 }

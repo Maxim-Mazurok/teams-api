@@ -1,6 +1,11 @@
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { DownloadResult } from "../../src/actions/file-actions.js";
-import { buildDownloadContentBlocks } from "../../src/model-context-protocol-download-content.js";
+import {
+  buildDownloadContentBlocks,
+  createDownloadOutputResults,
+} from "../../src/model-context-protocol-download-content.js";
 
 function createDownloadResult(
   overrides: Partial<DownloadResult> = {},
@@ -39,14 +44,38 @@ describe("buildDownloadContentBlocks", () => {
     ]);
   });
 
+  it("recognizes image MIME types case-insensitively", () => {
+    const imageData = Buffer.from("image data");
+
+    expect(
+      buildDownloadContentBlocks([
+        createDownloadResult({
+          fileName: "photo.png",
+          fileType: "png",
+          contentType: "Image/PNG",
+          savedTo: "/downloads/photo.png",
+          data: imageData,
+        }),
+      ]),
+    ).toEqual([
+      {
+        type: "image",
+        data: imageData.toString("base64"),
+        mimeType: "Image/PNG",
+      },
+    ]);
+  });
+
   it("returns text file content inline", () => {
+    const savedTo = resolve("/downloads/meeting notes#review.txt");
+
     expect(
       buildDownloadContentBlocks([
         createDownloadResult({
           fileName: "notes.txt",
           fileType: "txt",
           contentType: "text/plain",
-          savedTo: "/downloads/notes.txt",
+          savedTo,
           data: Buffer.from("meeting notes"),
         }),
       ]),
@@ -54,7 +83,7 @@ describe("buildDownloadContentBlocks", () => {
       {
         type: "resource",
         resource: {
-          uri: "file:///downloads/notes.txt",
+          uri: pathToFileURL(savedTo).toString(),
           mimeType: "text/plain",
           text: "meeting notes",
         },
@@ -87,5 +116,18 @@ describe("buildDownloadContentBlocks", () => {
 
   it("omits non-image binary content", () => {
     expect(buildDownloadContentBlocks([createDownloadResult()])).toEqual([]);
+  });
+
+  it("removes binary data from detailed download output", () => {
+    expect(createDownloadOutputResults([createDownloadResult()])).toEqual([
+      {
+        fileName: "report.pdf",
+        fileType: "pdf",
+        size: 4,
+        contentType: "application/pdf",
+        savedTo: "/downloads/report.pdf",
+        byteLength: 4,
+      },
+    ]);
   });
 });

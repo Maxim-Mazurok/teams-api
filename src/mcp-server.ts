@@ -44,7 +44,10 @@ import type { ActionParameter, OutputFormat } from "./actions/formatters.js";
 import type { DownloadResult } from "./actions/file-actions.js";
 import { serverInstructions } from "./server-instructions.js";
 import { recordToolCall, recordToolError } from "./telemetry.js";
-import { buildDownloadContentBlocks } from "./model-context-protocol-download-content.js";
+import {
+  buildDownloadContentBlocks,
+  createDownloadOutputResults,
+} from "./model-context-protocol-download-content.js";
 import {
   AuthenticationInProgressError,
   McpAuthManager,
@@ -163,24 +166,18 @@ for (const action of actions) {
           parameters as Record<string, unknown>,
         );
 
-        const output = formatOutput(action, result, outputFormat);
-        const durationMs = Date.now() - start;
-
-        // Redact binary data before recording telemetry — Buffer serialises as
-        // a large numeric array and would massively bloat telemetry.jsonl.
-        const telemetryResult =
+        const outputResult =
           action.name === "download-file" && Array.isArray(result)
-            ? (result as DownloadResult[]).map(({ data, ...rest }) => ({
-                ...rest,
-                byteLength: data.byteLength,
-              }))
+            ? createDownloadOutputResults(result as DownloadResult[])
             : result;
+        const output = formatOutput(action, outputResult, outputFormat);
+        const durationMs = Date.now() - start;
 
         recordToolCall({
           tool: action.name,
           format: outputFormat,
           parameters: parameters as Record<string, unknown>,
-          result: telemetryResult,
+          result: outputResult,
           output,
           durationMs,
         });
