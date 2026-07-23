@@ -71,7 +71,6 @@ import {
   removeReaction,
   postScheduledMessage,
   fetchUserProperties,
-  createOneOnOneConversation,
 } from "./api/chat-service.js";
 import { ApiAuthError, ApiRateLimitError } from "./api/common.js";
 import { resolveReactionKey, initializeEmojiMap } from "./emoji-map.js";
@@ -109,6 +108,19 @@ function extractEmailFromToken(token: TeamsToken): string | undefined {
       Buffer.from(jwt.split(".")[1], "base64").toString("utf-8"),
     ) as { upn?: string };
     return payload.upn ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractObjectIdFromToken(token: TeamsToken): string | undefined {
+  const bearerToken = token.bearerToken;
+  if (!bearerToken) return undefined;
+  try {
+    const payload = JSON.parse(
+      Buffer.from(bearerToken.split(".")[1], "base64").toString("utf-8"),
+    ) as { oid?: string };
+    return payload.oid ?? undefined;
   } catch {
     return undefined;
   }
@@ -878,7 +890,7 @@ export class TeamsClient {
       }
 
       // Strategy 1: Substrate search API for people + chat lookup
-      let matchedPersonForCreation:
+      let matchedPersonForConversation:
         | { mri: string; displayName: string }
         | undefined;
       try {
@@ -888,14 +900,10 @@ export class TeamsClient {
         );
 
         if (matchedPerson) {
-          // Validate MRI early — an invalid/empty MRI would cause both the UUID
-          // match below and createOneOnOneConversation to misbehave.
+          // Validate MRI early because both conversation lookup and virtual ID
+          // construction require an organization user UUID.
           if (/^8:orgid:[0-9a-f-]+$/i.test(matchedPerson.mri)) {
-            // Tentatively mark this person for conversation creation.  This is
-            // set before the chat search so that a searchChats failure (5xx /
-            // network error) doesn't silently prevent us from falling back to
-            // the idempotent create call further below.
-            matchedPersonForCreation = matchedPerson;
+            matchedPersonForConversation = matchedPerson;
           }
 
           // Try to find an existing chat via Substrate search.
@@ -925,8 +933,7 @@ export class TeamsClient {
           }
 
           // Check if any conversation ID contains the person's UUID.
-          // This only covers the 100 most-recent conversations; old 1:1 chats
-          // that no longer appear here are handled by createOneOnOneConversation.
+          // This only covers the 100 most-recent conversations.
           const personUuid = matchedPerson.mri.replace("8:orgid:", "");
           const matchingConversation = conversations.find(
             (conversation) =>
@@ -939,6 +946,33 @@ export class TeamsClient {
               memberDisplayName: matchedPerson.displayName,
             };
           }
+
+          const currentUserObjectId = extractObjectIdFromToken(this.token);
+          if (currentUserObjectId && matchedPersonForConversation) {
+            const matchedPersonMri = matchedPersonForConversation.mri;
+            const candidateConversationIds = [
+              `19:${currentUserObjectId}_${personUuid}@unq.gbl.spaces`,
+              `19:${personUuid}_${currentUserObjectId}@unq.gbl.spaces`,
+            ];
+            for (const candidateConversationId of candidateConversationIds) {
+              try {
+                const members = await fetchMembers(
+                  this.token,
+                  candidateConversationId,
+                );
+                if (members.some((member) => member.id === matchedPersonMri)) {
+                  return {
+                    conversationId: candidateConversationId,
+                    memberDisplayName: matchedPerson.displayName,
+                  };
+                }
+              } catch (error) {
+                if (error instanceof ApiAuthError) {
+                  throw error;
+                }
+              }
+            }
+          }
         }
       } catch (error) {
         if (error instanceof ApiAuthError) {
@@ -949,7 +983,7 @@ export class TeamsClient {
 
       // Fallback person discovery: scan group chat members and resolve
       // via profiles when Substrate search is unavailable.
-      if (!matchedPersonForCreation) {
+      if (!matchedPersonForConversation) {
         try {
           const memberMris = new Set<string>();
 
@@ -1002,7 +1036,7 @@ export class TeamsClient {
               matchedProfile &&
               /^8:orgid:[0-9a-f-]+$/i.test(matchedProfile.mri)
             ) {
-              matchedPersonForCreation = {
+              matchedPersonForConversation = {
                 displayName: matchedProfile.displayName,
                 mri: matchedProfile.mri,
               };
@@ -1030,17 +1064,20 @@ export class TeamsClient {
         }
       }
 
-      // If substrate search identified the person but found no existing chat, create one.
-      // This handles the case of first-ever contact with someone in the org.
-      if (matchedPersonForCreation) {
-        const newConversation = await createOneOnOneConversation(
-          this.token,
-          matchedPersonForCreation.mri,
-        );
-        return {
-          conversationId: newConversation.id,
-          memberDisplayName: matchedPersonForCreation.displayName,
-        };
+      // New 1:1 chats use a deterministic virtual ID. Teams persists the
+      // conversation when its first message is sent.
+      if (matchedPersonForConversation) {
+        const currentUserObjectId = extractObjectIdFromToken(this.token);
+        if (currentUserObjectId) {
+          const targetUserObjectId = matchedPersonForConversation.mri.replace(
+            "8:orgid:",
+            "",
+          );
+          return {
+            conversationId: `19:${currentUserObjectId}_${targetUserObjectId}@unq.gbl.spaces`,
+            memberDisplayName: matchedPersonForConversation.displayName,
+          };
+        }
       }
 
       // Strategy 2: Profile-based matching for 1:1 chats (uses Bearer token)
@@ -1629,9 +1666,7 @@ export class TeamsClient {
     return this.withTokenRefresh(async () => {
       const members = await fetchMembers(this.token, conversationId);
 
-      const unresolvedMembers = members.filter(
-        (member) => !member.displayName,
-      );
+      const unresolvedMembers = members.filter((member) => !member.displayName);
 
       if (unresolvedMembers.length === 0) {
         return members;
