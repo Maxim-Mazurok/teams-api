@@ -12,7 +12,7 @@ import * as chatService from "../../src/api/chat-service.js";
 import * as middleTier from "../../src/api/middle-tier.js";
 import * as substrate from "../../src/api/substrate.js";
 import * as attachments from "../../src/api/attachments.js";
-import { ApiAuthError } from "../../src/api/common.js";
+import { ApiAuthError, ApiResponseError } from "../../src/api/common.js";
 import * as tokenStore from "../../src/token-store.js";
 import * as autoLogin from "../../src/auth/auto-login.js";
 import * as interactiveLogin from "../../src/auth/interactive.js";
@@ -40,7 +40,6 @@ vi.mock("../../src/api/chat-service.js", async (importOriginal) => {
     fetchUserProperties: vi.fn(),
     addReaction: vi.fn(),
     removeReaction: vi.fn(),
-    createOneOnOneConversation: vi.fn(),
   };
 });
 vi.mock("../../src/api/middle-tier.js", async (importOriginal) => {
@@ -140,6 +139,14 @@ function makeMessagesPage(
   backwardLink: string | null = null,
 ): MessagesPage {
   return { messages, backwardLink, syncState: null };
+}
+
+function makeBearerToken(payload: Record<string, unknown>): string {
+  return [
+    Buffer.from(JSON.stringify({ algorithm: "none" })).toString("base64url"),
+    Buffer.from(JSON.stringify(payload)).toString("base64url"),
+    "signature",
+  ].join(".");
 }
 
 const mockedEmojiMap = vi.mocked(emojiMap);
@@ -527,6 +534,107 @@ describe("findOneOnOneConversation", () => {
     expect(result!.memberDisplayName).toBe("Alice Smith");
   });
 
+  it("should find an old 1:1 across both ID orderings and MRI casing", async () => {
+    const currentUserObjectId = "11111111-1111-1111-1111-111111111111";
+    const targetUserObjectId = "22222222-2222-2222-2222-222222222222";
+    const currentUserMri = `8:orgid:${currentUserObjectId}`;
+    const targetUserMri = `8:orgid:${targetUserObjectId}`;
+    const currentUserFirstConversationId = `19:${currentUserObjectId}_${targetUserObjectId}@unq.gbl.spaces`;
+    const targetUserFirstConversationId = `19:${targetUserObjectId}_${currentUserObjectId}@unq.gbl.spaces`;
+
+    mockedApi.fetchConversations.mockResolvedValue([]);
+    mockedApi.searchPeople.mockResolvedValue([
+      {
+        displayName: "Alice Smith",
+        mri: targetUserMri,
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Development",
+        objectId: targetUserObjectId,
+      },
+    ]);
+    mockedApi.searchChats.mockResolvedValue([]);
+    mockedApi.fetchMembers
+      .mockRejectedValueOnce(
+        new ApiResponseError("Conversation not found", 404),
+      )
+      .mockResolvedValueOnce([
+        {
+          id: currentUserMri,
+          displayName: "Current User",
+          role: "Admin",
+          memberType: "person",
+        },
+        {
+          id: targetUserMri.toUpperCase(),
+          displayName: "Alice Smith",
+          role: "Admin",
+          memberType: "person",
+        },
+      ]);
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      makeBearerToken({ oid: currentUserObjectId }),
+      "substrate-token",
+    );
+    const result = await client.findOneOnOneConversation("Alice");
+
+    expect(result).toEqual({
+      conversationId: targetUserFirstConversationId,
+      memberDisplayName: "Alice Smith",
+    });
+    expect(mockedApi.fetchMembers).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      currentUserFirstConversationId,
+    );
+    expect(mockedApi.fetchMembers).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      targetUserFirstConversationId,
+    );
+  });
+
+  it("should propagate member lookup failures while verifying old 1:1 chats", async () => {
+    const currentUserObjectId = "11111111-1111-1111-1111-111111111111";
+    const targetUserObjectId = "22222222-2222-2222-2222-222222222222";
+
+    mockedApi.fetchConversations.mockResolvedValue([]);
+    mockedApi.searchPeople.mockResolvedValue([
+      {
+        displayName: "Alice Smith",
+        mri: `8:orgid:${targetUserObjectId}`,
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Development",
+        objectId: targetUserObjectId,
+      },
+    ]);
+    mockedApi.searchChats.mockResolvedValue([]);
+    mockedApi.fetchMembers.mockRejectedValue(
+      new ApiAuthError("Chat Service token expired"),
+    );
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      makeBearerToken({ oid: currentUserObjectId }),
+      "substrate-token",
+    );
+
+    await expect(
+      client.findOneOnOneConversation("Alice"),
+    ).rejects.toBeInstanceOf(ApiAuthError);
+
+    mockedApi.fetchMembers.mockRejectedValue(new Error("Network unavailable"));
+
+    await expect(client.findOneOnOneConversation("Alice")).rejects.toThrow(
+      "Network unavailable",
+    );
+  });
+
   it("should fall back to message scanning when no substrate token", async () => {
     mockedApi.fetchConversations.mockResolvedValue([
       makeConversation({ id: "19:chat1", threadType: "chat", topic: "" }),
@@ -570,10 +678,9 @@ describe("findOneOnOneConversation", () => {
     const result = await client.findOneOnOneConversation("Nonexistent Person");
 
     expect(result).toBeNull();
-    expect(mockedApi.createOneOnOneConversation).not.toHaveBeenCalled();
   });
 
-  it("should create a new 1:1 conversation when person found via substrate but no existing chat", async () => {
+  it("should return a virtual 1:1 conversation ID when the person has no existing chat", async () => {
     // No pre-existing 1:1 conversations
     mockedApi.fetchConversations.mockResolvedValue([
       makeConversation({
@@ -596,15 +703,16 @@ describe("findOneOnOneConversation", () => {
     // No existing 1:1 chats in search results
     mockedApi.searchChats.mockResolvedValue([]);
 
-    // Create conversation returns a new ID
-    mockedApi.createOneOnOneConversation.mockResolvedValue({
-      id: "19:00000000-0000-0000-0000-000000000000_a1b2c3d4-e5f6-0000-0000-000000000000@unq.gbl.spaces",
-    });
+    mockedApi.fetchMembers.mockRejectedValue(
+      new ApiResponseError("Conversation not found", 404),
+    );
 
     const client = TeamsClient.fromToken(
       "token",
       "apac",
-      "bearer",
+      makeBearerToken({
+        oid: "00000000-0000-0000-0000-000000000000",
+      }),
       "substrate-token",
     );
     const result = await client.findOneOnOneConversation("Alice");
@@ -614,17 +722,9 @@ describe("findOneOnOneConversation", () => {
       "19:00000000-0000-0000-0000-000000000000_a1b2c3d4-e5f6-0000-0000-000000000000@unq.gbl.spaces",
     );
     expect(result!.memberDisplayName).toBe("Alice Smith");
-    expect(mockedApi.createOneOnOneConversation).toHaveBeenCalledWith(
-      expect.anything(),
-      "8:orgid:a1b2c3d4-e5f6-0000-0000-000000000000",
-    );
   });
 
-  it("should still create conversation when searchChats throws a non-auth error", async () => {
-    // This covers the case where an old 1:1 chat is not in the top 100 conversations
-    // AND the chat search API returns a 5xx error. Previously, the 5xx exception
-    // would abort the if(matchedPerson) block before matchedPersonForCreation was
-    // set, causing findOneOnOneConversation to return null instead of creating the chat.
+  it("should still return a virtual conversation ID when searchChats throws a non-auth error", async () => {
     mockedApi.fetchConversations.mockResolvedValue([
       makeConversation({
         id: "19:some-group@thread.v2",
@@ -646,14 +746,16 @@ describe("findOneOnOneConversation", () => {
     // searchChats throws a server error (5xx)
     mockedApi.searchChats.mockRejectedValue(new Error("Server error: 503"));
 
-    mockedApi.createOneOnOneConversation.mockResolvedValue({
-      id: "19:00000000-0000-0000-0000-000000000000_a1b2c3d4-e5f6-0000-0000-000000000000@unq.gbl.spaces",
-    });
+    mockedApi.fetchMembers.mockRejectedValue(
+      new ApiResponseError("Conversation not found", 404),
+    );
 
     const client = TeamsClient.fromToken(
       "token",
       "apac",
-      "bearer",
+      makeBearerToken({
+        oid: "00000000-0000-0000-0000-000000000000",
+      }),
       "substrate-token",
     );
     const result = await client.findOneOnOneConversation("Alice");
@@ -662,7 +764,6 @@ describe("findOneOnOneConversation", () => {
     expect(result!.conversationId).toBe(
       "19:00000000-0000-0000-0000-000000000000_a1b2c3d4-e5f6-0000-0000-000000000000@unq.gbl.spaces",
     );
-    expect(mockedApi.createOneOnOneConversation).toHaveBeenCalled();
   });
 
   it("should find existing 1:1 chat when searchChats returns lowercase threadType", async () => {
@@ -705,7 +806,6 @@ describe("findOneOnOneConversation", () => {
     expect(result).not.toBeNull();
     expect(result!.conversationId).toBe("19:alice-chat@unq.gbl.spaces");
     expect(result!.memberDisplayName).toBe("Alice Smith");
-    expect(mockedApi.createOneOnOneConversation).not.toHaveBeenCalled();
   });
 
   it("should fall back to profile-based matching when substrate search returns empty", async () => {
@@ -817,7 +917,7 @@ describe("findOneOnOneConversation", () => {
     ).rejects.toBeInstanceOf(ApiAuthError);
   });
 
-  it("should find person via group chat member scanning when substrate returns empty", async () => {
+  it("should verify old 1:1 IDs after group member discovery", async () => {
     // No existing 1:1 conversations; only a group chat where Alice is a member
     mockedApi.fetchConversations.mockResolvedValue([
       makeConversation({
@@ -832,20 +932,38 @@ describe("findOneOnOneConversation", () => {
     mockedApi.searchChats.mockResolvedValue([]);
 
     // Group chat has Alice as a member
-    mockedApi.fetchMembers.mockResolvedValue([
-      {
-        id: "8:orgid:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
-        displayName: "",
-        role: "member",
-        memberType: "person" as const,
-      },
-      {
-        id: "8:orgid:f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0",
-        displayName: "",
-        role: "member",
-        memberType: "person" as const,
-      },
-    ]);
+    mockedApi.fetchMembers
+      .mockResolvedValueOnce([
+        {
+          id: "8:orgid:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
+          displayName: "",
+          role: "member",
+          memberType: "person" as const,
+        },
+        {
+          id: "8:orgid:f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0",
+          displayName: "",
+          role: "member",
+          memberType: "person" as const,
+        },
+      ])
+      .mockRejectedValueOnce(
+        new ApiResponseError("Conversation not found", 404),
+      )
+      .mockResolvedValueOnce([
+        {
+          id: "8:orgid:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
+          displayName: "Current User",
+          role: "Admin",
+          memberType: "person" as const,
+        },
+        {
+          id: "8:orgid:f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0",
+          displayName: "Alice Smith",
+          role: "Admin",
+          memberType: "person" as const,
+        },
+      ]);
 
     // Profile resolution finds Alice
     mockedApi.fetchProfiles.mockResolvedValue([
@@ -865,26 +983,21 @@ describe("findOneOnOneConversation", () => {
       },
     ]);
 
-    // Should create a new 1:1 conversation since none exists
-    mockedApi.createOneOnOneConversation.mockResolvedValue({
-      id: "19:new-1on1@unq.gbl.spaces",
-    });
-
     const client = TeamsClient.fromToken(
       "token",
       "apac",
-      "bearer",
+      makeBearerToken({
+        oid: "a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
+      }),
       "substrate-token",
     );
     const result = await client.findOneOnOneConversation("Alice");
 
     expect(result).not.toBeNull();
-    expect(result!.conversationId).toBe("19:new-1on1@unq.gbl.spaces");
-    expect(result!.memberDisplayName).toBe("Alice Smith");
-    expect(mockedApi.createOneOnOneConversation).toHaveBeenCalledWith(
-      expect.anything(),
-      "8:orgid:f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0",
+    expect(result!.conversationId).toBe(
+      "19:f6f6f6f6-a7a7-b8b8-c9c9-d0d0d0d0d0d0_a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5@unq.gbl.spaces",
     );
+    expect(result!.memberDisplayName).toBe("Alice Smith");
     expect(mockedApi.fetchMembers).toHaveBeenCalled();
   });
 
@@ -924,19 +1037,20 @@ describe("findOneOnOneConversation", () => {
       },
     ]);
 
-    mockedApi.createOneOnOneConversation.mockResolvedValue({
-      id: "19:new-convo@unq.gbl.spaces",
-    });
-
-    const client = TeamsClient.fromToken("token", "apac", "bearer");
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      makeBearerToken({
+        oid: "11111111-1111-1111-1111-111111111111",
+      }),
+    );
     const result = await client.findOneOnOneConversation("Alice");
 
     expect(result).not.toBeNull();
-    expect(result!.memberDisplayName).toBe("Alice Smith");
-    expect(mockedApi.createOneOnOneConversation).toHaveBeenCalledWith(
-      expect.anything(),
-      "8:orgid:a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5",
+    expect(result!.conversationId).toBe(
+      "19:11111111-1111-1111-1111-111111111111_a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5@unq.gbl.spaces",
     );
+    expect(result!.memberDisplayName).toBe("Alice Smith");
   });
 });
 
