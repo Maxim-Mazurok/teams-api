@@ -34,7 +34,9 @@ export const downloadFileAction: ActionDefinition = {
     "Specify the message containing the file(s) via --message-id. " +
     "Use --output-directory to save files to a specific directory. " +
     "Without --output-directory, files are saved to a temporary directory. " +
-    "File contents are returned inline in the response.",
+    "Text file contents and images are returned inline in the response. " +
+    "Other binary files (PDFs, videos, archives, etc.) are saved to disk only; " +
+    "the response reports the local save path.",
   parameters: [
     ...conversationParameters,
     {
