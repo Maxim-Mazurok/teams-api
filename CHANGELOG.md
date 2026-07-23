@@ -1,3 +1,26 @@
+# [1.6.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.5.0...v1.6.0) (2026-07-23)
+
+
+### Bug Fixes
+
+* add entities as direct dependency for npx compatibility ([#46](https://github.com/Maxim-Mazurok/teams-api/issues/46)) ([19a19db](https://github.com/Maxim-Mazurok/teams-api/commit/19a19db9e5405aa2edc98261038fdfa7339df119))
+* auto-recover from stale SingletonLock on browser launch failure ([#45](https://github.com/Maxim-Mazurok/teams-api/issues/45)) ([04c6634](https://github.com/Maxim-Mazurok/teams-api/commit/04c66349af6856cc557d559b5553cada7f3c280b)), closes [#44](https://github.com/Maxim-Mazurok/teams-api/issues/44)
+* omit binary blobs from MCP responses ([#53](https://github.com/Maxim-Mazurok/teams-api/issues/53)) ([1ce8d4d](https://github.com/Maxim-Mazurok/teams-api/commit/1ce8d4dcfa080e8c8e71365541914fc2e9024289))
+* prefer chat service skype tokens ([e2135b4](https://github.com/Maxim-Mazurok/teams-api/commit/e2135b4026fb7fc6c1d70dc3c4d9cb088f7f80f4))
+* recognize attributed release commits ([edcfcec](https://github.com/Maxim-Mazurok/teams-api/commit/edcfcec8e8e019b08b6d63445c7a9891a262d939))
+* resolve old one-on-one chats ([#52](https://github.com/Maxim-Mazurok/teams-api/issues/52)) ([cecd81f](https://github.com/Maxim-Mazurok/teams-api/commit/cecd81f41cc5126761e55fc59906c67454533c64))
+
+
+### Features
+
+* add configurable agent marker for send and edit messages ([#40](https://github.com/Maxim-Mazurok/teams-api/issues/40)) ([afd5296](https://github.com/Maxim-Mazurok/teams-api/commit/afd5296eebcb5f68462236bce5cc9724ed00a5b9)), closes [#25](https://github.com/Maxim-Mazurok/teams-api/issues/25) [#29](https://github.com/Maxim-Mazurok/teams-api/issues/29)
+* add configurable audit logging for edit and delete actions ([#42](https://github.com/Maxim-Mazurok/teams-api/issues/42)) ([5618499](https://github.com/Maxim-Mazurok/teams-api/commit/5618499031d3b79be29f6c2f6701a5c6894c0d9f)), closes [#28](https://github.com/Maxim-Mazurok/teams-api/issues/28)
+* add configurable reply guard for message edits ([#39](https://github.com/Maxim-Mazurok/teams-api/issues/39)) ([ce62308](https://github.com/Maxim-Mazurok/teams-api/commit/ce62308296ff846af22fa94ac781b313dca7f996)), closes [#26](https://github.com/Maxim-Mazurok/teams-api/issues/26)
+* add configurable soft-delete mode for message deletion ([#41](https://github.com/Maxim-Mazurok/teams-api/issues/41)) ([1045100](https://github.com/Maxim-Mazurok/teams-api/commit/104510091abc8c801dc81f84f7227ab447f3cc0a)), closes [#27](https://github.com/Maxim-Mazurok/teams-api/issues/27)
+* add protected conversations support ([#43](https://github.com/Maxim-Mazurok/teams-api/issues/43)) ([cecb711](https://github.com/Maxim-Mazurok/teams-api/commit/cecb7113f5155b73c533551b24faa5c780f7b4a0)), closes [#30](https://github.com/Maxim-Mazurok/teams-api/issues/30)
+* describe teams image attachments ([363e905](https://github.com/Maxim-Mazurok/teams-api/commit/363e905218bd93b38b2b7effe9fd6c03ddba6818))
+* improve MCP auth startup UX ([dd3259a](https://github.com/Maxim-Mazurok/teams-api/commit/dd3259a30573c752c09f8a9c55271ba5789adcfa))
+
 # [1.5.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.4.0...v1.5.0) (2026-04-12)
 
 
