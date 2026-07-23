@@ -19,7 +19,11 @@ import {
   fetchUserProperties,
   parseRawMessage,
 } from "../../src/api/chat-service.js";
-import { ApiAuthError, ApiRateLimitError } from "../../src/api/common.js";
+import {
+  ApiAuthError,
+  ApiRateLimitError,
+  ApiResponseError,
+} from "../../src/api/common.js";
 import { fetchProfiles } from "../../src/api/middle-tier.js";
 import { searchPeople, searchChats } from "../../src/api/substrate.js";
 import {
@@ -252,6 +256,17 @@ describe("fetchMembers", () => {
 
     expect(members[0].memberType).toBe("person");
     expect(members[1].memberType).toBe("bot");
+  });
+
+  it("should expose the response status when member lookup fails", async () => {
+    mockFetchResponse({}, 404);
+
+    await expect(fetchMembers(testToken, "missing-chat")).rejects.toMatchObject(
+      {
+        name: "ApiResponseError",
+        statusCode: 404,
+      } satisfies Partial<ApiResponseError>,
+    );
   });
 });
 

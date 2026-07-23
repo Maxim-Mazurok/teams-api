@@ -22,6 +22,16 @@ export class ApiRateLimitError extends Error {
   }
 }
 
+export class ApiResponseError extends Error {
+  public readonly statusCode: number;
+
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.name = "ApiResponseError";
+    this.statusCode = statusCode;
+  }
+}
+
 const MAX_RETRY_ATTEMPTS = 5;
 const INITIAL_BACKOFF_MILLISECONDS = 2_000;
 
