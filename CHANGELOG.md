@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/Maxim-Mazurok/teams-api/compare/v1.6.0...v1.6.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* guard mentions and emotions against non-array payloads ([c8398be](https://github.com/Maxim-Mazurok/teams-api/commit/c8398be8a70da146a7e63d040e5dfbf07004b852))
+
 # [1.6.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.5.0...v1.6.0) (2026-07-23)
 
 
