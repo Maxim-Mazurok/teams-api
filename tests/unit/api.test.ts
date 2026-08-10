@@ -1197,6 +1197,31 @@ describe("parseRawMessage", () => {
     expect(message.reactions).toEqual([]);
   });
 
+  it('should handle emotions and mentions sent as the string "null"', () => {
+    const message = parseRawMessage({
+      id: "123",
+      messagetype: "Text",
+      content: "msg",
+      properties: { emotions: "null", mentions: "null" },
+    });
+
+    expect(message.reactions).toEqual([]);
+    expect(message.followers).toEqual([]);
+    expect(message.mentions).toEqual([]);
+  });
+
+  it("should handle emotions and mentions sent as a JSON object", () => {
+    const message = parseRawMessage({
+      id: "123",
+      messagetype: "Text",
+      content: "msg",
+      properties: { emotions: "{}", mentions: '{"id":"8:orgid:user1"}' },
+    });
+
+    expect(message.reactions).toEqual([]);
+    expect(message.mentions).toEqual([]);
+  });
+
   it("should handle missing fields gracefully", () => {
     const message = parseRawMessage({});
 

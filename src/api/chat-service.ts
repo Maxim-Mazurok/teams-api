@@ -674,10 +674,14 @@ function parseEmotions(rawEmotions: unknown): Array<{
 }> {
   if (typeof rawEmotions === "string") {
     try {
-      return JSON.parse(rawEmotions) as Array<{
-        key: string;
-        users: Array<{ mri: string; time: number; value?: unknown }>;
-      }>;
+      // Teams sends the literal string "null" here, which parses to null.
+      const parsed: unknown = JSON.parse(rawEmotions);
+      return Array.isArray(parsed)
+        ? (parsed as Array<{
+            key: string;
+            users: Array<{ mri: string; time: number; value?: unknown }>;
+          }>)
+        : [];
     } catch {
       return [];
     }
@@ -694,25 +698,29 @@ function parseEmotions(rawEmotions: unknown): Array<{
 }
 
 function parseMentions(rawMentions: unknown): Mention[] {
-  let parsed: Array<{ id?: string; displayName?: string }>;
+  let parsed: unknown;
 
   if (typeof rawMentions === "string") {
     try {
-      parsed = JSON.parse(rawMentions) as Array<{
-        id?: string;
-        displayName?: string;
-      }>;
+      // Teams sends the literal string "null" here, which parses to null.
+      parsed = JSON.parse(rawMentions);
     } catch {
       return [];
     }
   } else if (Array.isArray(rawMentions)) {
-    parsed = rawMentions as Array<{ id?: string; displayName?: string }>;
+    parsed = rawMentions;
   } else {
     return [];
   }
 
-  return parsed.map((mention) => ({
-    id: mention.id ?? "",
-    displayName: mention.displayName ?? "",
-  }));
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  return (parsed as Array<{ id?: string; displayName?: string }>).map(
+    (mention) => ({
+      id: mention.id ?? "",
+      displayName: mention.displayName ?? "",
+    }),
+  );
 }
