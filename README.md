@@ -6,7 +6,7 @@ Designed for autonomous AI agents that need to interact with Teams: read message
 
 [<img src="https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white" alt="Install in VS Code">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522teams%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522-p%2522%252C%2522teams-api%2540latest%2522%252C%2522teams-api-mcp%2522%255D%252C%2522env%2522%253A%257B%2522TEAMS_LOGIN%2522%253A%2522true%2522%257D%257D)
 [<img src="https://img.shields.io/badge/VS_Code_Insiders-Install_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white" alt="Install in VS Code Insiders">](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522teams%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522-p%2522%252C%2522teams-api%2540latest%2522%252C%2522teams-api-mcp%2522%255D%252C%2522env%2522%253A%257B%2522TEAMS_LOGIN%2522%253A%2522true%2522%257D%257D)
-[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=teams&config=%7B%22name%22%3A%22teams%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22-p%22%2C%22teams-api%40latest%22%2C%22teams-api-mcp%22%5D%2C%22env%22%3A%7B%22TEAMS_LOGIN%22%3A%22true%22%7D%7D)
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=teams&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIi1wIiwidGVhbXMtYXBpQGxhdGVzdCIsInRlYW1zLWFwaS1tY3AiXSwiZW52Ijp7IlRFQU1TX0xPR0lOIjoidHJ1ZSJ9fQ%3D%3D)
 [![npm version](https://img.shields.io/npm/v/teams-api?style=flat-square)](https://www.npmjs.com/package/teams-api)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-teams--api-green?style=flat-square)](https://registry.modelcontextprotocol.io)
 
@@ -94,7 +94,7 @@ Add to your VS Code MCP config (`.vscode/mcp.json` or User Settings):
 <details>
 <summary><strong>Cursor</strong></summary>
 
-[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=teams&config=%7B%22name%22%3A%22teams%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22-p%22%2C%22teams-api%40latest%22%2C%22teams-api-mcp%22%5D%2C%22env%22%3A%7B%22TEAMS_LOGIN%22%3A%22true%22%7D%7D)
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=teams&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIi1wIiwidGVhbXMtYXBpQGxhdGVzdCIsInRlYW1zLWFwaS1tY3AiXSwiZW52Ijp7IlRFQU1TX0xPR0lOIjoidHJ1ZSJ9fQ%3D%3D)
 
 Or add to `~/.cursor/mcp.json`:
 
