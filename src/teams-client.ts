@@ -718,6 +718,15 @@ export class TeamsClient {
   }
 
   /**
+   * Get Teams profiles for one or more user MRIs.
+   */
+  async getProfiles(userIdentifiers: string[]): Promise<UserProfile[]> {
+    return this.withTokenRefresh(() =>
+      fetchProfiles(this.token, userIdentifiers),
+    );
+  }
+
+  /**
    * Search for people in the organization directory by name.
    *
    * Primary: Substrate search API (requires Substrate token).
@@ -740,7 +749,23 @@ export class TeamsClient {
           maxResults,
         );
         if (substrateResults.length > 0) {
-          return substrateResults;
+          try {
+            const profiles = await fetchProfiles(
+              this.token,
+              substrateResults
+                .map((person) => person.mri)
+                .filter((userIdentifier) => userIdentifier.length > 0),
+            );
+            const userLocationByUserIdentifier = new Map(
+              profiles.map((profile) => [profile.mri, profile.userLocation]),
+            );
+            return substrateResults.map((person) => ({
+              ...person,
+              userLocation: userLocationByUserIdentifier.get(person.mri) ?? "",
+            }));
+          } catch {
+            return substrateResults;
+          }
         }
       } catch (error) {
         if (error instanceof ApiAuthError) {
@@ -813,6 +838,7 @@ export class TeamsClient {
         email: profile.email,
         jobTitle: profile.jobTitle,
         department: "",
+        userLocation: profile.userLocation,
         objectId: profile.mri.replace("8:orgid:", ""),
       }));
     });

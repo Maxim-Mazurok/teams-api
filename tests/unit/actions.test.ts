@@ -40,6 +40,7 @@ function createMockClient(
     listConversations: vi.fn(),
     findConversation: vi.fn(),
     findOneOnOneConversation: vi.fn(),
+    getProfiles: vi.fn(),
     findPeople: vi.fn(),
     findChats: vi.fn(),
     getMessages: vi.fn(),
@@ -122,8 +123,8 @@ beforeEach(() => {
 // ── Registry tests ───────────────────────────────────────────────────
 
 describe("action registry", () => {
-  it("should contain all 16 actions", () => {
-    expect(actions).toHaveLength(16);
+  it("should contain all 17 actions", () => {
+    expect(actions).toHaveLength(17);
   });
 
   it("should have unique names", () => {
@@ -155,6 +156,7 @@ describe("action registry", () => {
     expect(names).toContain("list-conversations");
     expect(names).toContain("find-conversation");
     expect(names).toContain("find-one-on-one");
+    expect(names).toContain("get-profiles");
     expect(names).toContain("find-people");
     expect(names).toContain("find-chats");
     expect(names).toContain("get-messages");
@@ -311,6 +313,59 @@ describe("find-one-on-one", () => {
   });
 });
 
+// ── get-profiles ─────────────────────────────────────────────────────
+
+describe("get-profiles", () => {
+  const action = getAction("get-profiles");
+
+  it("should call client.getProfiles with user identifiers", async () => {
+    const profiles = [
+      {
+        mri: "8:orgid:alice-uuid",
+        displayName: "Alice Smith",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        userLocation: "Sydney, Australia",
+        userType: "Member",
+      },
+    ];
+    const client = createMockClient({
+      getProfiles: vi.fn().mockResolvedValue(profiles),
+    });
+
+    const result = await action.execute(client, {
+      userIdentifiers: ["8:orgid:alice-uuid"],
+    });
+
+    expect(client.getProfiles).toHaveBeenCalledWith(["8:orgid:alice-uuid"]);
+    expect(result).toEqual(profiles);
+  });
+
+  it("should require at least one user identifier", async () => {
+    const client = createMockClient();
+
+    await expect(action.execute(client, {})).rejects.toThrow(
+      "At least one user identifier is required",
+    );
+  });
+
+  it("should format office location", () => {
+    const output = action.formatConcise([
+      {
+        mri: "8:orgid:alice-uuid",
+        displayName: "Alice Smith",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        userLocation: "Sydney, Australia",
+        userType: "Member",
+      },
+    ]);
+
+    expect(output).toContain("**Office location:**");
+    expect(output).toContain("Sydney, Australia");
+  });
+});
+
 // ── find-people ──────────────────────────────────────────────────────
 
 describe("find-people", () => {
@@ -324,6 +379,7 @@ describe("find-people", () => {
         email: "alice@example.com",
         jobTitle: "Engineer",
         department: "Dev",
+        userLocation: "Sydney, Australia",
         objectId: "alice-uuid",
       },
     ];
@@ -355,6 +411,7 @@ describe("find-people", () => {
         email: "alice@example.com",
         jobTitle: "Engineer",
         department: "Dev",
+        userLocation: "Sydney, Australia",
         objectId: "alice-uuid",
       },
     ];
@@ -364,6 +421,7 @@ describe("find-people", () => {
     expect(output).toContain("Alice Smith");
     expect(output).toContain("alice@example.com");
     expect(output).toContain("Engineer");
+    expect(output).toContain("Sydney, Australia");
   });
 
   it("should format empty result", () => {
@@ -3023,6 +3081,7 @@ describe("action registry (parametrized)", () => {
     "list-conversations",
     "find-conversation",
     "find-one-on-one",
+    "get-profiles",
     "find-people",
     "find-chats",
     "get-messages",

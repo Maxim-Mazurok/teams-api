@@ -269,6 +269,26 @@ Deleted messages have `messagetype` set to `Text` but include `properties.delete
 
 When a message is a reply, the `content` field contains a `<blockquote>` element wrapping the quoted message. The `itemtype="http://schema.skype.com/Reply"` attribute identifies these. The quoted message ID can be extracted from `data-cid` or `messageid` attributes on inner elements.
 
+## Middle-tier profile API
+
+**Get short profiles:**
+
+```text
+POST https://teams.cloud.microsoft/api/mt/{region}/beta/users/fetchShortProfile?isMailAddress=false&enableGuest=true&skypeTeamsInfo=true
+Authorization: Bearer <api.spaces.skype.com token>
+Content-Type: application/json
+
+["8:orgid:{uuid}"]
+```
+
+Returns `{ value: [...] }` with profile fields including `mri`, `displayName`, `email`, `jobTitle`, `userType`, and `userLocation`.
+
+Live verification notes:
+
+- `userLocation` contains the person's work or office location when configured in the organization directory.
+- The public `UserProfile.userLocation` property preserves the API field name and uses an empty string when the API omits it.
+- This endpoint requires the middle-tier bearer token; the Chat Service skype token cannot authorize it.
+
 ## Worker intercept findings (from browser extension research)
 
 These findings are from the browser extension POC and may be useful for future hybrid approaches:

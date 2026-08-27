@@ -60,6 +60,7 @@ export async function fetchProfiles(
       displayName?: string;
       email?: string;
       jobTitle?: string;
+      userLocation?: string;
       userType?: string;
     }>;
   };
@@ -69,6 +70,7 @@ export async function fetchProfiles(
     displayName: profile.displayName ?? "",
     email: profile.email ?? "",
     jobTitle: profile.jobTitle ?? "",
+    userLocation: profile.userLocation ?? "",
     userType: profile.userType ?? "",
   }));
 }

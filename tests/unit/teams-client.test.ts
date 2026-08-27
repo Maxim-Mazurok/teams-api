@@ -1055,6 +1055,62 @@ describe("findOneOnOneConversation", () => {
 });
 
 describe("findPeople", () => {
+  it("should get profiles by user identifier", async () => {
+    const profiles = [
+      {
+        mri: "8:orgid:alice-uuid",
+        displayName: "Alice Smith",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        userLocation: "Sydney, Australia",
+        userType: "Member",
+      },
+    ];
+    mockedApi.fetchProfiles.mockResolvedValue(profiles);
+
+    const client = TeamsClient.fromToken("token", "apac", "bearer");
+    const result = await client.getProfiles(["8:orgid:alice-uuid"]);
+
+    expect(result).toEqual(profiles);
+    expect(mockedApi.fetchProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({ bearerToken: "bearer" }),
+      ["8:orgid:alice-uuid"],
+    );
+  });
+
+  it("should enrich Substrate results with office location", async () => {
+    mockedApi.searchPeople.mockResolvedValue([
+      {
+        displayName: "Alice Smith",
+        mri: "8:orgid:alice-uuid",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Dev",
+        objectId: "alice-uuid",
+      },
+    ]);
+    mockedApi.fetchProfiles.mockResolvedValue([
+      {
+        mri: "8:orgid:alice-uuid",
+        displayName: "Alice Smith",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        userLocation: "Sydney, Australia",
+        userType: "Member",
+      },
+    ]);
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findPeople("Alice");
+
+    expect(result[0].userLocation).toBe("Sydney, Australia");
+  });
+
   it("should return people from Substrate search", async () => {
     const people = [
       {

@@ -48,6 +48,10 @@ Call teams_find_conversation with the topic name. For 1:1 chats (which have no t
 
 Call teams_find_people to search the organization directory by name. Call teams_find_chats to search chats by name or member.
 
+### Get office locations
+
+Call teams_find_people to search by name and receive office location when profile enrichment is available. For known MRIs, call teams_get_profiles with userIdentifiers to get profiles including userLocation.
+
 ### Get a meeting transcript
 
 Call teams_get_transcript with chat: "Meeting Name" to retrieve the parsed transcript, or pass rawVtt: true for the original VTT file.

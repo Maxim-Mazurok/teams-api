@@ -247,6 +247,8 @@ export interface UserProfile {
   email: string;
   /** Job title, or empty string. */
   jobTitle: string;
+  /** Work or office location, or empty string. */
+  userLocation?: string;
   /** User type (e.g. "Member", "Guest"). */
   userType: string;
 }
@@ -428,6 +430,8 @@ export interface PersonSearchResult {
   jobTitle: string;
   /** Department, or empty string. */
   department: string;
+  /** Work or office location when profile enrichment is available. */
+  userLocation?: string;
   /** AAD object ID (without tenant). */
   objectId: string;
 }

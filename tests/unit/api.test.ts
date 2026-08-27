@@ -285,6 +285,7 @@ describe("fetchProfiles", () => {
           displayName: "Alice Smith",
           email: "alice@example.com",
           jobTitle: "Engineer",
+          userLocation: "Sydney, Australia",
           userType: "Member",
         },
         {
@@ -308,9 +309,11 @@ describe("fetchProfiles", () => {
       displayName: "Alice Smith",
       email: "alice@example.com",
       jobTitle: "Engineer",
+      userLocation: "Sydney, Australia",
       userType: "Member",
     });
     expect(profiles[1].displayName).toBe("Bob Jones");
+    expect(profiles[1].userLocation).toBe("");
 
     const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
       .calls[0];
