@@ -828,6 +828,7 @@ describe("findOneOnOneConversation", () => {
         displayName: "Current User",
         email: "me@example.com",
         jobTitle: "",
+        userLocation: "",
         userType: "Member",
       },
       {
@@ -835,6 +836,7 @@ describe("findOneOnOneConversation", () => {
         displayName: "Alice Smith",
         email: "alice@example.com",
         jobTitle: "Engineer",
+        userLocation: "",
         userType: "Member",
       },
     ]);
@@ -874,6 +876,7 @@ describe("findOneOnOneConversation", () => {
         displayName: "Alice Smith",
         email: "alice@example.com",
         jobTitle: "Engineer",
+        userLocation: "",
         userType: "Member",
       },
     ]);
@@ -972,6 +975,7 @@ describe("findOneOnOneConversation", () => {
         displayName: "Current User",
         email: "me@example.com",
         jobTitle: "",
+        userLocation: "",
         userType: "Member",
       },
       {
@@ -979,6 +983,7 @@ describe("findOneOnOneConversation", () => {
         displayName: "Alice Smith",
         email: "alice@example.com",
         jobTitle: "Engineer",
+        userLocation: "",
         userType: "Member",
       },
     ]);
@@ -1033,6 +1038,7 @@ describe("findOneOnOneConversation", () => {
         displayName: "Alice Smith",
         email: "alice@example.com",
         jobTitle: "Engineer",
+        userLocation: "",
         userType: "Member",
       },
     ]);
@@ -1133,7 +1139,7 @@ describe("findPeople", () => {
     expect(result[0].userLocation).toBe("Sydney, Australia");
   });
 
-  it("should propagate profile enrichment authentication failures", async () => {
+  it("should return Substrate results when profile authentication fails", async () => {
     const people = [
       {
         displayName: "Alice Smith",
@@ -1155,8 +1161,58 @@ describe("findPeople", () => {
       "bearer",
       "substrate-token",
     );
+    const result = await client.findPeople("Alice");
 
-    await expect(client.findPeople("Alice")).rejects.toThrow(ApiAuthError);
+    expect(result).toEqual(people);
+  });
+
+  it("should refresh authentication before falling back from profile enrichment", async () => {
+    const people = [
+      {
+        displayName: "Alice Smith",
+        mri: "8:orgid:alice-uuid",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Dev",
+        objectId: "alice-uuid",
+      },
+    ];
+    const initialToken = {
+      skypeToken: "old-token",
+      region: "apac",
+      bearerToken: "old-bearer-token",
+      substrateToken: "substrate-token",
+      amsToken: "ams-token",
+      sharePointHost: "company-my.sharepoint.com",
+    };
+    const refreshedToken = {
+      skypeToken: "new-token",
+      region: "apac",
+      bearerToken: "new-bearer-token",
+      substrateToken: "substrate-token",
+    };
+    mockedTokenStore.loadToken.mockResolvedValue(initialToken);
+    mockedAuth.acquireTokenViaAutoLogin.mockResolvedValue(refreshedToken);
+    mockedApi.searchPeople.mockResolvedValue(people);
+    mockedApi.fetchProfiles
+      .mockRejectedValueOnce(new ApiAuthError("Profile token expired"))
+      .mockResolvedValueOnce([
+        {
+          mri: "8:orgid:alice-uuid",
+          displayName: "Alice Smith",
+          email: "alice@example.com",
+          jobTitle: "Engineer",
+          userLocation: "Sydney, Australia",
+          userType: "Member",
+        },
+      ]);
+
+    const client = await TeamsClient.create({ email: "user@company.com" });
+    const result = await client.findPeople("Alice");
+
+    expect(result[0].userLocation).toBe("Sydney, Australia");
+    expect(mockedAuth.acquireTokenViaAutoLogin).toHaveBeenCalledOnce();
+    expect(mockedApi.fetchProfiles).toHaveBeenCalledTimes(2);
   });
 
   it("should return Substrate results when profile enrichment fails", async () => {
@@ -1257,6 +1313,7 @@ describe("findPeople", () => {
         displayName: "Current User",
         email: "me@example.com",
         jobTitle: "",
+        userLocation: "",
         userType: "Member",
       },
       {
@@ -1264,6 +1321,7 @@ describe("findPeople", () => {
         displayName: "Alice Smith",
         email: "alice@example.com",
         jobTitle: "Engineer",
+        userLocation: "",
         userType: "Member",
       },
       {
@@ -1271,6 +1329,7 @@ describe("findPeople", () => {
         displayName: "Bob Jones",
         email: "bob@example.com",
         jobTitle: "Designer",
+        userLocation: "",
         userType: "Member",
       },
     ]);
@@ -1583,6 +1642,7 @@ describe("getMessages", () => {
         displayName: "Reaction User",
         email: "reaction.user@example.com",
         jobTitle: "",
+        userLocation: "",
         userType: "Member",
       },
       {
@@ -1590,6 +1650,7 @@ describe("getMessages", () => {
         displayName: "Follower User",
         email: "follower.user@example.com",
         jobTitle: "",
+        userLocation: "",
         userType: "Member",
       },
     ]);
@@ -1908,6 +1969,7 @@ describe("getMembers", () => {
           displayName: "Alice Smith",
           email: "alice@example.com",
           jobTitle: "Engineer",
+          userLocation: "",
           userType: "Member",
         },
         {
@@ -1915,6 +1977,7 @@ describe("getMembers", () => {
           displayName: "Bob Jones",
           email: "bob@example.com",
           jobTitle: "Manager",
+          userLocation: "",
           userType: "Member",
         },
       ]);
@@ -1995,6 +2058,7 @@ describe("getMembers", () => {
           displayName: "Bob",
           email: "",
           jobTitle: "",
+          userLocation: "",
           userType: "",
         },
         {
@@ -2002,6 +2066,7 @@ describe("getMembers", () => {
           displayName: "Test Bot",
           email: "",
           jobTitle: "",
+          userLocation: "",
           userType: "",
         },
       ]);
@@ -2232,6 +2297,7 @@ describe("getMembers", () => {
         displayName: "Max Mini Bot",
         email: "",
         jobTitle: "",
+        userLocation: "",
         userType: "",
       },
     ]);
@@ -2651,6 +2717,7 @@ describe("sendMessageWithFiles", () => {
         displayName: "User One",
         email: "user1@company.com",
         jobTitle: "",
+        userLocation: "",
         userType: "Member",
       },
       {
@@ -2658,6 +2725,7 @@ describe("sendMessageWithFiles", () => {
         displayName: "User Two",
         email: "user2@company.com",
         jobTitle: "",
+        userLocation: "",
         userType: "Member",
       },
     ]);
@@ -2752,6 +2820,7 @@ describe("sendMessageWithFiles", () => {
         displayName: "User One",
         email: "user1@company.com",
         jobTitle: "",
+        userLocation: "",
         userType: "Member",
       },
     ]);

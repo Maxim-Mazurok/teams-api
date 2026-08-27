@@ -760,11 +760,11 @@ export class TeamsClient {
 
       if (substrateResults.length > 0) {
         try {
-          const profiles = await fetchProfiles(
-            this.token,
-            substrateResults
-              .map((person) => person.mri)
-              .filter((userIdentifier) => userIdentifier.length > 0),
+          const userIdentifiers = substrateResults
+            .map((person) => person.mri)
+            .filter((userIdentifier) => userIdentifier.length > 0);
+          const profiles = await this.withTokenRefresh(() =>
+            fetchProfiles(this.token, userIdentifiers),
           );
           const userLocationByUserIdentifier = new Map(
             profiles.map((profile) => [profile.mri, profile.userLocation]),
@@ -773,10 +773,7 @@ export class TeamsClient {
             ...person,
             userLocation: userLocationByUserIdentifier.get(person.mri) ?? "",
           }));
-        } catch (error) {
-          if (error instanceof ApiAuthError) {
-            throw error;
-          }
+        } catch {
           return substrateResults;
         }
       }
