@@ -1,11 +1,58 @@
 /**
  * Search-related action definitions.
  *
- * Actions: find-people, find-chats.
+ * Actions: get-profiles, find-people, find-chats.
  */
 
-import type { PersonSearchResult, ChatSearchResult } from "../types.js";
+import type {
+  PersonSearchResult,
+  ChatSearchResult,
+  UserProfile,
+} from "../types.js";
 import type { ActionDefinition } from "./formatters.js";
+
+export const getProfilesAction: ActionDefinition = {
+  name: "get-profiles",
+  title: "Get User Profiles",
+  description:
+    "Get Teams profiles for one or more people by MRI. " +
+    "Returns display name, email, job title, office location, and user type.",
+  parameters: [
+    {
+      name: "userIdentifiers",
+      type: "string[]",
+      description:
+        "One or more Teams MRIs (for example, 8:orgid:00000000-0000-0000-0000-000000000000)",
+      required: true,
+    },
+  ],
+  execute: async (client, parameters) => {
+    const userIdentifiers = (
+      (parameters.userIdentifiers as string[] | undefined) ?? []
+    )
+      .map((userIdentifier) => userIdentifier.trim())
+      .filter((userIdentifier) => userIdentifier.length > 0);
+    if (userIdentifiers.length === 0) {
+      throw new Error("At least one user identifier is required");
+    }
+    return client.getProfiles(userIdentifiers);
+  },
+  formatConcise: (result) => {
+    const profiles = result as UserProfile[];
+    if (profiles.length === 0) return "No profiles found.";
+    const lines = [`## Profiles (${profiles.length} found)`, ""];
+    for (const profile of profiles) {
+      lines.push(`### ${profile.displayName || "(unknown)"}`);
+      if (profile.email) lines.push(`- **Email:** ${profile.email}`);
+      if (profile.jobTitle) lines.push(`- **Title:** ${profile.jobTitle}`);
+      if (profile.userLocation)
+        lines.push(`- **Office location:** ${profile.userLocation}`);
+      if (profile.userType) lines.push(`- **User type:** ${profile.userType}`);
+      lines.push(`- **MRI:** ${profile.mri}`, "");
+    }
+    return lines.join("\n");
+  },
+};
 
 export const findPeopleAction: ActionDefinition = {
   name: "find-people",
@@ -44,6 +91,8 @@ export const findPeopleAction: ActionDefinition = {
       if (person.jobTitle) lines.push(`- **Title:** ${person.jobTitle}`);
       if (person.department)
         lines.push(`- **Department:** ${person.department}`);
+      if (person.userLocation)
+        lines.push(`- **Office location:** ${person.userLocation}`);
       lines.push(`- **MRI:** ${person.mri}`);
       if (person.objectId) lines.push(`- **Object ID:** ${person.objectId}`);
       lines.push("");

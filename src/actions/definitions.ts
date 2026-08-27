@@ -20,7 +20,11 @@ import {
   addReactionAction,
   removeReactionAction,
 } from "./message-actions.js";
-import { findPeopleAction, findChatsAction } from "./search-actions.js";
+import {
+  getProfilesAction,
+  findPeopleAction,
+  findChatsAction,
+} from "./search-actions.js";
 import { getMembers, whoami, getTranscript } from "./utility-actions.js";
 import { downloadFileAction } from "./file-actions.js";
 import { describeImageAction } from "./image-description-actions.js";
@@ -36,6 +40,7 @@ const actionRegistry = new Map<string, ActionDefinition>([
   ["list-conversations", listConversations],
   ["find-conversation", findConversation],
   ["find-one-on-one", findOneOnOne],
+  ["get-profiles", getProfilesAction],
   ["find-people", findPeopleAction],
   ["find-chats", findChatsAction],
   ["get-messages", getMessages],

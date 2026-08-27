@@ -326,6 +326,13 @@ teams-api find-conversation --auto --email you@example.com --query "Design Revie
 # Find a 1:1 chat by person name
 teams-api find-one-on-one --auto --email you@example.com --person-name "Jane Doe"
 
+# Find people, including office location when profile enrichment is available
+teams-api find-people --auto --email you@example.com --query "Jane Doe"
+
+# Get profiles for MRIs returned by people search or member listing
+teams-api get-profiles --auto --email you@example.com \
+  --user-identifiers "8:orgid:00000000-0000-0000-0000-000000000000"
+
 # Read messages (by topic name, person name, or direct ID)
 teams-api get-messages --auto --email you@example.com --chat "Design Review"
 teams-api get-messages --auto --email you@example.com --to "Jane Doe" --max-pages 5
@@ -505,6 +512,7 @@ All MCP tools accept an optional `format` parameter (`concise` or `detailed`). D
 | `teams_list_conversations` | List available conversations                          |
 | `teams_find_conversation`  | Find a conversation by topic or member name           |
 | `teams_find_one_on_one`    | Find a 1:1 chat with a person                         |
+| `teams_get_profiles`       | Get user profiles, including office location          |
 | `teams_find_people`        | Search the organization directory                     |
 | `teams_find_chats`         | Search chats by name or member                        |
 | `teams_get_messages`       | Get messages from a conversation                      |
@@ -583,6 +591,8 @@ await client.sendMessage(conversations[0].id, "Hello from the API!");
 
 const oneOnOne = await client.findOneOnOneConversation("Jane Doe");
 const members = await client.getMembers(conversations[0].id);
+const profiles = await client.getProfiles(members.map((member) => member.id));
+console.log(profiles.map((profile) => profile.userLocation));
 ```
 
 ## Contributing
