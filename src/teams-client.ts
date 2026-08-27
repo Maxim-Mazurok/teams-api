@@ -741,37 +741,38 @@ export class TeamsClient {
   ): Promise<PersonSearchResult[]> {
     return this.withTokenRefresh(async () => {
       let authError: ApiAuthError | null = null;
+      let substrateResults: PersonSearchResult[] = [];
 
       try {
-        const substrateResults = await searchPeople(
-          this.token,
-          query,
-          maxResults,
-        );
-        if (substrateResults.length > 0) {
-          try {
-            const profiles = await fetchProfiles(
-              this.token,
-              substrateResults
-                .map((person) => person.mri)
-                .filter((userIdentifier) => userIdentifier.length > 0),
-            );
-            const userLocationByUserIdentifier = new Map(
-              profiles.map((profile) => [profile.mri, profile.userLocation]),
-            );
-            return substrateResults.map((person) => ({
-              ...person,
-              userLocation: userLocationByUserIdentifier.get(person.mri) ?? "",
-            }));
-          } catch {
-            return substrateResults;
-          }
-        }
+        substrateResults = await searchPeople(this.token, query, maxResults);
       } catch (error) {
         if (error instanceof ApiAuthError) {
           authError = error;
         }
         // Substrate unavailable — fall through to profile-based search
+      }
+
+      if (substrateResults.length > 0) {
+        try {
+          const profiles = await fetchProfiles(
+            this.token,
+            substrateResults
+              .map((person) => person.mri)
+              .filter((userIdentifier) => userIdentifier.length > 0),
+          );
+          const userLocationByUserIdentifier = new Map(
+            profiles.map((profile) => [profile.mri, profile.userLocation]),
+          );
+          return substrateResults.map((person) => ({
+            ...person,
+            userLocation: userLocationByUserIdentifier.get(person.mri) ?? "",
+          }));
+        } catch (error) {
+          if (error instanceof ApiAuthError) {
+            throw error;
+          }
+          return substrateResults;
+        }
       }
 
       // Fallback: search members of recent conversations via profiles

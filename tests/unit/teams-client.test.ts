@@ -1113,6 +1113,57 @@ describe("findPeople", () => {
     expect(result[0].userLocation).toBe("Sydney, Australia");
   });
 
+  it("should propagate profile enrichment authentication failures", async () => {
+    const people = [
+      {
+        displayName: "Alice Smith",
+        mri: "8:orgid:alice-uuid",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Dev",
+        objectId: "alice-uuid",
+      },
+    ];
+    mockedApi.searchPeople.mockResolvedValue(people);
+    mockedApi.fetchProfiles.mockRejectedValue(
+      new ApiAuthError("Profile token expired"),
+    );
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+
+    await expect(client.findPeople("Alice")).rejects.toThrow(ApiAuthError);
+  });
+
+  it("should return Substrate results when profile enrichment fails", async () => {
+    const people = [
+      {
+        displayName: "Alice Smith",
+        mri: "8:orgid:alice-uuid",
+        email: "alice@example.com",
+        jobTitle: "Engineer",
+        department: "Dev",
+        objectId: "alice-uuid",
+      },
+    ];
+    mockedApi.searchPeople.mockResolvedValue(people);
+    mockedApi.fetchProfiles.mockRejectedValue(new Error("Profile API down"));
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findPeople("Alice");
+
+    expect(result).toEqual(people);
+  });
+
   it("should return people from Substrate search", async () => {
     const people = [
       {
