@@ -721,8 +721,14 @@ export class TeamsClient {
    * Get Teams profiles for one or more user MRIs.
    */
   async getProfiles(userIdentifiers: string[]): Promise<UserProfile[]> {
+    const normalizedUserIdentifiers = userIdentifiers
+      .map((userIdentifier) => userIdentifier.trim())
+      .filter((userIdentifier) => userIdentifier.length > 0);
+    if (normalizedUserIdentifiers.length === 0) {
+      throw new Error("At least one user identifier is required");
+    }
     return this.withTokenRefresh(() =>
-      fetchProfiles(this.token, userIdentifiers),
+      fetchProfiles(this.token, normalizedUserIdentifiers),
     );
   }
 

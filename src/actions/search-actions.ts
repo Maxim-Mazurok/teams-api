@@ -27,8 +27,12 @@ export const getProfilesAction: ActionDefinition = {
     },
   ],
   execute: async (client, parameters) => {
-    const userIdentifiers = parameters.userIdentifiers as string[] | undefined;
-    if (!userIdentifiers || userIdentifiers.length === 0) {
+    const userIdentifiers = (
+      (parameters.userIdentifiers as string[] | undefined) ?? []
+    )
+      .map((userIdentifier) => userIdentifier.trim())
+      .filter((userIdentifier) => userIdentifier.length > 0);
+    if (userIdentifiers.length === 0) {
       throw new Error("At least one user identifier is required");
     }
     return client.getProfiles(userIdentifiers);

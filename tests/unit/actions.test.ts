@@ -344,9 +344,21 @@ describe("get-profiles", () => {
   it("should require at least one user identifier", async () => {
     const client = createMockClient();
 
-    await expect(action.execute(client, {})).rejects.toThrow(
-      "At least one user identifier is required",
-    );
+    await expect(
+      action.execute(client, { userIdentifiers: ["", " "] }),
+    ).rejects.toThrow("At least one user identifier is required");
+  });
+
+  it("should normalize user identifiers", async () => {
+    const client = createMockClient({
+      getProfiles: vi.fn().mockResolvedValue([]),
+    });
+
+    await action.execute(client, {
+      userIdentifiers: [" 8:orgid:alice-uuid ", " "],
+    });
+
+    expect(client.getProfiles).toHaveBeenCalledWith(["8:orgid:alice-uuid"]);
   });
 
   it("should format office location", () => {

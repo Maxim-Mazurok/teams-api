@@ -1077,6 +1077,26 @@ describe("getProfiles", () => {
       ["8:orgid:alice-uuid"],
     );
   });
+
+  it("should normalize user identifiers", async () => {
+    mockedApi.fetchProfiles.mockResolvedValue([]);
+
+    const client = TeamsClient.fromToken("token", "apac", "bearer");
+    await client.getProfiles([" 8:orgid:alice-uuid ", " "]);
+
+    expect(mockedApi.fetchProfiles).toHaveBeenCalledWith(expect.anything(), [
+      "8:orgid:alice-uuid",
+    ]);
+  });
+
+  it("should reject empty user identifiers", async () => {
+    const client = TeamsClient.fromToken("token", "apac", "bearer");
+
+    await expect(client.getProfiles(["", " "])).rejects.toThrow(
+      "At least one user identifier is required",
+    );
+    expect(mockedApi.fetchProfiles).not.toHaveBeenCalled();
+  });
 });
 
 describe("findPeople", () => {
