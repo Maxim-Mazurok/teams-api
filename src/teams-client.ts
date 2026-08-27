@@ -838,7 +838,7 @@ export class TeamsClient {
         email: profile.email,
         jobTitle: profile.jobTitle,
         department: "",
-        userLocation: profile.userLocation,
+        userLocation: profile.userLocation ?? "",
         objectId: profile.mri.replace("8:orgid:", ""),
       }));
     });

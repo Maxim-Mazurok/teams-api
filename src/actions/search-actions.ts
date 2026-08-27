@@ -1,7 +1,7 @@
 /**
  * Search-related action definitions.
  *
- * Actions: find-people, find-chats.
+ * Actions: get-profiles, find-people, find-chats.
  */
 
 import type {

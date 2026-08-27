@@ -1054,7 +1054,7 @@ describe("findOneOnOneConversation", () => {
   });
 });
 
-describe("findPeople", () => {
+describe("getProfiles", () => {
   it("should get profiles by user identifier", async () => {
     const profiles = [
       {
@@ -1077,7 +1077,9 @@ describe("findPeople", () => {
       ["8:orgid:alice-uuid"],
     );
   });
+});
 
+describe("findPeople", () => {
   it("should enrich Substrate results with office location", async () => {
     mockedApi.searchPeople.mockResolvedValue([
       {

@@ -247,7 +247,7 @@ export interface UserProfile {
   email: string;
   /** Job title, or empty string. */
   jobTitle: string;
-  /** Work or office location, or empty string. */
+  /** Work or office location when available. */
   userLocation?: string;
   /** User type (e.g. "Member", "Guest"). */
   userType: string;
