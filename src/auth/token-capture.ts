@@ -5,6 +5,7 @@
  * Captures skype, bearer, and substrate tokens from intercepted network requests.
  */
 
+import type { Page } from "playwright";
 import { detectTeamsRegionFromUrl } from "../region.js";
 import { diagnosePageState } from "./page-diagnostics.js";
 
@@ -39,9 +40,8 @@ function normalizeSkypeTokenHeader(value: string): string {
  * relying solely on timeouts. Throws a descriptive error if the login flow
  * stalls or reaches an unexpected state.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function captureTokensFromPage(
-  page: any,
+  page: Page,
   log: LogFunction,
   interceptTimeout: number,
 ): Promise<{

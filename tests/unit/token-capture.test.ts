@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { Page } from "playwright";
 import { captureTokensFromPage } from "../../src/auth/token-capture.js";
 
 interface FetchRequestPausedEvent {
@@ -43,7 +44,7 @@ function createPageStub(events: FetchRequestPausedEvent[]) {
     }),
     evaluate: vi.fn().mockResolvedValue({}),
     url: () => "https://teams.cloud.microsoft/v2/",
-  };
+  } as unknown as Page;
 
   return { page, devToolsSession };
 }
