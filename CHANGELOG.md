@@ -1,3 +1,5 @@
+## [1.7.2](https://github.com/Maxim-Mazurok/teams-api/compare/v1.7.1...v1.7.2) (2026-09-07)
+
 ## [1.7.1](https://github.com/Maxim-Mazurok/teams-api/compare/v1.7.0...v1.7.1) (2026-09-02)
 
 # [1.7.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.6.2...v1.7.0) (2026-08-27)
