@@ -186,6 +186,16 @@ npm install -g teams-api
 teams-api auth --login
 ```
 
+### Agent skill
+
+Compatible coding agents can install the optional [teams-api skill](skills/teams-api/) to learn when and how to use the CLI or SDK:
+
+```bash
+npx -y skills add Maxim-Mazurok/teams-api --skill teams-api
+```
+
+The installer detects supported agents and asks whether to install the skill for the current project or globally. Once installed, the agent loads it automatically for relevant Teams tasks.
+
 ### Advanced Topics
 
 Manual token usage, debug-session auth, and programmatic Node.js usage are covered later in this README.
