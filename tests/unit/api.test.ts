@@ -170,6 +170,20 @@ describe("fetchConversations", () => {
 });
 
 describe("fetchConversationsPage", () => {
+  it.each(["/v1/users/ME/conversations?cursor=older", "?cursor=older"])(
+    "should resolve relative continuation %s",
+    async (backwardLink) => {
+      mockFetchResponse({ conversations: [] });
+
+      await fetchConversationsPage(testToken, 50, backwardLink);
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/conversations?cursor=older",
+        { headers: { Authentication: "skypetoken=test-token-abc123" } },
+      );
+    },
+  );
+
   it("should preserve a continuation link on a short page and follow it", async () => {
     const backwardLink =
       "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/conversations?cursor=older";

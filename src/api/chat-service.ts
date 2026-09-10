@@ -55,16 +55,17 @@ export async function fetchConversationsPage(
   backwardLink?: string,
 ): Promise<ConversationsPage> {
   const baseUrl = chatServiceBase(token.region);
-  const url =
-    backwardLink ??
-    `${baseUrl}/users/ME/conversations?view=mychats&pageSize=${pageSize}`;
-  if (new URL(url).origin !== new URL(baseUrl).origin) {
+  const firstPageUrl = `${baseUrl}/users/ME/conversations?view=mychats&pageSize=${pageSize}`;
+  const url = new URL(backwardLink ?? firstPageUrl, firstPageUrl);
+  if (url.origin !== new URL(baseUrl).origin) {
     throw new Error(
       "Conversation pagination link must use the current Chat Service origin",
     );
   }
 
-  const response = await fetchWithRetry(url, { headers: authHeaders(token) });
+  const response = await fetchWithRetry(url.href, {
+    headers: authHeaders(token),
+  });
   if (!response.ok) {
     if (response.status === 401) {
       throw new ApiAuthError(
