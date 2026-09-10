@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   fetchConversations,
+  fetchConversationsPage,
   fetchMessagesPage,
   fetchMembers,
   postMessage,
@@ -165,6 +166,54 @@ describe("fetchConversations", () => {
 
     const conversations = await fetchConversations(testToken, 50);
     expect(conversations).toEqual([]);
+  });
+});
+
+describe("fetchConversationsPage", () => {
+  it("should preserve a continuation link on a short page and follow it", async () => {
+    const backwardLink =
+      "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/conversations?cursor=older";
+    mockFetchResponse({
+      conversations: [{ id: "19:chat", version: 123 }],
+      _metadata: { backwardLink },
+    });
+    mockFetchResponse({ conversations: [] });
+
+    const first = await fetchConversationsPage(testToken, 500);
+    const second = await fetchConversationsPage(
+      testToken,
+      500,
+      first.backwardLink!,
+    );
+
+    expect(first.conversations).toHaveLength(1);
+    expect(first.conversations[0].version).toBe(123);
+    expect(first.backwardLink).toBe(backwardLink);
+    expect(second).toEqual({ conversations: [], backwardLink: null });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(globalThis.fetch).toHaveBeenLastCalledWith(backwardLink, {
+      headers: { Authentication: "skypetoken=test-token-abc123" },
+    });
+  });
+
+  it("should reject continuation links on another origin before sending credentials", async () => {
+    await expect(
+      fetchConversationsPage(
+        testToken,
+        50,
+        "https://example.com/conversations",
+      ),
+    ).rejects.toThrow("current Chat Service origin");
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("should retain continuation links even when conversations are absent", async () => {
+    mockFetchResponse({ _metadata: { backwardLink: "next-page" } });
+
+    expect(await fetchConversationsPage(testToken, 50)).toEqual({
+      conversations: [],
+      backwardLink: "next-page",
+    });
   });
 });
 

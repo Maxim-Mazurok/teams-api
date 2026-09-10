@@ -605,6 +605,41 @@ const profiles = await client.getProfiles(members.map((member) => member.id));
 console.log(profiles.map((profile) => profile.userLocation));
 ```
 
+### Conversation pagination
+
+`listConversations()` returns one page and enriches untitled chat names by
+default. SDK consumers can pass `{ enrichNames: false }` to avoid member and
+profile lookups. CLI and MCP behavior and options are unchanged.
+
+For complete, lightweight enumeration, use `listConversationsPage()`:
+
+```typescript
+let backwardLink: string | undefined;
+do {
+  const page = await client.listConversationsPage({
+    pageSize: 500,
+    enrichNames: false,
+    backwardLink,
+  });
+  for (const conversation of page.conversations) {
+    console.log(
+      conversation.id,
+      conversation.version,
+      conversation.lastMessageTime,
+    );
+  }
+  backwardLink = page.backwardLink ?? undefined;
+} while (backwardLink);
+```
+
+Follow `backwardLink` until it is null, even when a page is short or becomes
+empty after system-stream filtering. Continuation URLs must use the current
+Chat Service origin. Name enrichment defaults to enabled on both SDK methods.
+
+Use `getMessages(id, { since })` to stop message pagination at a creation-time
+cutoff. This is not an edit/deletion delta feed; applications own checkpoint
+storage and reconciliation policy.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, architecture, and implementation notes.
