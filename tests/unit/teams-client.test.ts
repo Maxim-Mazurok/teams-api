@@ -33,6 +33,7 @@ vi.mock("../../src/api/chat-service.js", async (importOriginal) => {
   return {
     ...actual,
     fetchConversations: vi.fn(),
+    fetchConversationsPage: vi.fn(),
     fetchMessagesPage: vi.fn(),
     fetchMembers: vi.fn(),
     postMessage: vi.fn(),
@@ -205,7 +206,118 @@ describe("TeamsClient.fromToken", () => {
   });
 });
 
+describe("listConversationsPage", () => {
+  it("should retain pagination for short and system-only pages without enrichment", async () => {
+    const backwardLink =
+      "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/conversations?cursor=older";
+    mockedApi.fetchConversationsPage
+      .mockResolvedValueOnce({
+        conversations: [
+          makeConversation({ threadType: "streamofannotations" }),
+        ],
+        backwardLink,
+      })
+      .mockResolvedValueOnce({
+        conversations: [
+          makeConversation({ id: "19:group@thread.v2", topic: "" }),
+        ],
+        backwardLink: null,
+      });
+    const client = TeamsClient.fromToken("token");
+
+    const first = await client.listConversationsPage({
+      pageSize: 500,
+      enrichNames: false,
+    });
+    expect(first).toEqual({ conversations: [], backwardLink });
+    const second = await client.listConversationsPage({
+      backwardLink: first.backwardLink!,
+      enrichNames: false,
+    });
+
+    expect(second.conversations).toHaveLength(1);
+    expect(second.backwardLink).toBeNull();
+    expect(mockedApi.fetchConversationsPage).toHaveBeenNthCalledWith(
+      1,
+      client.getToken(),
+      500,
+      undefined,
+    );
+    expect(mockedApi.fetchConversationsPage).toHaveBeenNthCalledWith(
+      2,
+      client.getToken(),
+      50,
+      backwardLink,
+    );
+    expect(mockedApi.fetchMembers).not.toHaveBeenCalled();
+    expect(mockedApi.fetchProfiles).not.toHaveBeenCalled();
+    expect(mockedApi.fetchUserProperties).not.toHaveBeenCalled();
+  });
+
+  it("should enrich names and filter system streams by default", async () => {
+    mockedApi.fetchConversationsPage.mockResolvedValueOnce({
+      conversations: [
+        makeConversation({ id: "19:group@thread.v2", topic: "" }),
+        makeConversation({ threadType: "streamofannotations" }),
+      ],
+      backwardLink: null,
+    });
+    mockedApi.fetchUserProperties.mockResolvedValueOnce({
+      userDetails: JSON.stringify({ name: "Alice Smith" }),
+    });
+    mockedApi.fetchMembers.mockResolvedValueOnce([
+      {
+        id: "8:orgid:other",
+        displayName: "Bob Jones",
+        role: "member",
+        memberType: "person",
+      },
+    ]);
+
+    const page = await TeamsClient.fromToken("token").listConversationsPage();
+
+    expect(page.conversations).toHaveLength(1);
+    expect(page.conversations[0].topic).toBe("Bob Jones");
+    expect(mockedApi.fetchMembers).toHaveBeenCalledOnce();
+  });
+
+  it("should include system streams when requested", async () => {
+    const conversation = makeConversation({
+      threadType: "streamofannotations",
+    });
+    mockedApi.fetchConversationsPage.mockResolvedValueOnce({
+      conversations: [conversation],
+      backwardLink: null,
+    });
+
+    const page = await TeamsClient.fromToken("token").listConversationsPage({
+      excludeSystemStreams: false,
+    });
+
+    expect(page.conversations).toEqual([conversation]);
+  });
+});
+
 describe("listConversations", () => {
+  it("should skip name enrichment when disabled", async () => {
+    const untitled = [
+      makeConversation({ id: "19:first_second@unq.gbl.spaces", topic: "" }),
+      makeConversation({ id: "19:group@thread.v2", topic: "" }),
+    ];
+    mockedApi.fetchConversations.mockResolvedValueOnce(untitled);
+
+    const client = TeamsClient.fromToken("token");
+    const conversations = await client.listConversations({
+      enrichNames: false,
+    });
+
+    expect(conversations).toEqual(untitled);
+    expect(mockedApi.fetchUserProperties).not.toHaveBeenCalled();
+    expect(mockedApi.fetchMembers).not.toHaveBeenCalled();
+    expect(mockedApi.fetchProfiles).not.toHaveBeenCalled();
+    expect(mockedApi.fetchMessagesPage).not.toHaveBeenCalled();
+  });
+
   it("should filter out system streams by default", async () => {
     mockedApi.fetchConversations.mockResolvedValueOnce([
       makeConversation({ topic: "Real Chat", threadType: "chat" }),

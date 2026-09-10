@@ -8,6 +8,7 @@
 import type {
   TeamsToken,
   Conversation,
+  ConversationsPage,
   Message,
   MessageFormat,
   MessagesPage,
@@ -44,9 +45,27 @@ export async function fetchConversations(
   token: TeamsToken,
   pageSize: number,
 ): Promise<Conversation[]> {
-  const url = `${chatServiceBase(token.region)}/users/ME/conversations?view=mychats&pageSize=${pageSize}`;
+  const page = await fetchConversationsPage(token, pageSize);
+  return page.conversations;
+}
 
-  const response = await fetchWithRetry(url, { headers: authHeaders(token) });
+export async function fetchConversationsPage(
+  token: TeamsToken,
+  pageSize: number,
+  backwardLink?: string,
+): Promise<ConversationsPage> {
+  const baseUrl = chatServiceBase(token.region);
+  const firstPageUrl = `${baseUrl}/users/ME/conversations?view=mychats&pageSize=${pageSize}`;
+  const url = new URL(backwardLink ?? firstPageUrl, firstPageUrl);
+  if (url.origin !== new URL(baseUrl).origin) {
+    throw new Error(
+      "Conversation pagination link must use the current Chat Service origin",
+    );
+  }
+
+  const response = await fetchWithRetry(url.href, {
+    headers: authHeaders(token),
+  });
   if (!response.ok) {
     if (response.status === 401) {
       throw new ApiAuthError(
@@ -59,7 +78,7 @@ export async function fetchConversations(
   }
 
   const data = (await response.json()) as {
-    conversations: Array<{
+    conversations?: Array<{
       id: string;
       version: number;
       threadProperties?: {
@@ -69,9 +88,10 @@ export async function fetchConversations(
       };
       properties?: { displayName?: string; lastimreceivedtime?: string };
     }>;
+    _metadata?: { backwardLink?: string };
   };
 
-  return (data.conversations ?? []).map((conversation) => ({
+  const conversations = (data.conversations ?? []).map((conversation) => ({
     id: conversation.id,
     topic:
       conversation.threadProperties?.topic ??
@@ -84,6 +104,7 @@ export async function fetchConversations(
       ? Number(conversation.threadProperties.memberCount)
       : null,
   }));
+  return { conversations, backwardLink: data._metadata?.backwardLink ?? null };
 }
 
 /**

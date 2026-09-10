@@ -47,6 +47,8 @@ import type {
   ScheduledMessage,
   GetMessagesOptions,
   ListConversationsOptions,
+  ListConversationsPageOptions,
+  ConversationsPage,
   OneOnOneSearchResult,
   PersonSearchResult,
   ChatSearchResult,
@@ -63,6 +65,7 @@ import { SYSTEM_STREAM_TYPES } from "./types.js";
 import { isTextMessageType } from "./constants.js";
 import {
   fetchConversations,
+  fetchConversationsPage,
   fetchMessagesPage,
   fetchMembers,
   postMessage,
@@ -153,6 +156,8 @@ export type {
   ReactionResult,
   GetMessagesOptions,
   ListConversationsOptions,
+  ListConversationsPageOptions,
+  ConversationsPage,
   OneOnOneSearchResult,
   MessagesPage,
   Mention,
@@ -556,24 +561,53 @@ export class TeamsClient {
   ): Promise<Conversation[]> {
     return this.withTokenRefresh(async () => {
       const pageSize = options?.pageSize ?? 50;
-      const excludeSystem = options?.excludeSystemStreams ?? true;
-
       const conversations = await fetchConversations(this.token, pageSize);
+      return this.prepareConversations(conversations, options);
+    });
+  }
 
-      const filtered = excludeSystem
-        ? conversations.filter(
+  /**
+   * Fetch one conversation page, preserving its continuation URL.
+   * Follow backwardLink until null, even when a filtered page is empty.
+   * Set enrichNames: false for metadata-only enumeration.
+   */
+  async listConversationsPage(
+    options?: ListConversationsPageOptions,
+  ): Promise<ConversationsPage> {
+    return this.withTokenRefresh(async () => {
+      const page = await fetchConversationsPage(
+        this.token,
+        options?.pageSize ?? 50,
+        options?.backwardLink,
+      );
+      return {
+        ...page,
+        conversations: await this.prepareConversations(
+          page.conversations,
+          options,
+        ),
+      };
+    });
+  }
+
+  private async prepareConversations(
+    conversations: Conversation[],
+    options?: ListConversationsOptions,
+  ): Promise<Conversation[]> {
+    const filtered =
+      options?.excludeSystemStreams === false
+        ? conversations
+        : conversations.filter(
             (conversation) =>
               !(SYSTEM_STREAM_TYPES as readonly string[]).includes(
                 conversation.threadType,
               ),
-          )
-        : conversations;
-
-      // Resolve display names for untitled chats (1:1 and group).
+          );
+    if (options?.enrichNames !== false) {
       await this.resolveUntitledDisplayNames(filtered);
+    }
 
-      return filtered;
-    });
+    return filtered;
   }
 
   /**

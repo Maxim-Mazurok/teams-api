@@ -350,6 +350,13 @@ export interface ScheduledMessage {
   scheduledTime: string;
 }
 
+/** A page of conversations with pagination metadata. */
+export interface ConversationsPage {
+  conversations: Conversation[];
+  /** Continuation URL, or null when there are no older conversations. */
+  backwardLink: string | null;
+}
+
 /** A page of messages with pagination metadata. */
 export interface MessagesPage {
   /** Messages in this page. */
@@ -384,6 +391,14 @@ export interface ListConversationsOptions {
   pageSize?: number;
   /** If true, exclude system streams (annotations, threads, notifications, etc). */
   excludeSystemStreams?: boolean;
+  /** Resolve untitled chats using member/profile lookups (default: true). */
+  enrichNames?: boolean;
+}
+
+/** SDK options for fetching one conversation page. */
+export interface ListConversationsPageOptions extends ListConversationsOptions {
+  /** Continuation URL returned by the previous page. */
+  backwardLink?: string;
 }
 
 /**
