@@ -309,6 +309,7 @@ The examples below use `teams-api` for readability. If you are not installing gl
 | --------------------------- | -------------------------------------------------------------------------------- |
 | `--login`                   | Interactive browser login (all platforms)                                        |
 | `--auto`                    | Auto-acquire token via FIDO2 passkey (macOS)                                     |
+| `--headless`                | Run FIDO2 auto-login without a visible browser                                   |
 | `--email <email>`           | Corporate email (required with `--auto`, optional otherwise)                     |
 | `--token <token>`           | Use an existing skype token (advanced/manual)                                    |
 | `--bearer-token <token>`    | Optional middle-tier bearer token (advanced/manual)                              |
@@ -324,8 +325,11 @@ The examples below use `teams-api` for readability. If you are not installing gl
 # Acquire a token (interactive — all platforms)
 teams-api auth --login
 
-# Acquire a token (auto — macOS with FIDO2)
+# Acquire a token (headed auto-login — macOS with FIDO2)
 teams-api auth --auto --email you@example.com
+
+# Acquire a token (headless auto-login — explicit opt-in)
+teams-api auth --auto --headless --email you@example.com
 
 # List conversations
 teams-api list-conversations --login --limit 20 --format detailed
@@ -406,6 +410,7 @@ Use this only if you already have tokens from another flow or need to avoid brow
 | `TEAMS_REGION`                  | API region override. Required with `TEAMS_TOKEN`; optional otherwise                   |
 | `TEAMS_EMAIL`                   | Corporate email. Optional — the server prompts the AI agent if needed                  |
 | `TEAMS_AUTO`                    | Set to `true` to enable auto-login (macOS + FIDO2)                                     |
+| `TEAMS_HEADLESS`                | Set to `true` to run FIDO2 auto-login without a visible browser                        |
 | `TEAMS_LOGIN`                   | Set to `true` to enable interactive browser login                                      |
 | `TEAMS_DEBUG_PORT`              | Chrome debug port (default: 9222)                                                      |
 | `TEAMS_EDIT_REPLY_GUARD`        | Edit reply guard: `allow` (default), `warn`, or `block`. See below                     |
@@ -561,6 +566,7 @@ The Teams Chat Service URL varies by region. Login-based and debug-session auth 
 - **File attachments are not supported from remote AI hosts** (e.g. Claude.ai). The MCP server runs locally on your machine, so `--file` / `--image` paths must exist on your local filesystem. Cloud-hosted AI clients run in isolated containers and cannot access local paths. Use a local MCP client (Claude Desktop, Cursor, VS Code) or the CLI for file attachments.
 - Token lifetime is ~24 hours. After expiry, you must re-acquire.
 - The Teams Chat Service REST API is undocumented and may change without notice.
+- FIDO2 auto-login is never selected automatically. Enable it with `--auto` or `TEAMS_AUTO=true`; add `--headless` or `TEAMS_HEADLESS=true` only when unattended browser auth is wanted.
 - Auto-login requires macOS, system Chrome, a platform authenticator, and a FIDO2 passkey. On other platforms, use interactive login (`--login`) instead.
 - The members API returns empty display names for 1:1 chat participants. Use `findOneOnOneConversation()` to resolve names from message history.
 - Reaction actor identities come from the `emotions` field in message payloads. Parsing handles both JSON-string and array formats.

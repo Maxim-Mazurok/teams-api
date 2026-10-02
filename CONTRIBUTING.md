@@ -99,11 +99,11 @@ TeamsClient is the only public-facing class. It accepts a TeamsToken (from any a
 
 ### Authentication strategies
 
-1. **Smart login** (`acquireTokenViaSmartLogin` in `src/smart-login.ts`): The default auth strategy. Attempts auto-login first (macOS), falls back to interactive login on other platforms or when auto-login fails. Cached tokens are reused automatically via the platform credential store.
+1. **Smart login** (`acquireTokenViaSmartLogin` in `src/smart-login.ts`): Uses headed interactive login by default. FIDO2 auto-login and headless operation require explicit options. Cached tokens are reused automatically via the platform credential store.
 
 2. **Interactive login** (`acquireTokenViaInteractiveLogin` in `src/auth/interactive.ts`): Opens a visible browser window and navigates to Teams. Prefers an installed browser (Edge, Chrome) when available, falling back to Playwright's bundled Chromium. The user completes the login manually. Works on all platforms.
 
-3. **Auto-login** (`acquireTokenViaAutoLogin` in `src/auth/auto-login.ts`): Launches system Chrome via Playwright persistent context and completes FIDO2 passkey authentication automatically. macOS only. Usually invoked via smart login rather than directly.
+3. **Auto-login** (`acquireTokenViaAutoLogin` in `src/auth/auto-login.ts`): Launches system Chrome via Playwright persistent context and completes FIDO2 passkey authentication automatically. macOS only. Uses a visible browser unless headless operation is explicitly enabled.
 
 4. **Debug session** (`acquireTokenViaDebugSession` in `src/auth/debug-session.ts`): Connects to a running Chrome instance via puppeteer-core CDP, finds the Teams tab, enables Fetch interception, triggers a page reload, and captures the `x-skypetoken` header.
 

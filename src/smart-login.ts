@@ -1,8 +1,8 @@
 /**
- * Smart login — the zero-config default authentication strategy.
+ * Smart login — headed interactive authentication by default.
  *
  * Strategy:
- *   1. If on macOS + email provided + system Chrome exists → try auto-login
+ *   1. If FIDO2 is explicitly enabled and prerequisites exist → try auto-login
  *   2. If auto-login fails or prerequisites not met → interactive login
  *
  * Auto-login errors are caught and logged, then we immediately fall back
@@ -24,14 +24,14 @@ export async function acquireTokenViaSmartLogin(
   const log: AuthLogFunction =
     options?.log ?? (options?.verbose ? console.error.bind(console) : () => {});
 
-  // Try auto-login if prerequisites are met
-  if (options?.email && canAttemptAutoLogin()) {
+  // Try FIDO2 auto-login only when explicitly enabled.
+  if (options?.auto && options.email && canAttemptAutoLogin()) {
     log("Auto-login prerequisites met (macOS + Chrome), attempting...");
     try {
       return await acquireTokenViaAutoLogin({
         email: options.email,
         region: options.region,
-        headless: true,
+        headless: options.headless ?? false,
         verbose: options.verbose,
         log,
       });

@@ -37,6 +37,7 @@ program
 
 interface AuthFlags {
   auto?: boolean;
+  headless?: boolean;
   login?: boolean;
   debug?: boolean;
   email?: string;
@@ -50,6 +51,7 @@ interface AuthFlags {
 function addAuthOptions(command: Command): Command {
   return command
     .option("--auto", "Auto-acquire token via FIDO2 passkey (macOS)")
+    .option("--headless", "Run FIDO2 auto-login without a visible browser")
     .option(
       "--login",
       "Interactive browser login (all platforms, no FIDO2 needed)",
@@ -105,7 +107,7 @@ async function createClient(flags: AuthFlags): Promise<TeamsClient> {
     const autoLoginOptions: AutoLoginOptions = {
       email: flags.email,
       region: flags.region,
-      headless: true,
+      headless: flags.headless === true,
       verbose: true,
     };
     return TeamsClient.create(autoLoginOptions);
@@ -134,7 +136,7 @@ async function createClient(flags: AuthFlags): Promise<TeamsClient> {
     return TeamsClient.fromDebugSession(manualOptions);
   }
 
-  // Default: smart login (cross-platform, zero-config)
+  // Default: headed interactive login on every platform.
   const client = await TeamsClient.connect({
     email: flags.email,
     region: flags.region,

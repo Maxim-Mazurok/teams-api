@@ -51,7 +51,7 @@ export interface AutoLoginOptions {
   chromePath?: string;
   /** Directory for temporary browser profile (cleaned automatically). */
   profileDirectory?: string;
-  /** Run browser in headless mode (default: true). */
+  /** Run browser in headless mode (default: false). */
   headless?: boolean;
   /** Emit progress messages to console (default: false). */
   verbose?: boolean;
@@ -71,10 +71,14 @@ export interface InteractiveLoginOptions {
   log?: AuthLogFunction;
 }
 
-/** Options for smart login (zero-config default path). */
+/** Options for smart login. Interactive headed login is the default path. */
 export interface SmartLoginOptions {
-  /** Corporate email (optional — skips auto-login if not provided). */
+  /** Corporate email to pre-fill during login. */
   email?: string;
+  /** Use automatic FIDO2 authentication (default: false). */
+  auto?: boolean;
+  /** Run automatic FIDO2 authentication headlessly (default: false). */
+  headless?: boolean;
   /** Explicit API region override. Omit to auto-detect when possible. */
   region?: string;
   /** Emit progress messages to console (default: false). */

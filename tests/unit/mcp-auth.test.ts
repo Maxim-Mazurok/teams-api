@@ -128,6 +128,41 @@ describe("McpAuthManager", () => {
     expect(factory.create).not.toHaveBeenCalled();
   });
 
+  it("uses headed FIDO2 auth unless headless mode is explicitly configured", async () => {
+    const factory = createFactory();
+    const { manager } = createManager({
+      clientFactory: factory,
+      environment: {
+        TEAMS_AUTO: "true",
+        TEAMS_EMAIL: "user@contoso.com",
+      },
+    });
+
+    await manager.getClient();
+
+    expect(factory.create).toHaveBeenCalledWith(
+      expect.objectContaining({ headless: false }),
+    );
+  });
+
+  it("uses headless FIDO2 auth when explicitly configured", async () => {
+    const factory = createFactory();
+    const { manager } = createManager({
+      clientFactory: factory,
+      environment: {
+        TEAMS_AUTO: "true",
+        TEAMS_EMAIL: "user@contoso.com",
+        TEAMS_HEADLESS: "true",
+      },
+    });
+
+    await manager.getClient();
+
+    expect(factory.create).toHaveBeenCalledWith(
+      expect.objectContaining({ headless: true }),
+    );
+  });
+
   it("runs eager startup auth when an email is configured", async () => {
     const factory = createFactory();
     const log = vi.fn();
@@ -205,7 +240,7 @@ describe("McpAuthManager", () => {
     );
   });
 
-  it("does not split a tool-email flow when auto-login can run silently", async () => {
+  it("uses two-phase headed login when only the tool call supplies email", async () => {
     const factory = createFactory();
     const { manager } = createManager({
       canAttemptAutoLogin: () => true,
@@ -213,10 +248,13 @@ describe("McpAuthManager", () => {
       environment: {},
     });
 
-    await manager.getClient("user@contoso.com");
+    await expect(manager.getClient("user@contoso.com")).rejects.toBeInstanceOf(
+      AuthenticationInProgressError,
+    );
 
     expect(factory.connect).toHaveBeenCalledWith(
       expect.objectContaining({
+        auto: false,
         email: "user@contoso.com",
       }),
     );

@@ -33,11 +33,31 @@ beforeEach(() => {
 });
 
 describe("acquireTokenViaSmartLogin", () => {
-  it("should try auto-login when email provided and prerequisites met", async () => {
+  it("should use headed interactive login when only email is provided", async () => {
+    mockedPlatform.canAttemptAutoLogin.mockReturnValue(true);
+    mockedInteractive.acquireTokenViaInteractiveLogin.mockResolvedValue(
+      testToken,
+    );
+
+    const result = await acquireTokenViaSmartLogin({
+      email: "user@company.com",
+    });
+
+    expect(result).toEqual(testToken);
+    expect(mockedAutoLogin.acquireTokenViaAutoLogin).not.toHaveBeenCalled();
+    expect(
+      mockedInteractive.acquireTokenViaInteractiveLogin,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "user@company.com" }),
+    );
+  });
+
+  it("should try headed auto-login when FIDO2 is explicitly enabled", async () => {
     mockedPlatform.canAttemptAutoLogin.mockReturnValue(true);
     mockedAutoLogin.acquireTokenViaAutoLogin.mockResolvedValue(testToken);
 
     const result = await acquireTokenViaSmartLogin({
+      auto: true,
       email: "user@company.com",
     });
 
@@ -45,7 +65,7 @@ describe("acquireTokenViaSmartLogin", () => {
     expect(mockedAutoLogin.acquireTokenViaAutoLogin).toHaveBeenCalledWith(
       expect.objectContaining({
         email: "user@company.com",
-        headless: true,
+        headless: false,
       }),
     );
     expect(
@@ -63,6 +83,7 @@ describe("acquireTokenViaSmartLogin", () => {
     );
 
     const result = await acquireTokenViaSmartLogin({
+      auto: true,
       email: "user@company.com",
     });
 
@@ -97,6 +118,7 @@ describe("acquireTokenViaSmartLogin", () => {
     );
 
     const result = await acquireTokenViaSmartLogin({
+      auto: true,
       email: "user@company.com",
     });
 
@@ -117,6 +139,7 @@ describe("acquireTokenViaSmartLogin", () => {
     );
 
     await acquireTokenViaSmartLogin({
+      auto: true,
       email: "user@company.com",
       region: "emea",
     });

@@ -44,7 +44,7 @@ export async function acquireTokenViaAutoLogin(
   const chromePath = options.chromePath ?? DEFAULT_SYSTEM_CHROME_PATH;
   const profileDirectory =
     options.profileDirectory ?? DEFAULT_PROFILE_DIRECTORY;
-  const headless = options.headless ?? true;
+  const headless = options.headless ?? false;
   const log: LogFunction =
     options.log ?? (options.verbose ? console.error.bind(console) : () => {});
 

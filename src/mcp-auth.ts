@@ -35,6 +35,7 @@ interface McpAuthEnvironment {
   TEAMS_DEBUG?: string;
   TEAMS_DEBUG_PORT?: string;
   TEAMS_EMAIL?: string;
+  TEAMS_HEADLESS?: string;
   TEAMS_LOGIN?: string;
   TEAMS_REGION?: string;
   TEAMS_SUBSTRATE_TOKEN?: string;
@@ -47,6 +48,7 @@ interface ResolvedMcpAuthEnvironment {
   debug: boolean;
   debugPort: number;
   email?: string;
+  headless: boolean;
   login: boolean;
   region?: string;
   substrateToken?: string;
@@ -102,6 +104,7 @@ function resolveMcpAuthEnvironment(
     debug: environment.TEAMS_DEBUG === "true",
     debugPort: debugPortValue ? Number(debugPortValue) : 9222,
     email: getEnvironmentValue(environment, "TEAMS_EMAIL"),
+    headless: environment.TEAMS_HEADLESS === "true",
     login: environment.TEAMS_LOGIN === "true",
     region: getEnvironmentValue(environment, "TEAMS_REGION"),
     substrateToken: getEnvironmentValue(environment, "TEAMS_SUBSTRATE_TOKEN"),
@@ -189,7 +192,7 @@ export class McpAuthManager<Client extends AuthenticatedTeamsClient> {
       return !this.canAttemptAutoLogin();
     }
 
-    return !this.canAttemptAutoLogin();
+    return true;
   }
 
   private startAuthentication(toolEmail: string | undefined): Promise<Client> {
@@ -236,7 +239,7 @@ export class McpAuthManager<Client extends AuthenticatedTeamsClient> {
         const client = await this.clientFactory.create({
           email,
           region: authEnvironment.region,
-          headless: true,
+          headless: authEnvironment.headless,
           verbose: false,
           log,
         });
@@ -286,6 +289,7 @@ export class McpAuthManager<Client extends AuthenticatedTeamsClient> {
 
     try {
       const client = await this.clientFactory.connect({
+        auto: false,
         email,
         region: authEnvironment.region,
         verbose: false,
@@ -294,11 +298,11 @@ export class McpAuthManager<Client extends AuthenticatedTeamsClient> {
       if (email) {
         client.setEmail(email);
       }
-      this.recordAuth({ strategy: "auto", success: true });
+      this.recordAuth({ strategy: "login", success: true });
       this.log("Microsoft Teams authentication successful.");
       return client;
     } catch (error) {
-      this.recordAuth({ strategy: "auto", success: false, error });
+      this.recordAuth({ strategy: "login", success: false, error });
       throw error;
     }
   }

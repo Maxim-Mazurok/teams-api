@@ -14,6 +14,7 @@
  *     TEAMS_REGION          — API region (required with TEAMS_TOKEN, optional otherwise)
  *     TEAMS_EMAIL           — Corporate email (optional; the server prompts the AI agent if needed)
  *     TEAMS_AUTO            — Set to "true" to use auto-login (macOS + FIDO2)
+ *     TEAMS_HEADLESS        — Set to "true" to run FIDO2 auto-login headlessly
  *     TEAMS_LOGIN           — Set to "true" to use interactive browser login (all platforms)
  *     TEAMS_DEBUG_PORT      — Chrome debug port (default: 9222)
  *     TEAMS_TELEMETRY       — Set to "true" to enable full debug telemetry (contributor use)
