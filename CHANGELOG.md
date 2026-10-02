@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.8.0...v1.9.0) (2026-10-02)
+
+
+### Features
+
+* add headless mode for FIDO2 auto-login and update related documentation ([03fb496](https://github.com/Maxim-Mazurok/teams-api/commit/03fb49674093ba7d3017df84562f3bb49e9dc26b))
+
 # [1.8.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.7.2...v1.8.0) (2026-09-10)
 
 
