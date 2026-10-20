@@ -180,6 +180,43 @@ describe("TeamsClient.fromToken", () => {
     expect(client.getToken().region).toBe("apac");
   });
 
+  it("should restore a bearer-only token bundle and use it for API calls", async () => {
+    const token = {
+      skypeToken: "",
+      chatBearerToken: "chat-bearer-token",
+      region: "emea",
+      bearerToken: "profile-token",
+      substrateToken: "search-token",
+      amsToken: "image-token",
+      sharePointToken: "file-token",
+      sharePointHost: "contoso-my.sharepoint.com",
+    };
+    const client = TeamsClient.fromToken(token);
+    const restoredClient = TeamsClient.fromToken(client.getToken());
+    mockedApi.fetchUserProperties.mockResolvedValue({
+      userDetails: JSON.stringify({ name: "Alice Smith" }),
+    });
+
+    expect(restoredClient.getToken()).toEqual(token);
+    expect(await restoredClient.getCurrentUserDisplayName()).toBe(
+      "Alice Smith",
+    );
+    expect(mockedApi.fetchUserProperties).toHaveBeenCalledWith(token);
+  });
+
+  it("should copy an input token bundle", () => {
+    const token = {
+      skypeToken: "",
+      chatBearerToken: "original-token",
+      region: "apac",
+    };
+    const client = TeamsClient.fromToken(token);
+
+    token.chatBearerToken = "changed-token";
+
+    expect(client.getToken().chatBearerToken).toBe("original-token");
+  });
+
   it("should preserve optional bearer and substrate tokens", () => {
     const client = TeamsClient.fromToken(
       "my-token",
@@ -566,6 +603,49 @@ describe("findOneOnOneConversation", () => {
     expect(result).not.toBeNull();
     expect(result!.conversationId).toBe("48:notes");
     expect(result!.memberDisplayName).toContain("Alice Smith");
+  });
+
+  it("should return the self-chat when it is missing from the conversation list", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([
+      makeConversation({
+        id: "19:my-uuid_other-uuid@unq.gbl.spaces",
+        threadType: "chat",
+        topic: "",
+      }),
+    ]);
+    mockedApi.fetchUserProperties.mockResolvedValue({
+      userDetails: JSON.stringify({ name: "Alice Smith" }),
+    });
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findOneOnOneConversation("Alice Smith");
+
+    expect(result).toEqual({
+      conversationId: "48:notes",
+      memberDisplayName: "Alice Smith (self)",
+    });
+    expect(mockedApi.searchPeople).not.toHaveBeenCalled();
+  });
+
+  it("should not treat an unresolved current user name as a self-chat match", async () => {
+    mockedApi.fetchConversations.mockResolvedValue([]);
+    mockedApi.fetchUserProperties.mockResolvedValue({});
+    mockedApi.searchPeople.mockResolvedValue([]);
+
+    const client = TeamsClient.fromToken(
+      "token",
+      "apac",
+      "bearer",
+      "substrate-token",
+    );
+    const result = await client.findOneOnOneConversation("user");
+
+    expect(result?.conversationId).not.toBe("48:notes");
   });
 
   it("should find 1:1 chat via Substrate search when token is available", async () => {

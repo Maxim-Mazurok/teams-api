@@ -207,7 +207,7 @@ describe("McpAuthManager", () => {
     const client = new FakeTeamsClient();
     const pendingLogin = createPendingPromise<FakeTeamsClient>();
     const factory = createFactory(client);
-    factory.fromInteractiveLogin.mockReturnValue(pendingLogin.promise);
+    factory.connect.mockReturnValue(pendingLogin.promise);
     const log = vi.fn();
     const { manager } = createManager({
       canAttemptAutoLogin: () => false,
@@ -219,12 +219,14 @@ describe("McpAuthManager", () => {
     await expect(manager.getClient("user@contoso.com")).rejects.toBeInstanceOf(
       AuthenticationInProgressError,
     );
-    expect(factory.fromInteractiveLogin).toHaveBeenCalledWith(
+    expect(factory.connect).toHaveBeenCalledWith(
       expect.objectContaining({
+        auto: false,
         email: "user@contoso.com",
         log,
       }),
     );
+    expect(factory.fromInteractiveLogin).not.toHaveBeenCalled();
 
     pendingLogin.resolve(client);
     await expect(manager.getClient("user@contoso.com")).rejects.toBeInstanceOf(

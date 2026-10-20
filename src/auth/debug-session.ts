@@ -7,9 +7,11 @@
 
 import type { TeamsToken, ManualTokenOptions } from "../types.js";
 import { detectTeamsRegionFromUrl, resolveTeamsRegion } from "../region.js";
+import { isWebChatServiceRequest } from "./token-capture.js";
 
 const FETCH_INTERCEPT_TIMEOUT = 30 * 1_000;
 const PAGE_RELOAD_TIMEOUT = 30 * 1_000;
+const CHAT_BEARER_GRACE_PERIOD = 5 * 1_000;
 
 /**
  * Capture a Teams skype token from an existing Chrome debug session.
@@ -45,6 +47,7 @@ export async function acquireTokenViaDebugSession(
 
     const cdpSession = await teamsPage.createCDPSession();
     let skypeToken: string | null = null;
+    let chatBearerToken: string | null = null;
     let region: string | null = null;
     let bearerToken: string | null = null;
     let substrateToken: string | null = null;
@@ -58,6 +61,7 @@ export async function acquireTokenViaDebugSession(
 
     const tokenPromise = new Promise<void>((resolve) => {
       const timeout = setTimeout(resolve, FETCH_INTERCEPT_TIMEOUT);
+      let chatBearerTimeout: NodeJS.Timeout | null = null;
 
       cdpSession.on(
         "Fetch.requestPaused",
@@ -80,6 +84,15 @@ export async function acquireTokenViaDebugSession(
               name.toLowerCase() === "authorization" &&
               value.startsWith("Bearer ")
             ) {
+              if (isWebChatServiceRequest(requestUrl) && !chatBearerToken) {
+                chatBearerToken = value.slice("Bearer ".length);
+                // Newer Teams web clients never send x-skypetoken; settle
+                // for the chat Bearer token after a short grace period.
+                chatBearerTimeout ??= setTimeout(() => {
+                  clearTimeout(timeout);
+                  resolve();
+                }, CHAT_BEARER_GRACE_PERIOD);
+              }
               if (requestUrl.includes("/api/mt/") && !bearerToken) {
                 bearerToken = value.slice("Bearer ".length);
               }
@@ -102,6 +115,9 @@ export async function acquireTokenViaDebugSession(
 
           if (skypeToken) {
             clearTimeout(timeout);
+            if (chatBearerTimeout) {
+              clearTimeout(chatBearerTimeout);
+            }
             resolve();
           }
         },
@@ -118,7 +134,7 @@ export async function acquireTokenViaDebugSession(
 
     // If we have the skype token but not the substrate token yet,
     // wait a bit longer for substrate requests to fire
-    if (skypeToken && !substrateToken) {
+    if ((skypeToken || chatBearerToken) && !substrateToken) {
       await new Promise<void>((resolve) => {
         const extraTimeout = setTimeout(resolve, 5_000);
         const checkInterval = setInterval(() => {
@@ -135,14 +151,15 @@ export async function acquireTokenViaDebugSession(
     await cdpSession.send("Fetch.disable");
     await cdpSession.detach();
 
-    if (!skypeToken) {
+    if (!skypeToken && !chatBearerToken) {
       throw new Error(
         "Failed to capture skype token. Ensure Teams is loaded and authenticated.",
       );
     }
 
     return {
-      skypeToken,
+      skypeToken: skypeToken ?? "",
+      chatBearerToken: skypeToken ? undefined : (chatBearerToken ?? undefined),
       region: resolveTeamsRegion(options?.region, region ?? undefined),
       bearerToken: bearerToken ?? undefined,
       substrateToken: substrateToken ?? undefined,

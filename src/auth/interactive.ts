@@ -117,6 +117,7 @@ export async function acquireTokenViaInteractiveLogin(
 
     const {
       skypeToken,
+      chatBearerToken,
       region,
       bearerToken,
       substrateToken,
@@ -127,6 +128,7 @@ export async function acquireTokenViaInteractiveLogin(
 
     return {
       skypeToken,
+      chatBearerToken,
       region: resolveTeamsRegion(options?.region, region),
       bearerToken,
       substrateToken,

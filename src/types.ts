@@ -6,8 +6,18 @@
 
 /** Authentication token for Teams Chat Service REST API. */
 export interface TeamsToken {
-  /** The skype token used in the Authentication header. */
+  /**
+   * The skype token used in the Authentication header.
+   * Empty when the Teams web client no longer issues one; in that case
+   * `chatBearerToken` is used against the `teams.cloud.microsoft` Chat Service.
+   */
   skypeToken: string;
+  /**
+   * OAuth2 token (ic3.teams.office.com audience) sent by the Teams web client
+   * as `Authorization: Bearer` to `teams.cloud.microsoft/api/chatsvc/`.
+   * Used for the Chat Service when no skype token is available.
+   */
+  chatBearerToken?: string;
   /** API region (e.g. "apac", "emea", "amer"). */
   region: string;
   /**

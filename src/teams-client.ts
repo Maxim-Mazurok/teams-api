@@ -105,6 +105,8 @@ import { DEFAULT_TEAMS_REGION, resolveTeamsRegion } from "./region.js";
 import { saveToken, loadToken, clearToken } from "./token-store.js";
 
 const DEFAULT_ACCOUNT = "_default";
+const UNKNOWN_USER_DISPLAY_NAME = "Unknown User";
+const SELF_CHAT_ID = "48:notes";
 
 /**
  * Extract the user's email (UPN) from a bearer token JWT payload.
@@ -270,7 +272,7 @@ function parseCurrentUserIdentity(
   }
 
   return {
-    displayName: displayName ?? "Unknown User",
+    displayName: displayName ?? UNKNOWN_USER_DISPLAY_NAME,
     userPrincipalName,
   };
 }
@@ -384,7 +386,10 @@ export class TeamsClient {
     const cacheKey = options?.email ?? DEFAULT_ACCOUNT;
     const cachedToken = await loadToken(cacheKey);
     if (cachedToken) {
-      if (!cachedToken.skypeToken || !cachedToken.region) {
+      if (
+        (!cachedToken.skypeToken && !cachedToken.chatBearerToken) ||
+        !cachedToken.region
+      ) {
         log("Cached token is missing required fields, re-authenticating...");
         await clearToken(cacheKey);
       } else {
@@ -501,12 +506,24 @@ export class TeamsClient {
   /**
    * Create a client from an existing token bundle.
    *
+   * Pass a complete `TeamsToken` to restore all captured tokens, including
+   * `chatBearerToken` for accounts that do not issue a Skype token.
    * `bearerToken` enables profile/member resolution and `substrateToken`
    * enables reliable people/chat search. Both are optional; basic chat
-   * operations only require `skypeToken`.
+   * operations require either `skypeToken` or `chatBearerToken`.
    */
+  static fromToken(token: TeamsToken): TeamsClient;
   static fromToken(
     skypeToken: string,
+    region?: string,
+    bearerToken?: string,
+    substrateToken?: string,
+    amsToken?: string,
+    sharePointToken?: string,
+    sharePointHost?: string,
+  ): TeamsClient;
+  static fromToken(
+    token: TeamsToken | string,
     region = DEFAULT_TEAMS_REGION,
     bearerToken?: string,
     substrateToken?: string,
@@ -514,8 +531,12 @@ export class TeamsClient {
     sharePointToken?: string,
     sharePointHost?: string,
   ): TeamsClient {
+    if (typeof token !== "string") {
+      return new TeamsClient({ ...token });
+    }
+
     return new TeamsClient({
-      skypeToken,
+      skypeToken: token,
       region,
       bearerToken,
       substrateToken,
@@ -953,19 +974,23 @@ export class TeamsClient {
       const targetLower = personName.toLowerCase();
       let authError: ApiAuthError | null = null;
 
-      // Check self-chat first
+      // Check self-chat first. The 48:notes self-chat is not always part of
+      // the conversation list, but it can always be addressed by its ID.
+      // Without this, a search for the user's own name falls through to the
+      // 1:1 lookups below, which match any 1:1 chat (the user is in all of them).
       const conversations = await fetchConversations(this.token, 100);
-      const selfChat = conversations.find((conversation) =>
-        conversation.id.startsWith("48:notes"),
-      );
-      if (selfChat) {
-        const currentUserName = await this.getCurrentUserDisplayName();
-        if (currentUserName.toLowerCase().includes(targetLower)) {
-          return {
-            conversationId: selfChat.id,
-            memberDisplayName: `${currentUserName} (self)`,
-          };
-        }
+      const currentUserName = await this.getCurrentUserDisplayName();
+      if (
+        currentUserName !== UNKNOWN_USER_DISPLAY_NAME &&
+        currentUserName.toLowerCase().includes(targetLower)
+      ) {
+        const selfChat = conversations.find((conversation) =>
+          conversation.id.startsWith(SELF_CHAT_ID),
+        );
+        return {
+          conversationId: selfChat?.id ?? SELF_CHAT_ID,
+          memberDisplayName: `${currentUserName} (self)`,
+        };
       }
 
       // Strategy 1: Substrate search API for people + chat lookup
@@ -2002,7 +2027,7 @@ export class TeamsClient {
 
     if (options?.allowSelfChatFallback === false) {
       return {
-        displayName: "Unknown User",
+        displayName: UNKNOWN_USER_DISPLAY_NAME,
         userPrincipalName: null,
       };
     }
@@ -2034,7 +2059,7 @@ export class TeamsClient {
     }
 
     return {
-      displayName: "Unknown User",
+      displayName: UNKNOWN_USER_DISPLAY_NAME,
       userPrincipalName: null,
     };
   }

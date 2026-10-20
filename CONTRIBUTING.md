@@ -114,6 +114,7 @@ All strategies use the same CDP Fetch interception pattern in `src/auth/token-ca
 - The skype token is obtained from the Teams web application at `https://teams.cloud.microsoft/`
 - Token lifetime is approximately 24 hours (the `skypetoken_asm` cookie has `Max-Age=86399`)
 - Authentication header format: `Authentication: skypetoken=<token>` (note: `Authentication`, not `Authorization`)
+- Newer Teams web clients no longer send `x-skypetoken`. They call `https://teams.cloud.microsoft/api/chatsvc/<region>/v1` with `Authorization: Bearer <token>` (ic3.teams.office.com audience, ~24h). `captureTokensFromPage` (and the debug session) store it as `chatBearerToken`, and the Chat Service layer uses that endpoint and header whenever no skype token is available. AMS reads (inline images, transcripts) use `Authorization: Bearer` with the AMS token or the chat Bearer token in that case. The skype token is still preferred when present.
 - When the token expires, any API call will return `401` and a new token must be acquired
 
 ## API documentation

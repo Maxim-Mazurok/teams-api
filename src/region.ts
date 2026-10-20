@@ -1,7 +1,8 @@
 const KNOWN_TEAMS_REGIONS = ["apac", "emea", "amer"] as const;
 const CHAT_SERVICE_HOST_PATTERN =
   /^(?<region>[a-z]+)\.ng\.msg\.teams\.microsoft\.com$/i;
-const MIDDLE_TIER_PATH_PATTERN = /^\/api\/mt\/(?<region>[a-z]+)(?:\/|$)/i;
+const WEB_API_PATH_PATTERN =
+  /^\/api\/(?:mt|chatsvc)\/(?<region>[a-z]+)(?:\/|$)/i;
 
 export const DEFAULT_TEAMS_REGION = "apac";
 export const teamsRegions = [...KNOWN_TEAMS_REGIONS];
@@ -38,7 +39,7 @@ export function detectTeamsRegionFromUrl(
     }
 
     const pathRegion = canonicalizeTeamsRegion(
-      MIDDLE_TIER_PATH_PATTERN.exec(url.pathname)?.groups?.region,
+      WEB_API_PATH_PATTERN.exec(url.pathname)?.groups?.region,
     );
     if (isKnownTeamsRegion(pathRegion)) {
       return pathRegion;

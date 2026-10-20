@@ -231,6 +231,61 @@ describe("buildAmsImageTag", () => {
 });
 
 describe("fetchAmsImage", () => {
+  it("uses a Bearer token when no skype token is available", async () => {
+    const imageBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers({ "content-type": "image/png" }),
+      arrayBuffer: () =>
+        Promise.resolve(imageBytes.buffer.slice(0, imageBytes.byteLength)),
+    });
+    globalThis.fetch = mockFetch;
+
+    await fetchAmsImage(
+      { skypeToken: "", chatBearerToken: "chat-bearer", region: "apac" },
+      "test-object-id",
+    );
+
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe(
+      "Bearer chat-bearer",
+    );
+  });
+
+  it("prefers the AMS token over the chat Bearer token", async () => {
+    const imageBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers({ "content-type": "image/png" }),
+      arrayBuffer: () =>
+        Promise.resolve(imageBytes.buffer.slice(0, imageBytes.byteLength)),
+    });
+    globalThis.fetch = mockFetch;
+
+    await fetchAmsImage(
+      {
+        skypeToken: "",
+        chatBearerToken: "chat-bearer",
+        amsToken: "ams-bearer",
+        region: "apac",
+      },
+      "test-object-id",
+    );
+
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe(
+      "Bearer ams-bearer",
+    );
+  });
+
+  it("rejects without calling AMS when no token is available", async () => {
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+
+    await expect(
+      fetchAmsImage({ skypeToken: "", region: "apac" }, "test-object-id"),
+    ).rejects.toThrow("No skype token or AMS Bearer token");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it("fetches an image with skype token auth", async () => {
     const imageBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]); // PNG magic bytes
     const mockFetch = vi.fn().mockResolvedValue({

@@ -22,6 +22,14 @@ describe("detectTeamsRegionFromUrl", () => {
     ).toBe("amer");
   });
 
+  it("should detect the region from a web chat service path", () => {
+    expect(
+      detectTeamsRegionFromUrl(
+        "https://teams.cloud.microsoft/api/chatsvc/apac/v1/users/ME/conversations",
+      ),
+    ).toBe("apac");
+  });
+
   it("should ignore unknown or malformed URLs", () => {
     expect(
       detectTeamsRegionFromUrl(

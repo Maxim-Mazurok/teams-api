@@ -411,7 +411,7 @@ Use this only if you already have tokens from another flow or need to avoid brow
 | `TEAMS_EMAIL`                   | Corporate email. Optional — the server prompts the AI agent if needed                  |
 | `TEAMS_AUTO`                    | Set to `true` to enable auto-login (macOS + FIDO2)                                     |
 | `TEAMS_HEADLESS`                | Set to `true` to run FIDO2 auto-login without a visible browser                        |
-| `TEAMS_LOGIN`                   | Set to `true` to enable interactive browser login                                      |
+| `TEAMS_LOGIN`                   | Set to `true` to enable interactive browser login (reuses a cached token when valid)   |
 | `TEAMS_DEBUG_PORT`              | Chrome debug port (default: 9222)                                                      |
 | `TEAMS_EDIT_REPLY_GUARD`        | Edit reply guard: `allow` (default), `warn`, or `block`. See below                     |
 | `TEAMS_AGENT_MARKER`            | Agent marker prefix for sent/edited messages (e.g. `Ⓜ`). See below                    |
@@ -597,6 +597,8 @@ const autoClient = await TeamsClient.fromAutoLogin({
 // Advanced/manual: create a client from previously captured tokens
 const manualClient = TeamsClient.fromToken("skype-token-here", "emea");
 
+const restoredClient = TeamsClient.fromToken(client.getToken());
+
 const conversations = await client.listConversations();
 const messages = await client.getMessages(conversations[0].id, {
   maxPages: 5,
@@ -610,6 +612,10 @@ const members = await client.getMembers(conversations[0].id);
 const profiles = await client.getProfiles(members.map((member) => member.id));
 console.log(profiles.map((profile) => profile.userLocation));
 ```
+
+`TeamsClient.fromToken(tokenBundle)` accepts the complete `TeamsToken` returned
+by `getToken()`, including `chatBearerToken` for accounts without a Skype token.
+The string form accepts a Skype token and region.
 
 ### Conversation pagination
 

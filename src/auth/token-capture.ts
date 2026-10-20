@@ -26,6 +26,19 @@ function isChatServiceRequest(requestUrl: string): boolean {
   }
 }
 
+/** Chat Service calls made by the current Teams web client (Bearer-authenticated). */
+export function isWebChatServiceRequest(requestUrl: string): boolean {
+  try {
+    const url = new URL(requestUrl);
+    return (
+      url.hostname.toLowerCase() === "teams.cloud.microsoft" &&
+      url.pathname.startsWith("/api/chatsvc/")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function normalizeSkypeTokenHeader(value: string): string {
   const prefix = "skypetoken=";
   return value.toLowerCase().startsWith(prefix)
@@ -46,6 +59,7 @@ export async function captureTokensFromPage(
   interceptTimeout: number,
 ): Promise<{
   skypeToken: string;
+  chatBearerToken: string | undefined;
   region: string | undefined;
   bearerToken: string | undefined;
   substrateToken: string | undefined;
@@ -66,6 +80,7 @@ export async function captureTokensFromPage(
   };
   let skypeToken: string | null = null;
   let fallbackSkypeToken: string | null = null;
+  let chatBearerToken: string | null = null;
   let region: string | null = null;
   let bearerToken: string | null = null;
   let substrateToken: string | null = null;
@@ -85,6 +100,9 @@ export async function captureTokensFromPage(
       if (fallbackTimeout) {
         clearTimeout(fallbackTimeout);
       }
+      if (chatBearerTimeout) {
+        clearTimeout(chatBearerTimeout);
+      }
       if (!skypeToken && fallbackSkypeToken) {
         skypeToken = fallbackSkypeToken;
         log("Using fallback Skype token from non-chat request headers");
@@ -92,6 +110,7 @@ export async function captureTokensFromPage(
       resolve();
     }, interceptTimeout);
     let fallbackTimeout: NodeJS.Timeout | null = null;
+    let chatBearerTimeout: NodeJS.Timeout | null = null;
 
     function resolveWithToken(): void {
       if (resolved) {
@@ -101,7 +120,10 @@ export async function captureTokensFromPage(
       if (fallbackTimeout) {
         clearTimeout(fallbackTimeout);
       }
-      log("Skype token captured from request headers");
+      if (chatBearerTimeout) {
+        clearTimeout(chatBearerTimeout);
+      }
+      log("Token captured from request headers");
       clearTimeout(timeout);
       resolve();
     }
@@ -119,6 +141,25 @@ export async function captureTokensFromPage(
       }, FALLBACK_SKYPE_TOKEN_GRACE_PERIOD);
     }
 
+    // Newer Teams web clients no longer send x-skypetoken. Give a skype token
+    // a short grace period to show up, then settle for the chat Bearer token.
+    function scheduleChatBearerResolution(): void {
+      if (chatBearerTimeout) {
+        return;
+      }
+      chatBearerTimeout = setTimeout(() => {
+        if (!skypeToken && chatBearerToken) {
+          if (fallbackSkypeToken) {
+            skypeToken = fallbackSkypeToken;
+            log("Using fallback Skype token from non-chat request headers");
+          } else {
+            log("No skype token issued, using chat Bearer token");
+          }
+          resolveWithToken();
+        }
+      }, FALLBACK_SKYPE_TOKEN_GRACE_PERIOD);
+    }
+
     cdpSession.on(
       "Fetch.requestPaused",
       async (event: Record<string, unknown>) => {
@@ -129,9 +170,10 @@ export async function captureTokensFromPage(
         const requestId = event.requestId as string;
         const requestUrl = request.url ?? "";
         const isChatService = isChatServiceRequest(requestUrl);
+        const isWebChatService = isWebChatServiceRequest(requestUrl);
         const detectedRegion = detectTeamsRegionFromUrl(requestUrl);
 
-        if (detectedRegion && (isChatService || !region)) {
+        if (detectedRegion && (isChatService || isWebChatService || !region)) {
           region = detectedRegion;
           log(`Detected Teams region from request URL: ${region}`);
         }
@@ -150,6 +192,10 @@ export async function captureTokensFromPage(
             name.toLowerCase() === "authorization" &&
             value.startsWith("Bearer ")
           ) {
+            if (isWebChatService && !chatBearerToken) {
+              chatBearerToken = value.slice("Bearer ".length);
+              scheduleChatBearerResolution();
+            }
             if (requestUrl.includes("/api/mt/") && !bearerToken) {
               bearerToken = value.slice("Bearer ".length);
             }
@@ -186,7 +232,7 @@ export async function captureTokensFromPage(
 
   // If we have the skype token but not the substrate token yet,
   // wait a bit longer for substrate requests to fire
-  if (skypeToken && !substrateToken) {
+  if ((skypeToken || chatBearerToken) && !substrateToken) {
     log("Waiting for substrate token...");
     await new Promise<void>((resolve) => {
       const checkInterval = setInterval(() => {
@@ -207,15 +253,15 @@ export async function captureTokensFromPage(
   await cdpSession.send("Fetch.disable");
   await cdpSession.detach();
 
-  if (!skypeToken) {
+  if (!skypeToken && !chatBearerToken) {
     const state = await diagnosePageState(page);
     throw new Error(
       `Failed to capture skype token. Page state: ${state.phase} — ${state.detail} (URL: ${state.url})`,
     );
   }
 
-  const capturedSkypeToken: string = skypeToken;
-  log(`Token captured (${capturedSkypeToken.length} chars)`);
+  const capturedToken: string = skypeToken ?? chatBearerToken ?? "";
+  log(`Token captured (${capturedToken.length} chars)`);
   if (bearerToken) {
     log("Bearer token also captured for profile resolution");
   }
@@ -293,7 +339,8 @@ export async function captureTokensFromPage(
   }
 
   return {
-    skypeToken,
+    skypeToken: skypeToken ?? "",
+    chatBearerToken: skypeToken ? undefined : (chatBearerToken ?? undefined),
     region: region ?? undefined,
     bearerToken: bearerToken ?? undefined,
     substrateToken: substrateToken ?? undefined,

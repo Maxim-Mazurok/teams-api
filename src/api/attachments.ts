@@ -12,6 +12,26 @@ import { fetchWithRetry, ApiAuthError } from "./common.js";
 const AMS_BASE = "https://as-prod.asyncgw.teams.microsoft.com/v1/objects";
 
 /**
+ * Authorization header for AMS reads (images, transcripts).
+ *
+ * Uses the skype token when available. Newer Teams web clients don't issue
+ * one; AMS also accepts a Bearer token with the ic3.teams.office.com audience
+ * (the AMS token, or the chat Bearer token which has the same audience).
+ */
+export function amsReadAuthorization(token: TeamsToken): string {
+  if (token.skypeToken) {
+    return `skype_token ${token.skypeToken}`;
+  }
+  const bearer = token.amsToken ?? token.chatBearerToken;
+  if (!bearer) {
+    throw new Error(
+      "No skype token or AMS Bearer token is available for AMS access.",
+    );
+  }
+  return `Bearer ${bearer}`;
+}
+
+/**
  * Teams client version header required by the AMS API.
  * AMS uses this to determine the "platform id" and rejects requests without it.
  */
@@ -119,8 +139,8 @@ export function parseFileAttachments(rawFiles: unknown): FileAttachment[] {
 /**
  * Fetch an image from the AMS (Async Media Service).
  *
- * Returns the raw binary data and content type. Uses the skype token
- * for authentication (same pattern as transcript fetching).
+ * Returns the raw binary data and content type. Authenticates with the skype
+ * token, or a Bearer token when no skype token is available.
  *
  * @param view - AMS view name: "imgo" (compressed), "imgpsh_fullsize_anim" (full-size)
  */
@@ -133,7 +153,7 @@ export async function fetchAmsImage(
 
   const response = await fetchWithRetry(url, {
     headers: {
-      Authorization: `skype_token ${token.skypeToken}`,
+      Authorization: amsReadAuthorization(token),
     },
   });
 

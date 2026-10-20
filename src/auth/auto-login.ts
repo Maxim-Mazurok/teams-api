@@ -162,6 +162,7 @@ export async function acquireTokenViaAutoLogin(
     log("Capturing tokens...");
     const {
       skypeToken,
+      chatBearerToken,
       region,
       bearerToken,
       substrateToken,
@@ -172,6 +173,7 @@ export async function acquireTokenViaAutoLogin(
 
     return {
       skypeToken,
+      chatBearerToken,
       region: resolveTeamsRegion(options.region, region),
       bearerToken,
       substrateToken,

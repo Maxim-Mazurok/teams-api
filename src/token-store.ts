@@ -11,10 +11,12 @@ import type { TeamsToken } from "./types.js";
 import { createCredentialStore } from "./credential-store.js";
 
 const TOKEN_LIFETIME = 23 * 60 * 60 * 1_000; // 23 hours (tokens last ~24h, 1h safety margin)
+const JWT_EXPIRY_MARGIN = 5 * 60 * 1_000;
 
 interface StoredToken {
   skypeToken: string;
   region: string;
+  chatBearerToken?: string;
   bearerToken?: string;
   substrateToken?: string;
   amsToken?: string;
@@ -25,6 +27,21 @@ interface StoredToken {
 
 const store = createCredentialStore();
 
+/** True when the token is a JWT whose `exp` claim is (almost) reached. */
+function isJwtExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(
+      Buffer.from(token.split(".")[1], "base64url").toString("utf-8"),
+    ) as { exp?: number };
+    return (
+      typeof payload.exp === "number" &&
+      payload.exp * 1_000 - Date.now() < JWT_EXPIRY_MARGIN
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function saveToken(
   email: string,
   token: TeamsToken,
@@ -32,6 +49,7 @@ export async function saveToken(
   const storedToken: StoredToken = {
     skypeToken: token.skypeToken,
     region: token.region,
+    chatBearerToken: token.chatBearerToken,
     bearerToken: token.bearerToken,
     substrateToken: token.substrateToken,
     amsToken: token.amsToken,
@@ -65,9 +83,19 @@ export async function loadToken(email: string): Promise<TeamsToken | null> {
     return null;
   }
 
+  if (
+    !storedToken.skypeToken &&
+    storedToken.chatBearerToken &&
+    isJwtExpired(storedToken.chatBearerToken)
+  ) {
+    await clearToken(email);
+    return null;
+  }
+
   return {
     skypeToken: storedToken.skypeToken,
     region: storedToken.region,
+    chatBearerToken: storedToken.chatBearerToken,
     bearerToken: storedToken.bearerToken,
     substrateToken: storedToken.substrateToken,
     amsToken: storedToken.amsToken,

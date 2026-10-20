@@ -170,6 +170,64 @@ describe("loadToken", () => {
     expect(result).toBeNull();
     expect(mockStore.clear).toHaveBeenCalledWith(testEmail);
   });
+
+  describe("chat Bearer token", () => {
+    const now = new Date("2026-03-17T12:00:00.000Z").getTime();
+
+    function makeJwt(expiresAtMs: number): string {
+      const payload = Buffer.from(
+        JSON.stringify({ exp: Math.floor(expiresAtMs / 1_000) }),
+      ).toString("base64url");
+      return `header.${payload}.signature`;
+    }
+
+    function encodeBearerOnlyToken(chatBearerToken: string): string {
+      return Buffer.from(
+        JSON.stringify({
+          skypeToken: "",
+          chatBearerToken,
+          region: "apac",
+          acquiredAt: now,
+        }),
+      ).toString("base64");
+    }
+
+    it("should restore a chat Bearer token that is still valid", async () => {
+      const chatBearerToken = makeJwt(now + 60 * 60 * 1_000);
+      mockStore.load.mockResolvedValueOnce(
+        encodeBearerOnlyToken(chatBearerToken),
+      );
+
+      const result = await loadToken(testEmail);
+
+      expect(result).toEqual({
+        skypeToken: "",
+        chatBearerToken,
+        region: "apac",
+      });
+    });
+
+    it("should clear a chat Bearer token that expires within the safety margin", async () => {
+      mockStore.load.mockResolvedValueOnce(
+        encodeBearerOnlyToken(makeJwt(now + 2 * 60 * 1_000)),
+      );
+
+      const result = await loadToken(testEmail);
+
+      expect(result).toBeNull();
+      expect(mockStore.clear).toHaveBeenCalledWith(testEmail);
+    });
+
+    it("should keep a chat Bearer token that is not a decodable JWT", async () => {
+      mockStore.load.mockResolvedValueOnce(
+        encodeBearerOnlyToken("opaque-token"),
+      );
+
+      const result = await loadToken(testEmail);
+
+      expect(result?.chatBearerToken).toBe("opaque-token");
+    });
+  });
 });
 
 describe("clearToken", () => {

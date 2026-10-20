@@ -3,7 +3,6 @@ import { recordAuth as defaultRecordAuth } from "./telemetry.js";
 import type {
   AuthLogFunction,
   AutoLoginOptions,
-  InteractiveLoginOptions,
   ManualTokenOptions,
   SmartLoginOptions,
 } from "./types.js";
@@ -15,7 +14,6 @@ interface AuthenticatedTeamsClient {
 interface TeamsClientAuthFactory<Client extends AuthenticatedTeamsClient> {
   create(options: AutoLoginOptions): Promise<Client>;
   connect(options?: SmartLoginOptions): Promise<Client>;
-  fromInteractiveLogin(options?: InteractiveLoginOptions): Promise<Client>;
   fromDebugSession(options?: ManualTokenOptions): Promise<Client>;
   fromToken(
     skypeToken: string,
@@ -254,7 +252,11 @@ export class McpAuthManager<Client extends AuthenticatedTeamsClient> {
 
     if (authEnvironment.login) {
       try {
-        const client = await this.clientFactory.fromInteractiveLogin({
+        // Reuse a cached token when there is one; otherwise this falls back to
+        // interactive browser login. Calling the interactive login directly
+        // would open a browser on every MCP server start.
+        const client = await this.clientFactory.connect({
+          auto: false,
           region: authEnvironment.region,
           email,
           verbose: false,
