@@ -1,3 +1,10 @@
+## [1.9.1](https://github.com/Maxim-Mazurok/teams-api/compare/v1.9.0...v1.9.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* support bearer-only Teams sessions ([#58](https://github.com/Maxim-Mazurok/teams-api/issues/58)) ([757c8c3](https://github.com/Maxim-Mazurok/teams-api/commit/757c8c386383d06fbe773debbc383cc15c296a17))
+
 # [1.9.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.8.0...v1.9.0) (2026-10-02)
 
 
