@@ -4,6 +4,40 @@
  * All types used by the public API surface are defined here.
  */
 
+export interface SearchMessagesOptions {
+  query: string;
+  from?: string;
+  messageType?: "all" | "chat" | "channel";
+  conversationId?: string;
+  sentAfter?: string;
+  sentBefore?: string;
+  offset?: number;
+  pageSize?: number;
+}
+
+export interface MessageSearchResult {
+  id?: string;
+  messageId?: string;
+  conversationId?: string;
+  parentMessageId?: string;
+  threadType?: string;
+  senderDisplayName?: string;
+  senderEmail?: string;
+  senderMri?: string;
+  sentAt?: string;
+  subject?: string;
+  preview?: string;
+  conversationName?: string;
+  webUrl?: string;
+}
+
+export interface MessageSearchPage {
+  messages: MessageSearchResult[];
+  total: number;
+  hasMore: boolean;
+  nextOffset?: number;
+}
+
 /** Authentication token for Teams Chat Service REST API. */
 export interface TeamsToken {
   /**

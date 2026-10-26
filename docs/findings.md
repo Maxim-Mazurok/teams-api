@@ -2,6 +2,75 @@
 
 Technical notes discovered while building and testing the Teams Chat Service REST API integration.
 
+## Global Teams message search
+
+Observed in the Teams web client on 2026-10-26:
+
+```http
+POST https://substrate.office.com/searchservice/api/v2/query
+Authorization: Bearer <substrate-token>
+Content-Type: application/json
+```
+
+This endpoint uses the existing Substrate-audience token, not the Chat Service or middle-tier bearer token. Modern MSAL caches can contain encrypted envelopes (`id`, `nonce`, `data`, `lastUpdatedAt`) rather than plaintext token records. If login reload does not request Substrate, issuing a neutral search while interception remains enabled can capture the token from its request.
+
+Minimal request, independently replayed against the live service:
+
+```json
+{
+  "cvid": "00000000-0000-0000-0000-000000000000",
+  "scenario": { "Name": "powerbar" },
+  "EntityRequests": [
+    {
+      "entityType": "Message",
+      "contentSources": ["Teams"],
+      "fields": [
+        "Extension_SkypeSpaces_ConversationPost_Extension_FromSkypeInternalId_String",
+        "Extension_SkypeSpaces_ConversationPost_Extension_ThreadType_String",
+        "Extension_SkypeSpaces_ConversationPost_Extension_ParentMessageId_String"
+      ],
+      "propertySet": "Optimized",
+      "query": {
+        "queryString": "NOT (isClientSoftDeleted:TRUE) AND (release)",
+        "displayQueryString": "release"
+      },
+      "from": 0,
+      "size": 25
+    }
+  ]
+}
+```
+
+Both `EntityRequests` and `entityRequests` were accepted. The web client sends additional ranking, context, and query-alteration metadata; those were not needed for the minimal replay. Generate a fresh `cvid` for each request.
+
+Verified query filters:
+
+| Filter                      | Search expression                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------- |
+| Sender email                | `from:"alice@contoso.com"`                                                            |
+| Channels, including replies | `Extension_SkypeSpaces_ConversationPost_Extension_ThreadType_String:(topic OR space)` |
+| Chats                       | `Extension_SkypeSpaces_ConversationPost_Extension_ThreadType_String:(chat)`           |
+| Conversation                | `ClientThreadId:"19:example@thread.tacv2"`                                            |
+| Inclusive date range        | `sent>=2026-10-01 AND sent<=2026-10-26`                                               |
+
+The web UI also uses `queryAnnotations` for sender identity (`type: "People"`, `subtype: ["Sharer"]`, plus user/tenant IDs). Independent API replay accepted the simpler sender-email expression above. Literal filter values must be quoted and escaped. `*` supports filter-only searches. Parenthesize the user's query before combining filters with `AND` so an `OR` expression cannot escape the scope.
+
+Response: `EntitySets[]` with `EntityType: "Message"`, containing `ResultSets[]`. Each result set includes `Results`, approximate `Total`, and `MoreResultsAvailable`. Pagination uses request `from`/`size`; consecutive offset pages were verified to return distinct results. Scope remains permission/index/retention dependent.
+
+The client sums result-set `Total` values without deduplication. Whether totals overlap across multiple result sets has not been verified; the aggregate is approximate, not a unique-message count. Missing result metadata remains `undefined` (omitted in JSON), rather than being replaced with empty strings.
+
+Message result fields:
+
+- `Id`: search-result identifier, distinct from the Chat Service message ID.
+- `Source.InternetMessageId`: Chat Service message ID.
+- `Source.ClientThreadId`: conversation ID.
+- `Source.From.EmailAddress` / `Source.Sender.EmailAddress`: sender name and email.
+- `Source.DateTimeSent`, `Subject`, `Preview`, `ParentFolderDisplayName`: result metadata and preview, not the complete message body.
+- `Source.Extensions.SkypeSpaces_ConversationPost_Extension_*`: sender MRI, thread type, and parent message ID when requested.
+- `Source.Links`: URLs mentioned inside message content, **not** message permalinks. Construct Teams links as `https://teams.microsoft.com/l/message/{encodedConversationId}/{encodedMessageId}` with `parentMessageId` for replies.
+
+Search authentication failures, HTTP errors, missing message result sets, `Properties.HasParseException`, and `IsPartial` must not be converted into zero matches. Search requests themselves do not send messages or update read state.
+
 ## Teams Chat Service REST API
 
 The API base URL follows the pattern `https://{region}.ng.msg.teams.microsoft.com/v1`.

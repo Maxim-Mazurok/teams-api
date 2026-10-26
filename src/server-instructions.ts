@@ -48,6 +48,10 @@ Call teams_find_conversation with the topic name. For 1:1 chats (which have no t
 
 Call teams_find_people to search the organization directory by name. Call teams_find_chats to search chats by name or member.
 
+### Search message content
+
+Call teams_search_messages with query: "release" to search accessible chats and channel posts/replies. Use messageType: "channel" or "chat", from: "alice@contoso.com", conversationId, and inclusive YYYY-MM-DD sentAfter/sentBefore filters. Use query: "*" for filter-only searches. Each call returns one page; pass nextOffset as offset with the same filters to continue. Results contain previews, sender details, conversation/message IDs, parent message IDs, and Teams links. This is read-only and does not open conversations or mark messages read. A Substrate search token is required; refresh older cached credentials through interactive login if missing. Search indexing, access, and retention limit coverage; zero matches are not proof that messages do not exist.
+
 ### Get office locations
 
 Call teams_find_people to search by name and receive office location when profile enrichment is available. For known MRIs, call teams_get_profiles with userIdentifiers to get profiles including userLocation.

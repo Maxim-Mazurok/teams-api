@@ -10,7 +10,10 @@ interface FetchRequestPausedEvent {
   };
 }
 
-function createPageStub(events: FetchRequestPausedEvent[]) {
+function createPageStub(
+  events: FetchRequestPausedEvent[],
+  searchEvents: FetchRequestPausedEvent[] = [],
+) {
   let requestPausedHandler:
     | ((event: FetchRequestPausedEvent) => Promise<void>)
     | null = null;
@@ -30,6 +33,17 @@ function createPageStub(events: FetchRequestPausedEvent[]) {
     detach: vi.fn().mockResolvedValue(undefined),
   };
 
+  const searchInput = {
+    fill: vi.fn().mockResolvedValue(undefined),
+    press: vi.fn(async () => {
+      for (const event of searchEvents) {
+        await requestPausedHandler?.(event);
+      }
+    }),
+  };
+  const searchRegion = {
+    getByRole: vi.fn(() => ({ first: () => searchInput })),
+  };
   const page = {
     context: () => ({
       newCDPSession: vi.fn().mockResolvedValue(devToolsSession),
@@ -43,15 +57,90 @@ function createPageStub(events: FetchRequestPausedEvent[]) {
       }
     }),
     evaluate: vi.fn().mockResolvedValue({}),
+    getByRole: vi.fn((role: string) => {
+      if (role !== "search") throw new Error("Expected search landmark");
+      return searchRegion;
+    }),
     url: () => "https://teams.cloud.microsoft/v2/",
   } as unknown as Page;
 
-  return { page, devToolsSession };
+  return { page, devToolsSession, searchInput, searchRegion };
 }
 
 describe("captureTokensFromPage", () => {
+  it("captures a missing Substrate token without relying on localized search labels", async () => {
+    vi.useFakeTimers();
+    try {
+      const { page, searchInput, searchRegion } = createPageStub(
+        [
+          {
+            requestId: "chat",
+            request: {
+              url: "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/conversations",
+              headers: { "x-skypetoken": "chat-token" },
+            },
+          },
+        ],
+        [
+          {
+            requestId: "search",
+            request: {
+              url: "https://substrate.office.com/searchservice/api/v2/query",
+              headers: { authorization: "Bearer search-token" },
+            },
+          },
+        ],
+      );
+      const pending = captureTokensFromPage(page, vi.fn(), 30 * 1_000);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect((await pending).substrateToken).toBe("search-token");
+      expect(page.getByRole).toHaveBeenCalledWith("search");
+      expect(searchRegion.getByRole).toHaveBeenCalledWith("combobox");
+      expect(searchInput.fill).toHaveBeenCalledWith(
+        '"teams-api-authentication-token-capture"',
+        { timeout: 10 * 1_000 },
+      );
+      expect(searchInput.press).toHaveBeenCalledWith("Enter", {
+        timeout: 5 * 1_000,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps chat authentication usable when search UI is unavailable", async () => {
+    vi.useFakeTimers();
+    try {
+      const { page, searchInput } = createPageStub([
+        {
+          requestId: "chat",
+          request: {
+            url: "https://apac.ng.msg.teams.microsoft.com/v1/users/ME/conversations",
+            headers: { "x-skypetoken": "chat-token" },
+          },
+        },
+      ]);
+      const searchError = new Error("Sensitive diagnostic details");
+      searchError.name = "TimeoutError";
+      searchInput.fill.mockRejectedValue(searchError);
+      const log = vi.fn();
+      const pending = captureTokensFromPage(page, log, 30 * 1_000);
+      await vi.advanceTimersByTimeAsync(6 * 1_000);
+      expect((await pending).skypeToken).toBe("chat-token");
+      expect(searchInput.press).not.toHaveBeenCalled();
+      expect(log).toHaveBeenCalledWith(
+        "Search UI unavailable (TimeoutError); continuing with captured chat credentials",
+      );
+      expect(log.mock.calls.flat().join("\n")).not.toContain(
+        searchError.message,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("prefers a Chat Service Skype token over earlier Teams web requests", async () => {
-    const { page } = createPageStub([
+    const { page, searchInput } = createPageStub([
       {
         requestId: "web-request",
         request: {
@@ -88,6 +177,7 @@ describe("captureTokensFromPage", () => {
     expect(token.region).toBe("emea");
     expect(token.bearerToken).toBe("bearer-token");
     expect(token.substrateToken).toBe("substrate-token");
+    expect(searchInput.fill).not.toHaveBeenCalled();
   });
 
   it("falls back to the Teams web chat Bearer token when no Skype token is issued", async () => {

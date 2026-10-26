@@ -372,6 +372,42 @@ teams-api get-messages --auto --email you@example.com --chat "General" --output 
 teams-api get-messages --auto --email you@example.com --chat "General" --format detailed --output exports/general.json
 ```
 
+### Search messages
+
+Search indexed message content across accessible Teams chats and channel posts/replies without opening conversations, sending messages, or marking messages read:
+
+```bash
+teams-api search-messages --login --query "release" --message-type channel
+
+teams-api search-messages --query "*" --from alice@contoso.com \
+  --sent-after 2026-10-01 --sent-before 2026-10-26 \
+  --page-size 25 --offset 0 --format detailed
+```
+
+Options: `--query` (required; `*` for filter-only searches), `--from` (sender email), `--message-type` (`all`, `chat`, or `channel`), `--conversation-id`, `--sent-after`, `--sent-before`, `--page-size` (1-100, default 25), and `--offset` (default 0). Date bounds are inclusive and use `YYYY-MM-DD`. Advanced query syntax is passed to the Teams search service; structured filters are combined with it.
+
+Each call returns one page: `messages`, approximate `total`, `hasMore`, and `nextOffset` when another page is available. Pass `nextOffset` as the next call's `offset`, retaining the same query and filters. Results include previews rather than full message bodies, sender details, conversation/message IDs, reply parent IDs, and Teams permalinks. Use `get-messages` to retrieve a known message or thread in full.
+
+Result metadata is optional: missing values remain `undefined` in the SDK and are omitted from JSON, while explicit empty strings are preserved. Permalinks are available only when both conversation and message IDs are present. The approximate `total` sums the server's result-set totals without deduplication across result sets; it is not a unique-message count.
+
+```typescript
+import { TeamsClient } from "teams-api";
+
+const client = await TeamsClient.connect({ email: "you@contoso.com" });
+const page = await client.searchMessages({
+  query: "release",
+  messageType: "channel",
+  from: "alice@contoso.com",
+  pageSize: 25,
+});
+```
+
+MCP exposes the same operation as `teams_search_messages`, with camelCase parameters such as `messageType`, `sentAfter`, and `pageSize`.
+
+Message search requires a Substrate bearer token. Login capture attempts a neutral read-only search if reload traffic did not expose that token. For older cached credentials, run the command with `--login` to capture a fresh bundle. If browser search is unavailable or blocked, message search reports an authentication error instead of returning an empty result. Direct-token users must provide `--substrate-token` or `TEAMS_SUBSTRATE_TOKEN`.
+
+Search is limited by the signed-in user's permissions, search indexing, and retention policies. Zero matches do not establish that no messages exist. HTTP failures, invalid queries, and incomplete search responses are reported as errors, not empty results.
+
 ## MCP server
 
 The MCP server exposes Teams operations as tools for AI agents via stdio transport. See [Getting Started](#install-in-your-editor) for editor-specific setup.
@@ -530,6 +566,7 @@ All MCP tools accept an optional `format` parameter (`concise` or `detailed`). D
 | `teams_get_profiles`       | Get user profiles, including office location          |
 | `teams_find_people`        | Search the organization directory                     |
 | `teams_find_chats`         | Search chats by name or member                        |
+| `teams_search_messages`    | Search messages with sender, date, and scope filters  |
 | `teams_get_messages`       | Get messages from a conversation                      |
 | `teams_send_message`       | Send a message to a conversation                      |
 | `teams_get_members`        | List members of a conversation                        |

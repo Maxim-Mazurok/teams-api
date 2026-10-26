@@ -8,8 +8,119 @@ import type {
   PersonSearchResult,
   ChatSearchResult,
   UserProfile,
+  SearchMessagesOptions,
+  MessageSearchPage,
 } from "../types.js";
 import type { ActionDefinition } from "./formatters.js";
+
+export const searchMessagesAction: ActionDefinition = {
+  name: "search-messages",
+  title: "Search Messages",
+  description:
+    "Search message content across accessible Teams chats and channel posts/replies. " +
+    "Read-only; does not open chats, send messages, or mark messages read. " +
+    "Requires a Substrate search token. Returns one page with message IDs, previews, Teams links, total estimate, and nextOffset. " +
+    "Search visibility and retention policies apply; zero results do not prove no messages exist.",
+  parameters: [
+    {
+      name: "query",
+      type: "string",
+      description:
+        "Search keywords or advanced search query; use * for filter-only searches",
+      required: true,
+    },
+    {
+      name: "from",
+      type: "string",
+      description: "Sender email address to filter authored messages",
+      required: false,
+    },
+    {
+      name: "messageType",
+      type: "string",
+      description:
+        "Message scope: all (default), chat, or channel (includes replies)",
+      required: false,
+      default: "all",
+    },
+    {
+      name: "conversationId",
+      type: "string",
+      description: "Restrict results to this chat or channel conversation ID",
+      required: false,
+    },
+    {
+      name: "sentAfter",
+      type: "string",
+      description: "Inclusive start date in YYYY-MM-DD format",
+      required: false,
+    },
+    {
+      name: "sentBefore",
+      type: "string",
+      description: "Inclusive end date in YYYY-MM-DD format",
+      required: false,
+    },
+    {
+      name: "offset",
+      type: "number",
+      description:
+        "Result offset; pass nextOffset from the previous page (default: 0)",
+      required: false,
+      default: 0,
+    },
+    {
+      name: "pageSize",
+      type: "number",
+      description: "Number of results per page, from 1 to 100 (default: 25)",
+      required: false,
+      default: 25,
+    },
+  ],
+  execute: (client, parameters) =>
+    client.searchMessages({
+      query: parameters.query as string,
+      from: parameters.from as string | undefined,
+      messageType:
+        (parameters.messageType as SearchMessagesOptions["messageType"]) ??
+        "all",
+      conversationId: parameters.conversationId as string | undefined,
+      sentAfter: parameters.sentAfter as string | undefined,
+      sentBefore: parameters.sentBefore as string | undefined,
+      offset: (parameters.offset as number | undefined) ?? 0,
+      pageSize: (parameters.pageSize as number | undefined) ?? 25,
+    }),
+  formatConcise: (result) => {
+    const page = result as MessageSearchPage;
+    const lines = [
+      `## Message Search (${page.messages.length} returned; approximately ${page.total} matches)`,
+      "",
+    ];
+    if (!page.messages.length) lines.push("No matching messages found.", "");
+    for (const message of page.messages) {
+      lines.push(
+        `### ${message.senderDisplayName || message.senderEmail || "(unknown)"}${message.sentAt ? ` | ${message.sentAt}` : ""}`,
+      );
+      if (message.senderEmail)
+        lines.push(`- **Email:** ${message.senderEmail}`);
+      if (message.conversationName)
+        lines.push(`- **Conversation:** ${message.conversationName}`);
+      if (message.conversationId)
+        lines.push(`- **Conversation ID:** ${message.conversationId}`);
+      if (message.messageId)
+        lines.push(`- **Message ID:** ${message.messageId}`);
+      if (message.parentMessageId)
+        lines.push(`- **Parent message ID:** ${message.parentMessageId}`);
+      if (message.subject) lines.push(`- **Subject:** ${message.subject}`);
+      if (message.preview !== undefined) lines.push("", message.preview);
+      if (message.webUrl) lines.push("", `[Open in Teams](${message.webUrl})`);
+      lines.push("");
+    }
+    if (page.hasMore)
+      lines.push(`More results available. **nextOffset:** ${page.nextOffset}`);
+    return lines.join("\n");
+  },
+};
 
 export const getProfilesAction: ActionDefinition = {
   name: "get-profiles",

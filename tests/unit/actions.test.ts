@@ -43,6 +43,7 @@ function createMockClient(
     getProfiles: vi.fn(),
     findPeople: vi.fn(),
     findChats: vi.fn(),
+    searchMessages: vi.fn(),
     getMessages: vi.fn(),
     getMessagesPage: vi.fn(),
     sendMessage: vi.fn(),
@@ -123,8 +124,8 @@ beforeEach(() => {
 // ── Registry tests ───────────────────────────────────────────────────
 
 describe("action registry", () => {
-  it("should contain all 17 actions", () => {
-    expect(actions).toHaveLength(17);
+  it("should contain all 18 actions", () => {
+    expect(actions).toHaveLength(18);
   });
 
   it("should have unique names", () => {
@@ -159,6 +160,7 @@ describe("action registry", () => {
     expect(names).toContain("get-profiles");
     expect(names).toContain("find-people");
     expect(names).toContain("find-chats");
+    expect(names).toContain("search-messages");
     expect(names).toContain("get-messages");
     expect(names).toContain("send-message");
     expect(names).toContain("edit-message");
@@ -167,6 +169,100 @@ describe("action registry", () => {
     expect(names).toContain("whoami");
     expect(names).toContain("get-transcript");
     expect(names).toContain("describe-image");
+  });
+});
+
+describe("search-messages", () => {
+  const action = getAction("search-messages");
+
+  it("forwards structured filters and pagination to the client", async () => {
+    const page = { messages: [], total: 0, hasMore: false };
+    const client = createMockClient({
+      searchMessages: vi.fn().mockResolvedValue(page),
+    });
+    const parameters = {
+      query: "release",
+      from: "alice@contoso.com",
+      messageType: "channel",
+      conversationId: "19:channel@thread.tacv2",
+      sentAfter: "2026-10-01",
+      sentBefore: "2026-10-26",
+      offset: 10,
+      pageSize: 5,
+    };
+    expect(await action.execute(client, parameters)).toBe(page);
+    expect(client.searchMessages).toHaveBeenCalledWith(parameters);
+    expect(formatOutput(action, page, "detailed")).toBe(
+      JSON.stringify(page, null, 2),
+    );
+  });
+
+  it("applies declared defaults when called without optional parameters", async () => {
+    const client = createMockClient({
+      searchMessages: vi
+        .fn()
+        .mockResolvedValue({ messages: [], total: 0, hasMore: false }),
+    });
+    await action.execute(client, { query: "release" });
+    expect(client.searchMessages).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: "release",
+        messageType: "all",
+        offset: 0,
+        pageSize: 25,
+      }),
+    );
+  });
+
+  it("formats actionable IDs, plain-text previews, permalinks, and next offset", () => {
+    const output = action.formatConcise({
+      messages: [
+        {
+          senderDisplayName: "Alice Smith",
+          senderEmail: "alice@contoso.com",
+          sentAt: "2026-10-01T09:00:00Z",
+          conversationName: "General",
+          conversationId: "19:channel",
+          messageId: "123",
+          parentMessageId: "122",
+          subject: "List<string> release &amp; notes",
+          preview:
+            "Use List<string> when value < 10 and limit > 5; preserve &amp; literally",
+          webUrl: "https://teams.microsoft.com/l/message/channel/123",
+        },
+      ],
+      total: 10,
+      hasMore: true,
+      nextOffset: 1,
+    });
+    expect(output).toContain("Alice Smith");
+    expect(output).toContain("**Message ID:** 123");
+    expect(output).toContain("**Parent message ID:** 122");
+    expect(output).toContain("**Subject:** List<string> release &amp; notes");
+    expect(output).toContain(
+      "Use List<string> when value < 10 and limit > 5; preserve &amp; literally",
+    );
+    expect(output).toContain("[Open in Teams]");
+    expect(output).toContain("**nextOffset:** 1");
+  });
+
+  it("formats sparse results without undefined metadata or fabricated identifiers", () => {
+    const output = action.formatConcise({
+      messages: [{ id: "result-1" }],
+      total: 1,
+      hasMore: false,
+    });
+    expect(output).toContain("### (unknown)");
+    expect(output).not.toContain("undefined");
+    expect(output).not.toContain("**Conversation ID:**");
+    expect(output).not.toContain("**Message ID:**");
+    expect(output).not.toContain("[Open in Teams]");
+  });
+
+  it("formats empty search results", () => {
+    expect(
+      action.formatConcise({ messages: [], total: 0, hasMore: false }),
+    ).toContain("No matching messages found.");
   });
 });
 
@@ -3096,6 +3192,7 @@ describe("action registry (parametrized)", () => {
     "get-profiles",
     "find-people",
     "find-chats",
+    "search-messages",
     "get-messages",
     "send-message",
     "edit-message",

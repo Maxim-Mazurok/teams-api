@@ -24,6 +24,7 @@ import {
   getProfilesAction,
   findPeopleAction,
   findChatsAction,
+  searchMessagesAction,
 } from "./search-actions.js";
 import { getMembers, whoami, getTranscript } from "./utility-actions.js";
 import { downloadFileAction } from "./file-actions.js";
@@ -43,6 +44,7 @@ const actionRegistry = new Map<string, ActionDefinition>([
   ["get-profiles", getProfilesAction],
   ["find-people", findPeopleAction],
   ["find-chats", findChatsAction],
+  ["search-messages", searchMessagesAction],
   ["get-messages", getMessages],
   ["send-message", sendMessage],
   ["edit-message", editMessageAction],

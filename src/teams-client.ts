@@ -52,6 +52,8 @@ import type {
   OneOnOneSearchResult,
   PersonSearchResult,
   ChatSearchResult,
+  SearchMessagesOptions,
+  MessageSearchPage,
   MessagesPage,
   TranscriptResult,
   ImageAttachment,
@@ -84,6 +86,7 @@ import {
 import { resolveReactionKey, initializeEmojiMap } from "./emoji-map.js";
 import { fetchProfiles } from "./api/middle-tier.js";
 import { searchPeople, searchChats } from "./api/substrate.js";
+import { searchMessages } from "./api/message-search.js";
 import { fetchTranscript } from "./api/transcripts.js";
 import { buildQuoteHtml } from "./html-utils.js";
 import { cleanContent } from "./actions/formatters.js";
@@ -168,6 +171,9 @@ export type {
   UserProfile,
   PersonSearchResult,
   ChatSearchResult,
+  SearchMessagesOptions,
+  MessageSearchResult,
+  MessageSearchPage,
   TranscriptEntry,
   TranscriptResult,
   ImageAttachment,
@@ -901,6 +907,10 @@ export class TeamsClient {
         objectId: profile.mri.replace("8:orgid:", ""),
       }));
     });
+  }
+
+  searchMessages(options: SearchMessagesOptions): Promise<MessageSearchPage> {
+    return this.withTokenRefresh(() => searchMessages(this.token, options));
   }
 
   /**

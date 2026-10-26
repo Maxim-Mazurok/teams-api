@@ -234,6 +234,25 @@ export async function captureTokensFromPage(
   // wait a bit longer for substrate requests to fire
   if ((skypeToken || chatBearerToken) && !substrateToken) {
     log("Waiting for substrate token...");
+    try {
+      const searchInput = page
+        .getByRole("search")
+        .getByRole("combobox")
+        .first();
+      await searchInput.fill('"teams-api-authentication-token-capture"', {
+        timeout: 10 * 1_000,
+      });
+      if (!substrateToken) {
+        await searchInput.press("Enter", { timeout: 5 * 1_000 });
+      }
+    } catch (error) {
+      if (!substrateToken) {
+        const errorName = error instanceof Error ? error.name : typeof error;
+        log(
+          `Search UI unavailable (${errorName}); continuing with captured chat credentials`,
+        );
+      }
+    }
     await new Promise<void>((resolve) => {
       const checkInterval = setInterval(() => {
         if (substrateToken) {
@@ -244,7 +263,7 @@ export async function captureTokensFromPage(
       const extraTimeout = setTimeout(() => {
         clearInterval(checkInterval);
         resolve();
-      }, 5_000);
+      }, 5 * 1_000);
       extraTimeout.unref?.();
       checkInterval.unref?.();
     });

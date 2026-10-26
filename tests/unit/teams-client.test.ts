@@ -11,6 +11,7 @@ import { TeamsClient } from "../../src/teams-client.js";
 import * as chatService from "../../src/api/chat-service.js";
 import * as middleTier from "../../src/api/middle-tier.js";
 import * as substrate from "../../src/api/substrate.js";
+import * as messageSearch from "../../src/api/message-search.js";
 import * as attachments from "../../src/api/attachments.js";
 import { ApiAuthError, ApiResponseError } from "../../src/api/common.js";
 import * as tokenStore from "../../src/token-store.js";
@@ -61,6 +62,7 @@ vi.mock("../../src/api/substrate.js", async (importOriginal) => {
   };
 });
 vi.mock("../../src/token-store.js");
+vi.mock("../../src/api/message-search.js");
 vi.mock("../../src/auth/auto-login.js");
 vi.mock("../../src/auth/interactive.js");
 vi.mock("../../src/auth/debug-session.js");
@@ -86,6 +88,32 @@ vi.mock("../../src/api/attachments.js", async (importOriginal) => {
     buildFilesPropertyJson: vi.fn(),
     uploadAmsImage: vi.fn(),
   };
+});
+
+describe("searchMessages", () => {
+  it("delegates search options and returns the search page", async () => {
+    const token = {
+      skypeToken: "chat-token",
+      substrateToken: "search-token",
+      region: "apac",
+    };
+    const page = { messages: [], total: 0, hasMore: false };
+    vi.mocked(messageSearch.searchMessages).mockResolvedValue(page);
+    const client = TeamsClient.fromToken(token);
+    const options = { query: "release", from: "alice@contoso.com", offset: 10 };
+    expect(await client.searchMessages(options)).toBe(page);
+    expect(messageSearch.searchMessages).toHaveBeenCalledWith(token, options);
+  });
+
+  it("propagates search errors rather than falling back to chat scans", async () => {
+    vi.mocked(messageSearch.searchMessages).mockRejectedValue(
+      new Error("Search unavailable"),
+    );
+    await expect(
+      TeamsClient.fromToken("token").searchMessages({ query: "release" }),
+    ).rejects.toThrow("Search unavailable");
+    expect(chatService.fetchMessagesPage).not.toHaveBeenCalled();
+  });
 });
 
 const mockedApi = {
