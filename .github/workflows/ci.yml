@@ -87,4 +87,15 @@ jobs:
           sed -i "s/\"version\": \"0.0.0\"/\"version\": \"$VERSION\"/g" server.json
           mcp-publisher login github-oidc
           mcp-publisher validate
-          mcp-publisher publish
+          for attempt in {1..20}; do
+            if npm view "teams-api@$VERSION" version --prefer-online --userconfig=/dev/null &&
+              mcp-publisher publish; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              echo "::error::MCP Registry publication failed after 20 attempts"
+              exit 1
+            fi
+            echo "::notice::Waiting for npm/MCP Registry propagation; retrying in 30 seconds (attempt $attempt/20)"
+            sleep 30
+          done
