@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/Maxim-Mazurok/teams-api/compare/v1.9.1...v1.10.0) (2026-10-26)
+
+
+### Features
+
+* add global Teams message search ([d2b52af](https://github.com/Maxim-Mazurok/teams-api/commit/d2b52af21c037859d55f7c6d55010cbe690bf773))
+
 ## [1.9.1](https://github.com/Maxim-Mazurok/teams-api/compare/v1.9.0...v1.9.1) (2026-10-20)
 
 
